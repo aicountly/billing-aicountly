@@ -115,6 +115,39 @@ Two checks run after the files are copied:
 
 ## Troubleshooting
 
+### `Shell access is not enabled on your account!`
+
+```
+SSH authenticated, but the server did not run the command.
+    Shell access is not enabled on your account!
+    If you need shell access please contact support.
+```
+
+The deploy key is fine — authentication passed. The account's login shell is
+cPanel's `noshell`, which prints that notice and exits without running
+anything. It even exits 0, which is why the workflow checks for a sentinel in
+the output rather than trusting the exit status.
+
+rsync runs as a command over SSH, so **no SSH-based deploy can work until the
+account has a real shell.** No repository change can substitute for it:
+
+1. With WHM: **Account Functions → Manage Shell Access →** select the account
+   **→ Jailed Shell**. Jailed Shell is the right level — restricted, but it
+   runs rsync. Normal Shell works too and grants more than a deploy needs.
+2. On shared hosting without WHM, ask the host to *enable jailed SSH shell
+   access* for the account. That is the phrase to use.
+3. Confirm from any machine holding the deploy key:
+
+   ```sh
+   ssh -p <port> <user>@<host> 'echo ok; rsync --version | head -1'
+   ```
+
+   It must print `ok` and an rsync version. A working shell with no rsync
+   needs rsync added to the jail — ask the host.
+
+Production and sandbox are separate cPanel accounts and each needs this
+enabled on its own.
+
 ### `protocol version mismatch -- is your shell clean?`
 
 ```
