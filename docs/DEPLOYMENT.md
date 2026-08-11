@@ -113,6 +113,47 @@ Two checks run after the files are copied:
    failure. It logs a warning instead. Once the domain is live, a warning here
    means something is genuinely wrong.
 
+## Troubleshooting
+
+### `protocol version mismatch -- is your shell clean?`
+
+```
+protocol version mismatch -- is your shell clean?
+rsync error: protocol incompatibility (code 2) at compat.c(...) [sender=3.2.7]
+```
+
+rsync speaks its binary protocol over the SSH connection's **stdout**. When
+sshd runs `rsync --server` on the cPanel host, the account's shell sources
+`~/.bashrc` first — and anything that prints to stdout there (a welcome
+banner, an `echo`, a version-manager init) lands at the front of the protocol
+stream. rsync reads it where a version number belongs and aborts.
+
+It is a server-side problem, not a repository one. Nothing in this repository
+can fix it, and the SSH secrets are not at fault — note that *Verify SSH
+authentication* passes, because that step only echoes text.
+
+The *Check the remote shell is clean for rsync* step runs before the deploy and
+prints the offending output verbatim, so you can find the line that produced
+it. To fix it on the server:
+
+1. Open `~/.bashrc` (then `~/.bash_profile`, `~/.profile`) over SSH or in
+   cPanel File Manager with **Show hidden files** enabled.
+2. Delete the line that prints, or redirect it to stderr — which rsync ignores:
+   `echo "welcome" >&2`.
+3. Better, make the file silent for non-interactive shells by putting this at
+   the very top, above anything that prints:
+
+   ```sh
+   case $- in *i*) ;; *) return ;; esac
+   ```
+
+4. Re-run the workflow. The check confirms the fix in seconds.
+
+A banner set through sshd's `Banner` directive goes to stderr and is harmless —
+only stdout breaks rsync. The same check also fails early, with a clear
+message, if the cPanel host has no `rsync` installed, which produces an
+identical protocol error.
+
 ## Configuration: build time vs run time
 
 This is the part worth reading carefully, because the frontend and a future

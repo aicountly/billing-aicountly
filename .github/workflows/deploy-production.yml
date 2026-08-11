@@ -246,6 +246,81 @@ jobs:
           HINT
           exit 1
 
+      # rsync speaks its binary protocol over the SSH connection's stdout, so
+      # anything the account's shell prints there — a cPanel welcome banner, an
+      # echo in ~/.bashrc — is injected into the front of that stream. rsync
+      # then reads it where a version number belongs and dies with "protocol
+      # version mismatch -- is your shell clean?", which names neither the file
+      # nor the line responsible. Check it here, where the cause can be shown.
+      #
+      # The Verify SSH authentication step cannot catch this: it only echoes
+      # text, so stray output passes straight through it unnoticed.
+      - name: Check the remote shell is clean for rsync
+        run: |
+          ssh deploy-target 'true' > /tmp/remote-stdout 2>/tmp/remote-stderr || true
+
+          if [ -s /tmp/remote-stdout ]; then
+            echo "::error::The remote shell writes to stdout on a non-interactive command, which corrupts the rsync protocol stream."
+            echo "--- what the server sent on stdout ---"
+            sed 's/^/    /' /tmp/remote-stdout
+            echo "--- the same bytes (first 512) ---"
+            head -c 512 /tmp/remote-stdout | od -c | sed 's/^/    /'
+            cat <<'HINT'
+
+          This is the cause of: rsync error: protocol incompatibility (code 2)
+                                "protocol version mismatch -- is your shell clean?"
+
+          Nothing in this repository can fix it — the output is produced on the
+          server before rsync starts. Fix it on the cPanel account:
+
+            1. Log in over SSH, or open cPanel File Manager with "Show hidden
+               files" enabled, and look at these, in this order:
+
+                   ~/.bashrc          (most common culprit)
+                   ~/.bash_profile
+                   ~/.profile
+
+            2. Find the line producing the text shown above — usually an echo,
+               printf, cat of a banner, fortune, or a version-manager init.
+
+            3. Either delete it, or send it to stderr instead, which rsync
+               ignores:
+
+                   echo "welcome" >&2
+
+               Better still, make the whole file silent unless the shell is
+               interactive by putting this at the very top of ~/.bashrc, above
+               anything that prints:
+
+                   case $- in *i*) ;; *) return ;; esac
+
+               Everything below it then runs only for real logins, and rsync
+               gets a clean channel.
+
+            4. Re-run this workflow. This step confirms the fix in seconds.
+
+          A banner configured in sshd (the Banner directive) goes to stderr and
+          is harmless — only stdout breaks rsync.
+
+          HINT
+            exit 1
+          fi
+          echo "Remote shell is clean: a non-interactive command produced no stdout."
+
+          if [ -s /tmp/remote-stderr ]; then
+            echo "::notice::The server writes to stderr on login. That is harmless for rsync; shown here for context:"
+            sed 's/^/    /' /tmp/remote-stderr
+          fi
+
+          # A missing or very old rsync on the server reports the same protocol
+          # error, so rule that out here rather than in the middle of a deploy.
+          if ! ssh deploy-target 'command -v rsync' > /tmp/remote-rsync 2>/dev/null || [ ! -s /tmp/remote-rsync ]; then
+            echo "::error::No rsync on the cPanel host. rsync must be installed there — ask the host to add it, since the deploy cannot run without it."
+            exit 1
+          fi
+          echo "Remote rsync: $(cat /tmp/remote-rsync)"
+          ssh deploy-target 'rsync --version 2>/dev/null | head -1' | sed 's/^/    /'
+
       - name: Deploy web build to the document root
         env:
           REMOTE_ROOT: ${{ secrets.PROD_SSH_REMOTE_ROOT }}
