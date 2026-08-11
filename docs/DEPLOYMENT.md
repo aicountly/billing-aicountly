@@ -115,6 +115,40 @@ Two checks run after the files are copied:
 
 ## Troubleshooting
 
+### `mkdir "***" failed: No such file or directory (2)`
+
+```
+rsync: [Receiver] mkdir "***" failed: No such file or directory (2)
+rsync error: error in file IO (code 11)
+```
+
+The deploy target does not exist on the server. `***` is the remote-root
+secret, masked in the log. rsync creates only the **last** directory of a
+destination path, never missing parent directories, so it stops here.
+
+Reaching this error is progress: SSH, the shell, and rsync on the server are
+all working.
+
+Two causes, most likely first:
+
+1. **The domain has not been created in cPanel yet.** cPanel creates the
+   document root when the domain is added — until then there is nothing to
+   deploy into. **cPanel → Domains → Create A Domain**, then note the document
+   root it reports and set the remote-root secret to exactly that path.
+2. **The secret does not match the real document root.** The *Check the deploy
+   target exists on the server* step lists the account's home directory and any
+   paths that look like document roots; compare those against the secret. A
+   relative value resolves against the SSH user's home, so `public_html` means
+   `<home>/public_html`.
+
+The workflow deliberately **does not create the directory itself**. On cPanel a
+document root only serves traffic when the domain that owns it exists, so
+creating the folder by hand would produce a green deploy into a path no vhost
+serves — a site that still shows nothing.
+
+If the directory exists but the step reports it is not writable, check its
+owner and permissions; it must be owned by the cPanel account.
+
 ### `Shell access is not enabled on your account!`
 
 ```

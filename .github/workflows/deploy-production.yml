@@ -376,6 +376,76 @@ jobs:
           echo "Remote rsync: $(cat /tmp/remote-rsync)"
           ssh deploy-target 'rsync --version 2>/dev/null | head -1' | sed 's/^/    /'
 
+      # rsync creates the final directory of a destination path but never its
+      # missing parents, so a wrong or not-yet-created document root surfaces
+      # as `mkdir "..." failed: No such file or directory (2)` — with the path
+      # masked in the log, since it comes from a secret. Check it here, where
+      # the account's actual directories can be listed alongside the failure.
+      - name: Check the deploy target exists on the server
+        env:
+          REMOTE_ROOT: ${{ secrets.PROD_SSH_REMOTE_ROOT }}
+        run: |
+          set +e
+          ssh deploy-target "REMOTE_ROOT='$REMOTE_ROOT' sh -s" > /tmp/target.out 2>&1 <<'REMOTE'
+            if [ ! -d "$REMOTE_ROOT" ]; then echo "STATUS=MISSING"; exit 0; fi
+            if [ ! -w "$REMOTE_ROOT" ]; then echo "STATUS=NOTWRITABLE"; exit 0; fi
+            echo "STATUS=OK"
+          REMOTE
+          rc=$?
+          set -e
+
+          if [ $rc -ne 0 ]; then
+            echo "::error::Could not check the deploy target over SSH."
+            sed 's/^/    /' /tmp/target.out
+            exit 1
+          fi
+
+          if grep -q 'STATUS=OK' /tmp/target.out; then
+            echo "Deploy target exists on the server and is writable."
+            exit 0
+          fi
+
+          if grep -q 'STATUS=NOTWRITABLE' /tmp/target.out; then
+            echo "::error::The deploy target exists but the SSH user cannot write to it. Check the directory's owner and permissions in cPanel — it must be owned by the cPanel account."
+            exit 1
+          fi
+
+          echo "::error::The deploy target directory does not exist on the server, so rsync cannot write into it."
+          echo "--- directories in the account's home ---"
+          ssh deploy-target 'echo "Home: $HOME"; ls -la "$HOME" 2>/dev/null | head -40' | sed 's/^/    /' || true
+          echo "--- paths that look like document roots ---"
+          ssh deploy-target 'ls -d "$HOME"/public_html "$HOME"/*/public_html "$HOME"/*billing* 2>/dev/null' | sed 's/^/    /' || echo "    (none found)"
+          cat <<'HINT'
+
+          rsync creates only the last directory of a destination path, never
+          missing parent directories, which is why it failed with
+
+              mkdir "..." failed: No such file or directory (2)
+
+          Two causes, in order of likelihood:
+
+            1. The domain has not been created in cPanel yet. cPanel creates
+               the document root when the domain is added, and until then
+               there is nothing to deploy into:
+
+                 cPanel > Domains > Create A Domain
+
+               Note the document root it reports and set the remote-root
+               secret to exactly that path.
+
+            2. The remote-root secret does not match the real document root.
+               Compare the directories listed above against the value stored
+               in the secret. A relative value resolves against the SSH user's
+               home directory, so "public_html" means <home>/public_html.
+
+          This workflow deliberately does not create the directory itself. On
+          cPanel a document root only serves traffic when the domain that owns
+          it exists, so creating the folder by hand would give a green deploy
+          into a path no vhost serves — a site that still shows nothing.
+
+          HINT
+          exit 1
+
       - name: Deploy web build to the document root
         env:
           REMOTE_ROOT: ${{ secrets.PROD_SSH_REMOTE_ROOT }}
