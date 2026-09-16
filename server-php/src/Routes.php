@@ -6,9 +6,11 @@ namespace Aicountly\Api;
 
 use Aicountly\Api\Controllers\CatalogController;
 use Aicountly\Api\Controllers\DashboardController;
+use Aicountly\Api\Controllers\DashboardsController;
 use Aicountly\Api\Controllers\DuesController;
 use Aicountly\Api\Controllers\ManageController;
 use Aicountly\Api\Controllers\ProfilesController;
+use Aicountly\Api\Controllers\ReportsController;
 use Aicountly\Api\Controllers\ScheduleController;
 use Aicountly\Api\Controllers\SettingsController;
 use Aicountly\Api\Controllers\TransactionsController;
@@ -54,6 +56,8 @@ final class Routes
         //     | expense | bank_deposit | bank_withdrawal | bank_transfer
         $router->post('v1/transactions/{kind}', [TransactionsController::class, 'create']);
         $router->get('v1/transactions/unfinished', [TransactionsController::class, 'unfinished']);
+        // Invoices a credit note (or bills a debit note) can be raised against.
+        $router->get('v1/original-documents', [TransactionsController::class, 'originalDocuments']);
         $router->get('v1/transactions/{id}', [TransactionsController::class, 'show']);
         $router->post('v1/transactions/{id}/retry', [TransactionsController::class, 'retry']);
         $router->get('v1/transactions/{id}/statutory', [TransactionsController::class, 'statutoryStatus']);
@@ -79,8 +83,26 @@ final class Routes
         $router->get('v1/reminders/{id}/candidates', [ScheduleController::class, 'reminderCandidates']);
         $router->post('v1/reminders/{id}/log', [ScheduleController::class, 'logReminder']);
 
-        // Home.
-        $router->get('v1/dashboard', [DashboardController::class, 'index']);
+        // The five dashboards. Each checks its own permission before it reads
+        // anything, so the tab bar and the URL agree about who may open what.
+        $router->get('v1/dashboards/overview', [DashboardsController::class, 'overview']);
+        $router->get('v1/dashboards/biller', [DashboardsController::class, 'biller']);
+        $router->get('v1/dashboards/receivables', [DashboardsController::class, 'receivables']);
+        $router->get('v1/dashboards/payables', [DashboardsController::class, 'payables']);
+        $router->get('v1/dashboards/cash-compliance', [DashboardsController::class, 'cashCompliance']);
+        $router->post('v1/dashboards/day-close', [DashboardsController::class, 'dayCloseStep']);
+
+        // Promises to pay — ours, because no other product records a promise.
+        $router->post('v1/promises', [DashboardsController::class, 'recordPromise']);
+        $router->post('v1/promises/{id}/status', [DashboardsController::class, 'setPromiseStatus']);
+
+        // Reports. Books' own registers, read live and printable.
+        $router->get('v1/reports', [ReportsController::class, 'index']);
+        $router->get('v1/reports/{key}', [ReportsController::class, 'run']);
+        $router->get('v1/reports/{key}/export', [ReportsController::class, 'export']);
+
+        // The short list the bell and the overview both read, and the state of
+        // anything that has not reached Books.
         $router->get('v1/insights', [DashboardController::class, 'insights']);
         $router->get('v1/integration-commands', [DashboardController::class, 'commands']);
     }

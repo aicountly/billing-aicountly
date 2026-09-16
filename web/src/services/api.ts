@@ -191,6 +191,43 @@ export const api = {
 
   del: <T>(path: string, params?: QueryParams) => request<ItemResponse<T>>(path, { method: 'DELETE', params }),
 
+  /**
+   * A file, fetched with the session key and handed to the browser.
+   *
+   * An <a download> cannot carry the Authorization header, and putting the
+   * session key in a query string would write it into every proxy log between
+   * here and the server. So the file is fetched like any other call and handed
+   * over as a blob.
+   */
+  async download(path: string, params?: QueryParams): Promise<{ blob: Blob; filename: string }> {
+    const sesKey = await ensureSesKey()
+    const response = await fetch(buildUrl(path, params, true), {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${sesKey}` },
+    })
+
+    if (!response.ok) {
+      // An error body is JSON even when the happy path is a file.
+      let envelope: { error?: { code?: string; message?: string; details?: Record<string, unknown> } } | null = null
+      try {
+        envelope = JSON.parse(await response.text())
+      } catch {
+        envelope = null
+      }
+      throw new ApiError(
+        response.status,
+        envelope?.error?.code ?? 'error',
+        envelope?.error?.message ?? `Could not build that file (${response.status})`,
+        envelope?.error?.details ?? {},
+      )
+    }
+
+    const disposition = response.headers.get('Content-Disposition') ?? ''
+    const match = /filename="?([^";]+)"?/i.exec(disposition)
+
+    return { blob: await response.blob(), filename: match?.[1] ?? 'export.csv' }
+  },
+
   /** Context-free: the health check and the portal relay. */
   /**
    * Context-free: the health check, the portal relay, and the company switcher.

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Aicountly\Api\Controllers;
 
 use Aicountly\Api\Audit;
+use Aicountly\Api\Dashboards;
 use Aicountly\Api\Db;
 use Aicountly\Api\Http;
 use Aicountly\Api\Permissions;
@@ -37,6 +38,11 @@ final class SettingsController extends Controller
             'permissions'  => $granted,
             'settings'     => $settings,
             'menu'         => self::menu($settings, $granted, $auth->accessType() === 1),
+            // The dashboards this profile may open, and where it starts. Built
+            // from the same list the endpoints check, so the tab bar can never
+            // offer a screen the API will refuse.
+            'dashboards'   => Dashboards::permitted($granted, $auth->accessType() === 1),
+            'landing'      => Dashboards::landing($granted, $auth->accessType() === 1),
         ]);
     }
 
@@ -127,25 +133,43 @@ final class SettingsController extends Controller
      *
      * @param array<string, mixed> $settings
      * @param list<string>         $granted
-     * @return list<array{key:string, label:string, path:string}>
+     * @return list<array{key:string, label:string, path:string, children:list<array{label:string, path:string}>}>
      */
     private static function menu(array $settings, array $granted, bool $isOwner): array
     {
         $may = static fn (?string $permission) => $permission === null || $isOwner || in_array($permission, $granted, true);
+        $landing = Dashboards::landing($granted, $isOwner);
 
+        // Grouped the way a shopkeeper thinks about the day rather than the way
+        // the vouchers are filed: what I sold, what I bought, where the money
+        // went, who I deal with.
+        //
+        // Every path here has a route behind it. An entry pointing at a screen
+        // that does not exist is worse than no entry: the user is told the
+        // feature is there, clicks, and is told the page does not exist.
         $entries = [
-            ['key' => 'home',        'label' => 'Home',        'path' => '/',            'permission' => null,              'needs' => null],
-            ['key' => 'sales',       'label' => 'Sales',       'path' => '/sales',       'permission' => 'sale.view',       'needs' => null],
-            ['key' => 'purchases',   'label' => 'Purchases',   'path' => '/purchases',   'permission' => 'purchase.view',   'needs' => 'needs_purchase'],
-            ['key' => 'money_in',    'label' => 'Money In',    'path' => '/money-in',    'permission' => 'receipt.create',  'needs' => null],
-            ['key' => 'money_out',   'label' => 'Money Out',   'path' => '/money-out',   'permission' => 'payment.create',  'needs' => 'needs_purchase'],
-            ['key' => 'bank_cash',   'label' => 'Bank & Cash', 'path' => '/bank-cash',   'permission' => 'contra.create',   'needs' => 'needs_bank_cash'],
-            ['key' => 'receivables', 'label' => 'Money to Collect', 'path' => '/receivables', 'permission' => 'receivable.view', 'needs' => null],
-            ['key' => 'payables',    'label' => 'Money to Pay',     'path' => '/payables',    'permission' => 'payable.view',    'needs' => 'needs_payables'],
-            ['key' => 'items',       'label' => 'Items',       'path' => '/items',       'permission' => 'sale.view',       'needs' => 'maintains_stock'],
-            ['key' => 'parties',     'label' => 'Parties',     'path' => '/parties',     'permission' => 'sale.view',       'needs' => null],
-            ['key' => 'reports',     'label' => 'Reports',     'path' => '/reports',     'permission' => 'reports.view',    'needs' => null],
-            ['key' => 'more',        'label' => 'More',        'path' => '/more',        'permission' => null,              'needs' => null],
+            ['key' => 'dashboard',   'label' => 'Dashboard',   'path' => $landing,       'permission' => null,              'needs' => null, 'children' => []],
+            ['key' => 'sales',       'label' => 'Sales',       'path' => '/sales',       'permission' => 'sale.view',       'needs' => null, 'children' => [
+                ['label' => 'New bill',     'path' => '/sales/new',         'permission' => 'sale.create'],
+                ['label' => 'Credit note',  'path' => '/more/credit-note',  'permission' => 'credit_note.create'],
+            ]],
+            ['key' => 'purchases',   'label' => 'Purchases',   'path' => '/purchases',   'permission' => 'purchase.view',   'needs' => 'needs_purchase', 'children' => [
+                ['label' => 'New purchase', 'path' => '/purchases/new',    'permission' => 'purchase.create'],
+                ['label' => 'Debit note',   'path' => '/more/debit-note',  'permission' => 'debit_note.create'],
+                ['label' => 'Expense',      'path' => '/more/expense',     'permission' => 'expense.create'],
+            ]],
+            ['key' => 'money',       'label' => 'Money',       'path' => '/money-in',    'permission' => 'receipt.create',  'needs' => null, 'children' => [
+                ['label' => 'Money received', 'path' => '/money-in/new',        'permission' => 'receipt.create'],
+                ['label' => 'Money paid',     'path' => '/money-out/new',       'permission' => 'payment.create'],
+                ['label' => 'Bank deposit',   'path' => '/bank-cash/deposit',   'permission' => 'contra.create'],
+                ['label' => 'Bank withdrawal', 'path' => '/bank-cash/withdrawal', 'permission' => 'contra.create'],
+            ]],
+            ['key' => 'receivables', 'label' => 'Money to Collect', 'path' => '/receivables', 'permission' => 'receivable.view', 'needs' => null, 'children' => []],
+            ['key' => 'payables',    'label' => 'Money to Pay',     'path' => '/payables',    'permission' => 'payable.view',    'needs' => 'needs_payables', 'children' => []],
+            ['key' => 'parties',     'label' => 'Parties',     'path' => '/parties',     'permission' => 'sale.view',       'needs' => null, 'children' => []],
+            ['key' => 'items',       'label' => 'Items',       'path' => '/items',       'permission' => 'sale.view',       'needs' => 'maintains_stock', 'children' => []],
+            ['key' => 'reports',     'label' => 'Reports',     'path' => '/reports',     'permission' => 'reports.view',    'needs' => null, 'children' => []],
+            ['key' => 'more',        'label' => 'Settings',    'path' => '/more',        'permission' => null,              'needs' => null, 'children' => []],
         ];
 
         $out = [];
@@ -156,7 +180,20 @@ final class SettingsController extends Controller
             if ($entry['needs'] !== null && !($settings[$entry['needs']] ?? true)) {
                 continue;
             }
-            $out[] = ['key' => $entry['key'], 'label' => $entry['label'], 'path' => $entry['path']];
+
+            $children = [];
+            foreach ($entry['children'] as $child) {
+                if ($may($child['permission'])) {
+                    $children[] = ['label' => $child['label'], 'path' => $child['path']];
+                }
+            }
+
+            $out[] = [
+                'key'      => $entry['key'],
+                'label'    => $entry['label'],
+                'path'     => $entry['path'],
+                'children' => $children,
+            ];
         }
 
         return $out;
