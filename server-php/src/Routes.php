@@ -1,0 +1,81 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Aicountly\Api;
+
+use Aicountly\Api\Controllers\CatalogController;
+use Aicountly\Api\Controllers\DashboardController;
+use Aicountly\Api\Controllers\DuesController;
+use Aicountly\Api\Controllers\ProfilesController;
+use Aicountly\Api\Controllers\ScheduleController;
+use Aicountly\Api\Controllers\SettingsController;
+use Aicountly\Api\Controllers\TransactionsController;
+
+final class Routes
+{
+    public static function register(Router $router): void
+    {
+        // Session, business mode and the menu it produces.
+        $router->get('v1/session', [SettingsController::class, 'session']);
+        $router->get('v1/settings', [SettingsController::class, 'show']);
+        $router->put('v1/settings', [SettingsController::class, 'update']);
+        $router->post('v1/onboarding', [SettingsController::class, 'onboard']);
+
+        // Billing profiles — who may see and do what inside this product.
+        $router->get('v1/profiles', [ProfilesController::class, 'index']);
+        $router->post('v1/profiles', [ProfilesController::class, 'create']);
+        $router->put('v1/profiles/{id}', [ProfilesController::class, 'update']);
+        $router->get('v1/profiles/{id}/members', [ProfilesController::class, 'members']);
+        $router->post('v1/profiles/{id}/members', [ProfilesController::class, 'assign']);
+        $router->delete('v1/profiles/{id}/members/{assignmentId}', [ProfilesController::class, 'unassign']);
+
+        // Read-through to the products that own the data.
+        $router->get('v1/catalog/items', [CatalogController::class, 'items']);
+        $router->get('v1/catalog/items/search', [CatalogController::class, 'searchItems']);
+        $router->get('v1/catalog/items/favourites', [CatalogController::class, 'favourites']);
+        $router->get('v1/catalog/items/barcode/{code}', [CatalogController::class, 'itemByBarcode']);
+        $router->get('v1/catalog/stock', [CatalogController::class, 'stock']);
+        $router->get('v1/catalog/low-stock', [CatalogController::class, 'lowStock']);
+        $router->get('v1/catalog/warehouses', [CatalogController::class, 'warehouses']);
+        $router->get('v1/catalog/parties', [CatalogController::class, 'parties']);
+        $router->get('v1/catalog/cash-bank', [CatalogController::class, 'cashBankAccounts']);
+        $router->get('v1/catalog/expense-accounts', [CatalogController::class, 'expenseAccounts']);
+        $router->get('v1/catalog/tax-categories', [CatalogController::class, 'taxCategories']);
+
+        // Transactions. One route per kind, one service behind all of them.
+        // kind: sale | purchase | receipt | payment | credit_note | debit_note
+        //     | expense | bank_deposit | bank_withdrawal | bank_transfer
+        $router->post('v1/transactions/{kind}', [TransactionsController::class, 'create']);
+        $router->get('v1/transactions/unfinished', [TransactionsController::class, 'unfinished']);
+        $router->get('v1/transactions/{id}', [TransactionsController::class, 'show']);
+        $router->post('v1/transactions/{id}/retry', [TransactionsController::class, 'retry']);
+        $router->get('v1/transactions/{id}/statutory', [TransactionsController::class, 'statutoryStatus']);
+        $router->post('v1/transactions/{id}/statutory/{what}', [TransactionsController::class, 'generateStatutory']);
+
+        // Dues — every figure read live from Books.
+        $router->get('v1/receivables', [DuesController::class, 'receivables']);
+        $router->get('v1/payables', [DuesController::class, 'payables']);
+        $router->get('v1/parties/{accountId}/statement', [DuesController::class, 'statement']);
+        $router->get('v1/cash-bank', [DuesController::class, 'cashAndBank']);
+        $router->get('v1/open-bills', [DuesController::class, 'openBills']);
+
+        // Recurring bills and payment reminders — business automation, not sync.
+        $router->get('v1/recurring', [ScheduleController::class, 'listRecurring']);
+        $router->post('v1/recurring', [ScheduleController::class, 'createRecurring']);
+        $router->get('v1/recurring/due', [ScheduleController::class, 'dueRecurring']);
+        $router->get('v1/recurring/{id}', [ScheduleController::class, 'showRecurring']);
+        $router->post('v1/recurring/{id}/run', [ScheduleController::class, 'runRecurring']);
+        $router->post('v1/recurring/{id}/status', [ScheduleController::class, 'setRecurringStatus']);
+
+        $router->get('v1/reminders', [ScheduleController::class, 'listReminderRules']);
+        $router->post('v1/reminders', [ScheduleController::class, 'createReminderRule']);
+        $router->get('v1/reminders/{id}/candidates', [ScheduleController::class, 'reminderCandidates']);
+        $router->post('v1/reminders/{id}/log', [ScheduleController::class, 'logReminder']);
+
+        // Home.
+        $router->get('v1/dashboard', [DashboardController::class, 'index']);
+        $router->get('v1/insights', [DashboardController::class, 'insights']);
+        $router->get('v1/integration-commands', [DashboardController::class, 'commands']);
+    }
+}
