@@ -40,6 +40,8 @@ export interface BillingSettings {
 export interface BillingSession {
   uuid: string
   display_name: string
+  /** False when the portal gave no name and display_name is the uuid standing in. */
+  display_name_known: boolean
   is_owner: boolean
   context: { cmp_id: number; fy_id: number; bo_id: number }
   permissions: string[]

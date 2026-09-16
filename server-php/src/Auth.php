@@ -113,16 +113,53 @@ final class Auth
         return isset($this->session['acs_type']) ? (int) $this->session['acs_type'] : null;
     }
 
+    /**
+     * Candidate keys for a human's name, widest first.
+     *
+     * The portal has spelled this several ways over the years, and a key that
+     * is merely absent should not cost the user their name — the fallback is a
+     * uuid, which rendered in the header as an avatar reading "7".
+     */
+    private const NAME_FIELDS = [
+        'name', 'full_name', 'fullname', 'display_name', 'user_name', 'username',
+        'user_full_name', 'user_display_name', 'email', 'user_email', 'email_id', 'emailid',
+    ];
+
+    /** A name to show, or the uuid when the portal gave none. Pair with hasDisplayName(). */
     public function displayName(): string
     {
-        foreach (['name', 'full_name', 'user_name', 'email'] as $field) {
+        foreach (self::NAME_FIELDS as $field) {
             $value = $this->session[$field] ?? null;
-            if (is_string($value) && $value !== '') {
-                return $value;
+            if (is_string($value) && trim($value) !== '') {
+                return trim($value);
             }
         }
 
+        // first_name + last_name, when that is how it came.
+        $parts = [];
+        foreach (['first_name', 'middle_name', 'last_name'] as $field) {
+            $value = $this->session[$field] ?? null;
+            if (is_string($value) && trim($value) !== '') {
+                $parts[] = trim($value);
+            }
+        }
+        if ($parts !== []) {
+            return implode(' ', $parts);
+        }
+
         return $this->uuid;
+    }
+
+    /**
+     * Whether displayName() is a name or a fallback.
+     *
+     * The screen needs to tell them apart: initials cut from a uuid are not
+     * initials, they are the first character of an identifier, and showing one
+     * in an avatar makes the product look broken to the person it belongs to.
+     */
+    public function hasDisplayName(): bool
+    {
+        return $this->displayName() !== $this->uuid;
     }
 
     private static function bearer(): string

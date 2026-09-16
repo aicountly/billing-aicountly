@@ -29,20 +29,24 @@ final class SettingsController extends Controller
 
         $settings = self::settingsRow($ctx->cmpId);
         $granted = Permissions::granted($ctx, $auth);
+        $isOwner = $ctx->isOwner($auth);
 
         Http::data([
             'uuid'         => $auth->uuid,
             'display_name' => $auth->displayName(),
-            'is_owner'     => $auth->accessType() === 1,
+            // False when the portal gave no name and the uuid is standing in,
+            // so the header can show a person icon instead of a slice of an id.
+            'display_name_known' => $auth->hasDisplayName(),
+            'is_owner'     => $isOwner,
             'context'      => $ctx->asQuery(),
             'permissions'  => $granted,
             'settings'     => $settings,
-            'menu'         => self::menu($settings, $granted, $auth->accessType() === 1),
+            'menu'         => self::menu($settings, $granted, $isOwner),
             // The dashboards this profile may open, and where it starts. Built
             // from the same list the endpoints check, so the tab bar can never
             // offer a screen the API will refuse.
-            'dashboards'   => Dashboards::permitted($granted, $auth->accessType() === 1),
-            'landing'      => Dashboards::landing($granted, $auth->accessType() === 1),
+            'dashboards'   => Dashboards::permitted($granted, $isOwner),
+            'landing'      => Dashboards::landing($granted, $isOwner),
         ]);
     }
 

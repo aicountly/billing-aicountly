@@ -129,6 +129,11 @@ function userWithProfile(Context $ctx, string $uuid, string $templateKey): Auth
 
 function resetDatabase(): void
 {
+    // Both memos are per-request in production. Across a suite in one process
+    // they would carry a previous case's answer into the next one.
+    Context::forgetAccess();
+    Permissions::forget();
+
     $tables = [
         'billing_reminder_log', 'billing_reminder_rules',
         'billing_recurring_runs', 'billing_recurring_rules',
@@ -559,6 +564,110 @@ check('a reminder rule with a minimum skips small bills', function () use ($ctx,
     assertSame(0, count($result['candidates']), 'the 120000 bill is below the minimum');
 });
 
+echo "\nWho owns this company\n";
+
+check('the portal session cannot say who owns a company, and Manage can', function () {
+    // The bug this closes: ownership was read from the PORTAL session, which
+    // validates a ses_key and knows nothing about companies. `acs_type` is
+    // simply absent from that response, so every user resolved as delegated,
+    // held no permissions, and saw a menu with two entries on it.
+    assertSame(1, ManageAccess::resolve(['acs_type' => 1]), 'an explicit owner');
+    assertSame(0, ManageAccess::resolve(['acs_type' => 0]), 'an explicit delegate');
+    assertSame(1, ManageAccess::resolve(['ownership' => 'owner']), 'the label');
+    assertSame(0, ManageAccess::resolve(['ownership' => 'shared']), 'and its opposite');
+    assertSame(0, ManageAccess::resolve(['ownership' => 'Delegated']), 'whatever its case');
+    assertSame(1, ManageAccess::resolve(['is_creator' => true]), 'the oldest signal of the three');
+    assertSame(null, ManageAccess::resolve(['cmp_id' => 55]), 'and silence is not a no — it is unknown');
+
+    // Order matters: acs_type wins over the label, the label over is_creator.
+    assertSame(0, ManageAccess::resolve(['acs_type' => 0, 'ownership' => 'owner']), 'acs_type beats the label');
+    assertSame(0, ManageAccess::resolve(['ownership' => 'shared', 'is_creator' => true]), 'the label beats is_creator');
+});
+
+check('an owner holds every permission without a Billing profile', function () {
+    // The real-world case: somebody creates a company in Manage and opens
+    // Billing for the first time. There is no profile assigned to them yet, and
+    // there cannot be — assigning one needs access.manage, which is what they
+    // are trying to get. If ownership does not resolve, there is no way in.
+    Context::forgetAccess();
+    Permissions::forget();
+    resetDatabase();
+
+    $owner = freshContext(61);          // the stub calls 61 an owner
+    $auth = authFor('fresh-owner', null); // and the portal said nothing at all
+
+    assertSame(null, $auth->accessType(), 'the session carries no acs_type, as in production');
+    assertTrue($owner->isOwner($auth), 'Manage says owner, so they are one here');
+    assertTrue(Permissions::allows($owner, $auth, 'cost.view'), 'and they hold everything');
+    assertTrue(Permissions::allows($owner, $auth, 'access.manage'), 'including the one that lets them assign profiles');
+    assertSame(count(Permissions::all()), count(Permissions::granted($owner, $auth)), 'every permission in the catalog');
+});
+
+check('a delegated user with no profile holds nothing', function () {
+    Context::forgetAccess();
+    Permissions::forget();
+    resetDatabase();
+
+    $ctx62 = freshContext(62);          // the stub calls 62 shared
+    $auth = authFor('delegate', null);
+
+    assertTrue(!$ctx62->isOwner($auth), 'Manage says shared');
+    assertSame([], Permissions::granted($ctx62, $auth), 'and nobody has given them a profile');
+    assertThrows(
+        static fn () => Permissions::assert($ctx62, $auth, 'sale.create'),
+        'Billing profile',
+        'a delegate with no profile raising a bill',
+    );
+});
+
+check('ownership comes off the companies list when companyinfo is silent', function () {
+    // companyinfo does not carry ownership — the browser's own parser reads it
+    // off the LIST row, not that one. The resolution has to fall through, and
+    // the stub is shaped to make it: its companyinfo never says.
+    Context::forgetAccess();
+    Permissions::forget();
+    resetDatabase();
+
+    foreach ([[63, true, 'acs_type on the list row'], [64, true, 'is_creator on the list row'], [65, false, 'acs_type 0 on the list row']] as [$cmpId, $expected, $what]) {
+        Context::forgetAccess();
+        Permissions::forget();
+        $ctx = freshContext($cmpId);
+        assertSame($expected, $ctx->isOwner(authFor('someone-' . $cmpId, null)), $what);
+    }
+});
+
+check('a company Manage says nothing about falls back to the session, then closed', function () {
+    Context::forgetAccess();
+    Permissions::forget();
+    resetDatabase();
+
+    // 55 appears in the stub's list with no ownership fields at all.
+    $ctx55 = freshContext(55);
+
+    // Nothing anywhere: not an owner. Failing closed is the right way round —
+    // a person wrongly shown as delegated sees too little and complains; one
+    // wrongly shown as an owner sees the bank balance.
+    assertTrue(!$ctx55->isOwner(authFor('nobody', null)), 'silence is not ownership');
+
+    // A portal that does carry acs_type is still honoured.
+    Context::forgetAccess();
+    Permissions::forget();
+    assertTrue($ctx55->isOwner(authFor('legacy-owner', 1)), 'a session that does say is believed');
+});
+
+check('an owner lands on the overview even with no profile row', function () {
+    Context::forgetAccess();
+    Permissions::forget();
+    resetDatabase();
+
+    $ctx61 = freshContext(61);
+    $auth = authFor('fresh-owner', null);
+    $granted = Permissions::granted($ctx61, $auth);
+
+    assertSame('/dashboard/overview', Dashboards::landing($granted, $ctx61->isOwner($auth)), 'not /more');
+    assertSame(5, count(Dashboards::permitted($granted, $ctx61->isOwner($auth))), 'all five tabs');
+});
+
 echo "\nThe five dashboards\n";
 
 check('an owner lands on the overview and a biller on their own desk', function () use ($ctx) {
@@ -834,10 +943,17 @@ check('the biller desk counts this biller\'s own work and nobody else\'s', funct
     $biller = userWithProfile($ctx, 'user-biller', 'biller');
     $other = userWithProfile($ctx, 'user-other', 'biller');
 
-    (new TransactionService($ctx, $biller))->create('sale', saleInput(['date' => gmdate('Y-m-d')]));
-    (new TransactionService($ctx, $other))->create('sale', saleInput(['date' => gmdate('Y-m-d')]));
+    // The COMPANY's today, not the server's. Dating these with gmdate() made
+    // this test pass for eighteen hours a day and fail for the other five and a
+    // half: after 18:30 UTC it is already tomorrow in Asia/Kolkata, so the bill
+    // was written on the 16th and the desk — correctly — counted the 17th.
+    $period = Period::resolve(['key' => 'today']);
+    $today = $period->today();
 
-    $desk = (new BillerDeskService($ctx, $biller))->build(Period::resolve(['key' => 'today']));
+    (new TransactionService($ctx, $biller))->create('sale', saleInput(['date' => $today]));
+    (new TransactionService($ctx, $other))->create('sale', saleInput(['date' => $today]));
+
+    $desk = (new BillerDeskService($ctx, $biller))->build($period);
     $mine = null;
     foreach ($desk['metrics'] as $metric) {
         if ($metric['id'] === 'my_invoices_today') {

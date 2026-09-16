@@ -132,6 +132,12 @@ final class Permissions
     /** @var array<string, list<string>> */
     private static array $cache = [];
 
+    /** Test seam: the memo is per request in production and must not leak between cases. */
+    public static function forget(): void
+    {
+        self::$cache = [];
+    }
+
     public static function assert(Context $ctx, Auth $auth, string $permission): void
     {
         if (!self::allows($ctx, $auth, $permission)) {
@@ -144,7 +150,11 @@ final class Permissions
         if ($auth->isService()) {
             return true;
         }
-        if ($auth->accessType() === 1) {
+        // Owner OF THIS COMPANY, per Manage — not per the portal session, which
+        // does not know which company is open and so cannot answer it. Asking
+        // the session was why every user resolved as delegated, held no
+        // permissions, and saw a menu with two entries on it.
+        if ($ctx->isOwner($auth)) {
             return true;
         }
 
@@ -159,7 +169,7 @@ final class Permissions
             return self::$cache[$key];
         }
 
-        if ($auth->isService() || $auth->accessType() === 1) {
+        if ($auth->isService() || $ctx->isOwner($auth)) {
             return self::$cache[$key] = self::all();
         }
 

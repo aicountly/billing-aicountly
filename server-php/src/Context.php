@@ -23,6 +23,17 @@ final class Context
     /** @var array<string, bool> */
     private static array $verified = [];
 
+    /**
+     * Company access type per (company, session), from Manage.
+     *
+     * Memoised beside the tenant check because it arrives on the same row: the
+     * call that proves you may open this company is the call that says whether
+     * you own it.
+     *
+     * @var array<string, ?int>
+     */
+    private static array $accessTypes = [];
+
     private function __construct(
         public readonly int $cmpId,
         public readonly int $fyId,
@@ -67,7 +78,8 @@ final class Context
             return;
         }
 
-        $result = (new ManageClient())->withSession($auth->sesKey())->companyInfo($this->cmpId);
+        $manage = (new ManageClient())->withSession($auth->sesKey());
+        $result = $manage->companyInfo($this->cmpId);
 
         if (!$result['ok']) {
             // Unreachable is not "allowed". A tenant check that fails open is not
@@ -75,15 +87,58 @@ final class Context
             Http::error(503, 'context_unavailable', 'Cannot confirm company access right now. Please retry.');
         }
 
-        $body = $result['body'] ?? [];
-        $company = $body['data'] ?? $body['company'] ?? $body;
+        $company = ManageAccess::companyRow($result['body'] ?? null);
         $resolved = (int) ($company['cmp_id'] ?? $company['comp_id'] ?? $company['id'] ?? 0);
 
         if ($resolved !== $this->cmpId) {
             Http::forbidden('You do not have access to this company.');
         }
 
+        // The same row says whether this person OWNS the company. Reading it
+        // here is what makes an owner an owner in this product: the portal
+        // session cannot answer that question, because it does not know which
+        // company is being opened.
+        self::$accessTypes[$key] = ManageAccess::forCompany($manage, $this->cmpId, $company);
         self::$verified[$key] = true;
+    }
+
+    /**
+     * 1 = owner of this company, 0 = delegated, null = Manage did not say.
+     *
+     * Resolves on demand so a caller that reaches it before assertAllowed()
+     * still gets an answer rather than a silent "not the owner".
+     */
+    public function accessType(Auth $auth): ?int
+    {
+        if ($auth->isService()) {
+            return ManageAccess::OWNER;
+        }
+
+        $key = $this->cmpId . ':' . $auth->fingerprint();
+        if (!array_key_exists($key, self::$accessTypes)) {
+            $this->assertAllowed($auth);
+        }
+
+        $fromManage = self::$accessTypes[$key] ?? null;
+        if ($fromManage !== null) {
+            return $fromManage;
+        }
+
+        // Only if Manage said nothing: a portal session that happens to carry
+        // acs_type is still worth honouring, and costs nothing to check.
+        return $auth->accessType();
+    }
+
+    public function isOwner(Auth $auth): bool
+    {
+        return $this->accessType($auth) === ManageAccess::OWNER;
+    }
+
+    /** Test seam: the memo is per request in production and must not leak between cases. */
+    public static function forgetAccess(): void
+    {
+        self::$verified = [];
+        self::$accessTypes = [];
     }
 
     /** @return array{cmp_id:int, fy_id:int, bo_id:int} */

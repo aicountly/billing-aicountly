@@ -273,12 +273,18 @@ function UserMenu() {
   const navigate = useNavigate()
   const { session, can } = useBilling()
 
-  const name = session?.display_name ?? 'You'
-  const initials = name
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? '')
-    .join('')
+  // Initials only from a real name. The portal does not always send one, and
+  // the fallback is a uuid — "7" in an avatar is the first character of an
+  // identifier, not a person.
+  const named = session?.display_name_known === true
+  const name = named ? (session?.display_name as string) : 'Your account'
+  const initials = named
+    ? name
+        .split(/\s+/)
+        .slice(0, 2)
+        .map((part) => part[0]?.toUpperCase() ?? '')
+        .join('')
+    : ''
 
   return (
     <Popover label={<span className="billing-avatar">{initials || <User size={16} aria-hidden />}</span>} ariaLabel="Your account" asChild>
@@ -287,7 +293,7 @@ function UserMenu() {
           <div className="billing-menu__heading">
             <strong>{name}</strong>
             <div style={{ color: 'var(--billing-muted)', fontSize: 12 }}>
-              {session?.is_owner ? 'Owner' : 'Billing profile'}
+              {session?.is_owner ? 'Owner of this company' : 'Billing profile'}
             </div>
           </div>
           {can('settings.manage') && (

@@ -31,6 +31,7 @@ const PERIOD = {
 export const ownerSession: BillingSession = {
   uuid: 'demo-owner',
   display_name: 'Rohit Gupta',
+  display_name_known: true,
   is_owner: true,
   context: { cmp_id: 1, fy_id: 4, bo_id: 0 },
   permissions: [],

@@ -73,8 +73,37 @@ if ($key !== '' && isset($seen[$key])) {
 $n = count($seen) + 1;
 
 // --- Manage ---------------------------------------------------------------
+/**
+ * Ownership is keyed off the company id so one stub can play every shape
+ * Manage has used. Company 55 — the one almost every test opens — deliberately
+ * says NOTHING about ownership, which is the case production is actually in:
+ * companyinfo answers, the row carries no acs_type, and the resolution has to
+ * fall through to the companies list.
+ */
+$manageOwnership = [
+    61 => ['ownership' => 'owner'],
+    62 => ['ownership' => 'shared'],
+    63 => ['acs_type' => 1],
+    64 => ['is_creator' => true],
+    65 => ['acs_type' => 0],
+];
+
 if (str_contains($path, '/companyinfo')) {
-    echo json_encode(['data' => ['cmp_id' => (int) ($_GET['comp_id'] ?? 0), 'cmp_name' => 'Stub Trading Co']]);
+    $id = (int) ($_GET['comp_id'] ?? 0);
+    // companyinfo never carries ownership here, mirroring the real payload the
+    // browser's parser reads: it pulls ownership off the LIST row, not this one.
+    echo json_encode(['data' => ['cmp_id' => $id, 'cmp_name' => 'Stub Trading Co']]);
+    exit;
+}
+
+if (str_contains($path, '/companies')) {
+    $rows = [];
+    foreach ($manageOwnership as $id => $fields) {
+        $rows[] = ['comp_id' => $id, 'company_name' => 'Stub Co ' . $id] + $fields;
+    }
+    // 55 is in the list but says nothing either, so it resolves to null.
+    $rows[] = ['comp_id' => 55, 'company_name' => 'Stub Trading Co'];
+    echo json_encode(['data' => $rows, 'meta' => ['total' => count($rows)]]);
     exit;
 }
 
