@@ -112,8 +112,14 @@ final class ScheduleService
     /**
      * Raise this occurrence of a recurring bill.
      *
-     * Called when the user presses "bill it now", or by the scheduled run. Either
-     * way it goes straight to the Books Sales API through TransactionService, so
+     * A PERSON CALLS THIS, always. `GET /v1/recurring/due` lists the rules whose
+     * date has arrived and someone presses "bill it now" on the ones they mean;
+     * nothing sweeps this table on a timer. A scheduler that raised invoices
+     * unattended would post statutory documents to Books with nobody watching
+     * for the ones it got wrong, and it would be indistinguishable from the
+     * background synchronisation this architecture exists to avoid.
+     *
+     * It goes straight to the Books Sales API through TransactionService, so
      * there is exactly one path a sale can take through this product.
      */
     public function runRecurring(int $ruleId, ?string $dueDate = null): array
