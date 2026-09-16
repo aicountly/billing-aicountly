@@ -18,7 +18,16 @@ require __DIR__ . '/../src/Autoload.php';
 
 Env::load(__DIR__ . '/../.env');
 
+use Aicountly\Api\Domain\BillerDeskService;
+use Aicountly\Api\Domain\CollectionsService;
+use Aicountly\Api\Domain\ComplianceService;
 use Aicountly\Api\Domain\DuesService;
+use Aicountly\Api\Domain\Metric;
+use Aicountly\Api\Domain\OverviewService;
+use Aicountly\Api\Domain\Period;
+use Aicountly\Api\Domain\RegisterReader;
+use Aicountly\Api\Domain\ReportService;
+use Aicountly\Api\Domain\SupplierDuesService;
 use Aicountly\Api\Domain\ScheduleService;
 use Aicountly\Api\Domain\TransactionService;
 
@@ -126,6 +135,7 @@ function resetDatabase(): void
         'billing_transaction_requests', 'billing_integration_commands',
         'billing_favourite_items', 'billing_saved_filters', 'billing_user_preferences',
         'billing_profile_assignments', 'billing_profiles', 'billing_settings',
+        'billing_payment_promises', 'billing_day_close_checks',
     ];
     Db::connect()->exec('TRUNCATE ' . implode(', ', $tables) . ', billing_audit_log RESTART IDENTITY CASCADE');
     @unlink(sys_get_temp_dir() . '/stub-idempotency.json');
@@ -549,6 +559,432 @@ check('a reminder rule with a minimum skips small bills', function () use ($ctx,
     assertSame(0, count($result['candidates']), 'the 120000 bill is below the minimum');
 });
 
+echo "\nThe five dashboards\n";
+
+check('an owner lands on the overview and a biller on their own desk', function () use ($ctx) {
+    resetDatabase();
+    Permissions::seed($ctx);
+
+    $owner = authFor('user-owner', 1);
+    $biller = userWithProfile($ctx, 'user-biller', 'biller');
+
+    assertSame(
+        '/dashboard/overview',
+        Dashboards::landing(Permissions::granted($ctx, $owner), true),
+        'the owner starts on the business',
+    );
+    assertSame(
+        '/dashboard/biller',
+        Dashboards::landing(Permissions::granted($ctx, $biller), false),
+        'the biller starts at the counter',
+    );
+});
+
+check('a biller is refused the dashboards they cannot see, by the API and not the menu', function () use ($ctx) {
+    resetDatabase();
+    $biller = userWithProfile($ctx, 'user-biller', 'biller');
+
+    // The tab bar does not offer them...
+    $offered = array_column(Dashboards::permitted(Permissions::granted($ctx, $biller), false), 'key');
+    assertSame(['biller'], $offered, 'only the biller desk is offered');
+
+    // ...and neither does the API, which is the part that matters.
+    foreach (['overview', 'receivables', 'payables', 'cash-compliance'] as $key) {
+        assertThrows(
+            static fn () => Dashboards::assert($ctx, $biller, $key),
+            'not part of your Billing profile',
+            'a biller typing /dashboard/' . $key,
+        );
+    }
+
+    // And the one they may open, they may open.
+    Dashboards::assert($ctx, $biller, 'biller');
+});
+
+check('the overview leaves out the cards a profile may not see, rather than greying them', function () use ($ctx) {
+    resetDatabase();
+    $biller = userWithProfile($ctx, 'user-biller', 'biller');
+
+    $overview = (new OverviewService($ctx, $biller))->build(Period::resolve(['key' => 'month']));
+    $ids = array_column($overview['metrics'], 'id');
+
+    assertTrue(in_array('sales', $ids, true), 'a biller may see what they sold');
+    foreach (['to_collect', 'to_pay', 'cash_bank'] as $hidden) {
+        assertTrue(!in_array($hidden, $ids, true), $hidden . ' is absent, not shown as unavailable');
+    }
+});
+
+check('an owner gets four cards, each saying what kind of number it is', function () use ($ctx, $auth) {
+    resetDatabase();
+    $overview = (new OverviewService($ctx, $auth))->build(Period::resolve(['key' => 'month']));
+
+    $byId = [];
+    foreach ($overview['metrics'] as $metric) {
+        $byId[$metric['id']] = $metric;
+    }
+
+    assertSame(4, count($byId), 'four cards');
+    assertSame(Metric::BASIS_PERIOD, $byId['sales']['basis'], 'sales is a movement');
+    assertSame(Metric::BASIS_AS_OF, $byId['to_collect']['basis'], 'what is owed is a balance');
+    assertSame(Metric::BASIS_AS_OF, $byId['cash_bank']['basis'], 'so is cash and bank');
+
+    foreach ($byId as $id => $metric) {
+        assertTrue($metric['definition'] !== '', $id . ' says what it counts');
+    }
+});
+
+check('an unreachable Books makes a card unavailable, never zero', function () use ($ctx, $auth) {
+    resetDatabase();
+    stubFail('bill-by-bill', 500);
+
+    $overview = (new OverviewService($ctx, $auth))->build(Period::resolve(['key' => 'month']));
+    stubRecover();
+
+    $collect = null;
+    foreach ($overview['metrics'] as $metric) {
+        if ($metric['id'] === 'to_collect') {
+            $collect = $metric;
+        }
+    }
+
+    assertTrue($collect !== null, 'the card is still drawn');
+    assertSame('unavailable', $collect['status'], 'and says so');
+    assertSame(null, $collect['value'], 'with no value at all — a zero here reads as a quiet day');
+
+    // The other three were perfectly readable and must survive it.
+    $ready = array_filter($overview['metrics'], static fn (array $m) => $m['status'] === 'ready');
+    assertTrue(count($ready) >= 2, 'one dead service does not blank the whole screen');
+});
+
+check('a receipt in the period is collections, and is not called revenue', function () use ($ctx, $auth) {
+    resetDatabase();
+    $dashboard = (new CollectionsService($ctx, $auth))->build(Period::resolve(['from' => '2026-09-01', 'to' => '2026-09-30']));
+
+    $collected = null;
+    foreach ($dashboard['metrics'] as $metric) {
+        if ($metric['id'] === 'collected') {
+            $collected = $metric;
+        }
+    }
+
+    assertTrue($collected !== null, 'the card exists');
+    assertSame(50000.0, $collected['value'], 'the stub receipt');
+    assertSame(Metric::BASIS_PERIOD, $collected['basis'], 'a movement, not a balance');
+    assertTrue(str_contains($collected['definition'], 'not revenue'), 'and the wording says what it is not');
+});
+
+check('the ageing buckets add up to the total shown above them', function () use ($ctx, $auth) {
+    resetDatabase();
+    $dues = (new DuesService($ctx, $auth))->receivables();
+
+    $sum = array_sum($dues['ageing']);
+    assertTrue(abs($sum - $dues['total']) < 0.01, "buckets {$sum} against total {$dues['total']}");
+    assertTrue($dues['ageing_reconciles'], 'and the service says so itself');
+});
+
+check('a bill with no due date gets its own bucket, not the healthy one', function () use ($ctx, $auth) {
+    // Folding an undated bill into "not yet due" paints it green. It might be
+    // months late and nobody would chase it.
+    resetDatabase();
+    $service = new \ReflectionClass(DuesService::class);
+    $method = $service->getMethod('dues');
+    $method->setAccessible(true);
+
+    $rows = (new DuesService($ctx, $auth))->receivables();
+    assertSame(0.0, $rows['ageing']['no_due_date'], 'the stub bill is dated, so the bucket is empty');
+    assertTrue(array_key_exists('no_due_date', $rows['ageing']), 'but the bucket exists');
+});
+
+check('the priority queue names who to ring and the arithmetic behind it', function () use ($ctx, $auth) {
+    resetDatabase();
+    $dashboard = (new CollectionsService($ctx, $auth))->build(Period::resolve(['key' => 'month']));
+    $priorities = $dashboard['panels']['priorities'];
+
+    assertTrue($priorities !== null, 'the stub bill is overdue, so there is somebody to chase');
+    $sum = 0.0;
+    foreach ($priorities['accounts'] as $account) {
+        $sum += $account['overdue'];
+    }
+    assertTrue(abs($sum - $priorities['amount']) < 0.01, 'the named accounts add up to the figure quoted');
+    assertTrue(!str_contains(json_encode($priorities), 'confidence'), 'and no confidence score is invented');
+});
+
+check('a promise is a record of a conversation, judged against what Books says', function () use ($ctx, $auth) {
+    resetDatabase();
+    $promises = new \Aicountly\Api\Domain\PromiseService($ctx, $auth);
+    $promises->record([
+        'account_id' => 501, 'amount' => 25000, 'promised_date' => '2020-01-01', 'status' => 'CONFIRMED',
+    ]);
+
+    // Books still shows something outstanding, and the date has passed.
+    $open = $promises->open('2026-09-16', [501 => ['account_name' => 'Northern Distributors', 'total' => 120000.0]]);
+    assertSame(1, count($open), 'one promise');
+    assertSame('PAST_DUE', $open[0]['standing'], 'the date went by and the money did not come');
+    assertSame(25000.0, $open[0]['promised_amount'], 'what they said');
+    assertSame(120000.0, $open[0]['still_outstanding'], 'and, separately, what Books says is left');
+
+    // Books says nothing is left: the promise is settled, without this product
+    // ever having written that down.
+    $settled = $promises->open('2026-09-16', [501 => ['account_name' => 'Northern Distributors', 'total' => 0.0]]);
+    assertSame('SETTLED', $settled[0]['standing'], 'settled because Books says so, not because we marked it');
+});
+
+check('a promise cannot be recorded without the permission for it', function () use ($ctx) {
+    resetDatabase();
+    $biller = userWithProfile($ctx, 'user-biller', 'biller');
+
+    assertThrows(
+        static fn () => (new \Aicountly\Api\Domain\PromiseService($ctx, $biller))->record([
+            'account_id' => 501, 'amount' => 100, 'promised_date' => '2026-10-01',
+        ]),
+        'Billing profile',
+        'a biller noting a promise',
+    );
+});
+
+check('two bills that look like the same bill are flagged, and neither is blocked', function () use ($ctx, $auth) {
+    resetDatabase();
+    $dashboard = (new SupplierDuesService($ctx, $auth))->build(Period::resolve(['key' => 'month']));
+    $review = $dashboard['panels']['review'];
+
+    assertTrue($review['available'], 'the queue was read');
+    $codes = [];
+    foreach ($review['rows'] as $row) {
+        foreach ($row['flags'] as $flag) {
+            $codes[$flag['code']] = true;
+        }
+    }
+
+    // MD-7812 and MD/7812 are the same number written two ways.
+    assertTrue(isset($codes['duplicate_number']), 'the same bill number twice is caught through the punctuation');
+    assertTrue(isset($codes['missing_bill_date']), 'and a bill with no date of its own is caught');
+
+    // Four purchases in the stub. The clean one is not in the queue at all:
+    // a bill with nothing wrong with it is recorded, not "awaiting review".
+    assertSame(4, $review['examined'], 'all four were looked at');
+    assertSame(3, count($review['rows']), 'and only the three with something odd are listed');
+
+    $listed = array_column($review['rows'], 'bill_no');
+    assertTrue(!in_array('AP-9021', $listed, true), 'the clean bill is absent');
+
+    // Flagged, not blocked: the row carries the other document so a person can
+    // compare them, and nothing is merged or refused automatically.
+    foreach ($review['rows'] as $row) {
+        if ($row['bill_no'] === 'MD-7812') {
+            assertTrue(count($row['peer_bills']) > 0, 'the other bill is offered for comparison');
+        }
+    }
+});
+
+check('a bank deposit is counted as neither money in nor money out', function () use ($ctx, $auth) {
+    // A cash deposit into the bank is not income and a withdrawal is not an
+    // expense. Counting either would show a business that banked its takings on
+    // the way in and spent them on the way out.
+    resetDatabase();
+    $dashboard = (new ComplianceService($ctx, $auth))->build(Period::resolve(['key' => 'today']), '2026-09-15');
+    $movement = $dashboard['panels']['movement'];
+
+    assertTrue($movement['available'], 'the day was read');
+    assertSame(50000.0, $movement['in_total'], 'the receipt');
+    assertSame(12000.0, $movement['out_total'], 'the payment');
+    assertSame(40000.0, $movement['transferred']['amount'], 'and the contra, reported on its own');
+    assertTrue(
+        abs($movement['in_total'] - 50000.0) < 0.01 && abs($movement['out_total'] - 12000.0) < 0.01,
+        'the 40,000 transfer is in neither total',
+    );
+});
+
+check('ticking a day-close step records who looked and locks nothing', function () use ($ctx, $auth) {
+    resetDatabase();
+    $service = new ComplianceService($ctx, $auth);
+    $service->setStep('2026-09-15', 'receipts_reviewed', true);
+
+    $dashboard = $service->build(Period::resolve(['key' => 'today']), '2026-09-15');
+    $steps = [];
+    foreach ($dashboard['panels']['checklist']['steps'] as $step) {
+        $steps[$step['key']] = $step;
+    }
+
+    assertTrue($steps['receipts_reviewed']['checked'], 'the tick stuck');
+    assertSame($auth->uuid, $steps['receipts_reviewed']['checked_by'], 'and says who');
+    assertTrue(!$steps['payments_reviewed']['checked'], 'the others are untouched');
+
+    // Nothing anywhere claims a period was closed.
+    assertTrue(
+        str_contains($dashboard['panels']['checklist']['note'], 'closes no period'),
+        'the screen says outright that it locks nothing',
+    );
+
+    $service->setStep('2026-09-15', 'receipts_reviewed', false);
+    $after = $service->build(Period::resolve(['key' => 'today']), '2026-09-15');
+    assertTrue(!$after['panels']['checklist']['steps'][0]['checked'], 'and it can be unticked');
+});
+
+check('an unknown day-close step is refused', function () use ($ctx, $auth) {
+    resetDatabase();
+    assertThrows(
+        static fn () => (new ComplianceService($ctx, $auth))->setStep('2026-09-15', 'lock_the_books', true),
+        'not a step',
+        'a step nobody defined',
+    );
+});
+
+check('the biller desk counts this biller\'s own work and nobody else\'s', function () use ($ctx) {
+    resetDatabase();
+    $biller = userWithProfile($ctx, 'user-biller', 'biller');
+    $other = userWithProfile($ctx, 'user-other', 'biller');
+
+    (new TransactionService($ctx, $biller))->create('sale', saleInput(['date' => gmdate('Y-m-d')]));
+    (new TransactionService($ctx, $other))->create('sale', saleInput(['date' => gmdate('Y-m-d')]));
+
+    $desk = (new BillerDeskService($ctx, $biller))->build(Period::resolve(['key' => 'today']));
+    $mine = null;
+    foreach ($desk['metrics'] as $metric) {
+        if ($metric['id'] === 'my_invoices_today') {
+            $mine = $metric;
+        }
+    }
+
+    assertSame(1, $mine['value'], 'one bill, mine — not the two on the counter');
+    assertSame(Metric::BASIS_COUNT, $mine['basis'], 'and it is a count, not an amount');
+});
+
+echo "\nReading Books honestly\n";
+
+check('a register that could not be read in full is not totalled', function () {
+    // Summing a page and calling it a month is the easiest way to put a
+    // confidently wrong figure in front of an owner: it looks plausible and is
+    // short by whatever did not fit.
+    $truncated = ['available' => true, 'complete' => false, 'rows' => [
+        ['grand_total' => 100.0], ['grand_total' => 200.0],
+    ]];
+    assertSame(null, RegisterReader::total($truncated), 'no total from a partial read');
+    assertSame(null, RegisterReader::daily($truncated, Period::resolve(['key' => 'month'])), 'and no chart either');
+
+    $complete = ['available' => true, 'complete' => true, 'rows' => [
+        ['grand_total' => 100.0], ['grand_total' => 200.0],
+    ]];
+    assertSame(300.0, RegisterReader::total($complete), 'a complete read does total');
+});
+
+check('a row with no readable amount stops the total rather than shortening it', function () {
+    $reading = ['available' => true, 'complete' => true, 'rows' => [
+        ['grand_total' => 100.0], ['voucher_no' => 'INV/2'],
+    ]];
+    assertSame(null, RegisterReader::total($reading), 'one unreadable row means no total');
+});
+
+check('a part-paid invoice never reads as paid', function () {
+    $paid = \Aicountly\Api\Domain\BooksReadings::settlementStatus(['grand_total' => 1000.0, 'balance' => 0.0]);
+    $part = \Aicountly\Api\Domain\BooksReadings::settlementStatus(['grand_total' => 1000.0, 'balance' => 400.0]);
+    $none = \Aicountly\Api\Domain\BooksReadings::settlementStatus(['grand_total' => 1000.0, 'balance' => 1000.0]);
+    $unknown = \Aicountly\Api\Domain\BooksReadings::settlementStatus(['voucher_no' => 'INV/1']);
+
+    assertSame('PAID', $paid, 'settled');
+    assertSame('PARTIALLY_PAID', $part, 'half of it is still owed and the badge says so');
+    assertSame('UNPAID', $none, 'none of it paid');
+    assertSame(null, $unknown, 'and an unreadable row shows no status rather than a guessed one');
+});
+
+check('a comparison against nothing is refused, and a rise is not always good', function () {
+    $noBase = Metric::compare(1000.0, 0.0, 'last month', riseIsGood: true);
+    assertTrue($noBase['available'] === false, 'dividing by nothing gives no percentage');
+    assertSame('No comparison available', $noBase['label'], 'and it says so instead of inventing one');
+
+    $salesUp = Metric::compare(110.0, 100.0, 'last month', riseIsGood: true);
+    assertSame('positive', $salesUp['tone'], 'more sales is good news');
+
+    $overdueUp = Metric::compare(110.0, 100.0, 'last month', riseIsGood: false);
+    assertSame('warning', $overdueUp['tone'], 'more overdue debt is not, and must not be painted green');
+});
+
+check('today is the company\'s today, not the server\'s', function () {
+    $india = Period::resolve(['key' => 'today'], 'Asia/Kolkata');
+    $pacific = Period::resolve(['key' => 'today'], 'America/Los_Angeles');
+
+    assertSame($india->from, $india->to, 'today is one day');
+    assertTrue($india->timezone === 'Asia/Kolkata', 'and it is kept with the figure');
+    // At most one calendar day apart, and often different — which is the point.
+    $gap = abs((new \DateTimeImmutable($india->today()))->getTimestamp() - (new \DateTimeImmutable($pacific->today()))->getTimestamp());
+    assertTrue($gap <= 86400, 'the two clocks differ by at most a day');
+
+    $nonsense = Period::resolve(['key' => 'today'], 'Mars/Olympus_Mons');
+    assertSame('Asia/Kolkata', $nonsense->timezone, 'a timezone PHP does not know falls back rather than failing');
+});
+
+check('a period compares against the same number of days before it', function () {
+    $period = Period::resolve(['from' => '2026-09-01', 'to' => '2026-09-30']);
+    assertSame(30, $period->days(), 'thirty days');
+    assertSame('2026-08-02', $period->previousFrom, 'compared with the thirty before it');
+    assertSame('2026-08-31', $period->previousTo, 'not with a 31-day August');
+});
+
+echo "\nReports and exports\n";
+
+check('an export carries the whole filtered set, or refuses', function () use ($ctx, $auth) {
+    resetDatabase();
+    $report = (new ReportService($ctx, $auth))->run('sales_register', Period::resolve(['from' => '2026-09-01', 'to' => '2026-09-30']));
+
+    assertSame(2, count($report['rows']), 'both stub invoices');
+    assertTrue($report['complete'], 'and the read was complete');
+    $csv = ReportService::toCsv($report);
+    assertSame(4, count(array_filter(explode("\n", trim($csv)))), 'header, two rows, total');
+
+    // A partial read must not produce a short file that looks whole.
+    $report['complete'] = false;
+    assertThrows(
+        static fn () => ReportService::toCsv($report),
+        'would give you a short file',
+        'exporting a truncated report',
+    );
+});
+
+check('a customer named like a formula exports as a name', function () use ($ctx, $auth) {
+    resetDatabase();
+    $report = (new ReportService($ctx, $auth))->run('sales_register', Period::resolve(['key' => 'month']));
+    $report['rows'] = [
+        ['document_no' => 'INV/9', 'date' => '2026-09-15', 'party' => '=cmd|\' /c calc\'!A1', 'amount' => 100.0, 'status' => 'PAID'],
+        ['document_no' => 'INV/10', 'date' => '2026-09-15', 'party' => "\t@SUM(1+1)", 'amount' => 50.0, 'status' => 'PAID'],
+    ];
+    $report['complete'] = true;
+
+    $csv = ReportService::toCsv($report);
+    assertTrue(str_contains($csv, "'=cmd"), 'a leading = is neutralised');
+    assertTrue(str_contains($csv, "'@SUM"), 'and so is a leading @ hidden behind a tab');
+    assertTrue(!preg_match('/,=cmd/', $csv), 'nothing reaches the file as a live formula');
+});
+
+check('exporting needs its own permission, separate from reading', function () use ($ctx) {
+    resetDatabase();
+    // A profile may be trusted to look a balance up on screen and not to walk
+    // out with the ledger.
+    $collection = userWithProfile($ctx, 'user-collection', 'collection');
+    assertTrue(
+        !Permissions::allows($ctx, $collection, 'export.data'),
+        'a collection user cannot export',
+    );
+    assertTrue(
+        !Permissions::allows($ctx, $collection, 'reports.view'),
+        'nor open the report screen',
+    );
+});
+
+check('a biller cannot run a report about money they may not see', function () use ($ctx) {
+    resetDatabase();
+    $biller = userWithProfile($ctx, 'user-biller', 'biller');
+
+    assertThrows(
+        static fn () => (new ReportService($ctx, $biller))->run('payables_ageing', Period::resolve(['key' => 'month'])),
+        'Billing profile',
+        'a biller running the payables ageing',
+    );
+    assertThrows(
+        static fn () => (new ReportService($ctx, $biller))->run('cash_bank_summary', Period::resolve(['key' => 'month'])),
+        'does not show balances',
+        'a biller running the cash summary',
+    );
+});
+
 echo "\nData ownership (release-blocking)\n";
 
 check('no table holds a voucher, ledger, balance, item or party', function () {
@@ -577,21 +1013,70 @@ check('no column caches a remote balance, name or valuation', function () {
     assertSame(0, count($suspicious), 'cached remote fields exist: ' . json_encode($suspicious));
 });
 
-check('the one amount column that exists is a record of what we told a customer', function () {
-    // billing_reminder_log.amount_at_send. It is a record of a message that was
-    // sent, not a balance this product maintains, and nothing reads it back as
-    // one — the reminder screen re-reads Books every time.
+check('the only amounts stored are records of what somebody said', function () {
+    // Two kinds of numeric column are allowed in this product, and the list is
+    // spelled out one column at a time so that adding a third is a deliberate
+    // act with a justification attached rather than a migration nobody queried.
+    //
+    // A RULE'S OWN TERMS — what a recurring bill is for, the floor below which
+    // a reminder is not worth sending. Ours by definition: nothing else knows
+    // the rule exists.
+    //
+    // A RECORD OF A CONVERSATION — what we told a customer was outstanding when
+    // we chased them, and what they said back. Neither is a balance. Nothing
+    // reads either one back as one: the reminder screen re-reads Books every
+    // time, and a promise is judged by asking Books what is still owed.
+    //
+    // What remains forbidden is the thing this test exists for: a column that
+    // holds a figure Books, Inventory or Manage owns, so that some screen can
+    // render it without asking. That is a second source of truth, and it is
+    // wrong the moment anybody posts anything anywhere else.
+    $allowedTables = ['billing_recurring_rules', 'billing_reminder_rules'];
+    $allowedColumns = [
+        'billing_reminder_log.amount_at_send'      => 'what we told a customer they owed, when we told them',
+        'billing_payment_promises.promised_amount' => 'what the customer said they would pay',
+    ];
+
     $amounts = Db::all(
         "SELECT table_name, column_name FROM information_schema.columns
-         WHERE table_schema = 'public' AND data_type = 'numeric'
-           AND table_name NOT IN ('billing_recurring_rules', 'billing_reminder_rules')",
+         WHERE table_schema = 'public' AND data_type = 'numeric'",
     );
+
     foreach ($amounts as $column) {
+        if (in_array($column['table_name'], $allowedTables, true)) {
+            continue;
+        }
         assertTrue(
-            $column['table_name'] === 'billing_reminder_log' && $column['column_name'] === 'amount_at_send',
+            isset($allowedColumns[$column['table_name'] . '.' . $column['column_name']]),
             "unexpected numeric column {$column['table_name']}.{$column['column_name']}",
         );
     }
+});
+
+check('a promise to pay is never read back as a balance', function () {
+    // The promise is ours; the outstanding is Books'. They are shown side by
+    // side so that a promise which was not kept is visible AS one — which only
+    // works while the two stay separate. If this ever fails, some screen has
+    // started answering "how much do they owe" out of our own table.
+    $sources = [
+        __DIR__ . '/../src/Domain/PromiseService.php',
+        __DIR__ . '/../src/Domain/CollectionsService.php',
+    ];
+
+    foreach ($sources as $file) {
+        $code = (string) file_get_contents($file);
+        assertTrue(
+            !preg_match('/SUM\s*\(\s*promised_amount/i', $code),
+            basename($file) . ' totals promised_amount as if it were a balance',
+        );
+    }
+
+    // And the shape proves it: the outstanding beside a promise is a separate
+    // field, fed from the Books reading rather than from the promise row.
+    $service = new \ReflectionClass(\Aicountly\Api\Domain\PromiseService::class);
+    $open = (string) file_get_contents($service->getFileName());
+    assertTrue(str_contains($open, "'still_outstanding'"), 'the Books figure is carried separately');
+    assertTrue(str_contains($open, "'promised_amount'"), 'and so is what they said');
 });
 
 check('the audit log refuses UPDATE and DELETE', function () {

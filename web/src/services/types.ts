@@ -11,10 +11,20 @@ export interface MenuEntry {
   key: string
   label: string
   path: string
+  /** Sub-entries the server decided this user may reach. Already permission-filtered. */
+  children?: Array<{ label: string; path: string }>
+}
+
+/** A dashboard this profile may open. The API checks the same list. */
+export interface DashboardEntry {
+  key: string
+  label: string
+  path: string
 }
 
 export interface BillingSettings {
   cmp_id: number
+  timezone: string
   business_mode: 'micro' | 'trader' | 'service' | 'retail' | 'owner'
   business_type: string | null
   gst_registered: boolean
@@ -36,6 +46,16 @@ export interface BillingSession {
   settings: BillingSettings
   /** Computed on the server from the permissions and the business mode. */
   menu: MenuEntry[]
+  /**
+   * The dashboards this profile may open, in order, and where it starts.
+   *
+   * Both come from the server for the same reason the menu does: a tab bar
+   * built in the browser out of a permission list the browser was handed is a
+   * tab bar the browser can edit. The endpoints check the same list, so a tab
+   * that is absent here is also a URL that returns 403.
+   */
+  dashboards: DashboardEntry[]
+  landing: string
 }
 
 export interface IntegrationCommand {
@@ -97,7 +117,17 @@ export interface Dues {
   overdue: number
   due_today: number
   due_this_week: number
-  ageing: { current: number; '1_30': number; '31_60': number; '61_90': number; '90_plus': number }
+  ageing: {
+    current: number
+    '1_30': number
+    '31_60': number
+    '61_90': number
+    '90_plus': number
+    /** Bills Books returned without a due date. Its own bucket so the bar still adds up. */
+    no_due_date: number
+  }
+  /** The server checked the buckets sum to the total. False means do not draw the breakdown. */
+  ageing_reconciles: boolean
   parties: DueParty[]
   bills: DueBill[]
   note: string
@@ -110,26 +140,6 @@ export interface CashBank {
   bank?: number | null
   accounts?: Array<{ account_id: number; account_name: string; balance: number; kind: 'cash' | 'bank' }>
   source?: string
-}
-
-export interface DashboardCards {
-  sales?: {
-    available: boolean
-    today: Record<string, unknown> | null
-    period: Record<string, unknown> | null
-    reason: string | null
-  }
-  receivable?: { available: boolean; reason?: string; total?: number; overdue?: number; due_today?: number; due_this_week?: number }
-  payable?: { available: boolean; reason?: string; total?: number; overdue?: number; due_this_week?: number }
-  cash_bank: CashBank
-  low_stock?: { available: boolean; reason?: string; items?: Array<Record<string, unknown>> }
-  attention: { unfinished_transactions: number; recurring_due: number }
-}
-
-export interface Dashboard {
-  period: { from: string; to: string }
-  cards: DashboardCards
-  note: string
 }
 
 export interface Insight {

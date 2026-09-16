@@ -168,5 +168,68 @@ if (str_contains($path, '/dashboard/sales')) {
     exit;
 }
 
+/**
+ * The voucher register, which is what every dashboard reads.
+ *
+ * Shaped like the real contract, with `meta.total` present so the truncation
+ * rule can be exercised: a reader that cannot prove it has every row must
+ * refuse to total them.
+ */
+if (str_contains($path, '/registers')) {
+    $type = (int) ($_GET['vch_type_id'] ?? 0);
+    $rows = [];
+
+    if ($type === 18) {            // sales
+        $rows = [
+            ['voucher_id' => 4101, 'vch_uuid' => 'vch-s1', 'voucher_no' => 'INV/0001', 'voucher_date' => '2026-09-14',
+             'account_id' => 501, 'account_name' => 'Northern Distributors', 'grand_total' => 118000.0, 'balance' => 0.0],
+            ['voucher_id' => 4102, 'vch_uuid' => 'vch-s2', 'voucher_no' => 'INV/0002', 'voucher_date' => '2026-09-15',
+             'account_id' => 502, 'account_name' => 'Mehta Traders', 'grand_total' => 59000.0, 'balance' => 29500.0],
+        ];
+    } elseif ($type === 13) {      // receipts
+        $rows = [
+            ['voucher_id' => 4201, 'voucher_no' => 'RCP/0001', 'voucher_date' => '2026-09-15',
+             'account_id' => 501, 'account_name' => 'Northern Distributors', 'grand_total' => 50000.0],
+        ];
+    } elseif ($type === 9) {       // payments
+        $rows = [
+            ['voucher_id' => 4301, 'voucher_no' => 'PAY/0001', 'voucher_date' => '2026-09-15',
+             'account_id' => 601, 'account_name' => 'Aarti Plastics', 'grand_total' => 12000.0],
+        ];
+    } elseif ($type === 1) {       // contra — a bank deposit
+        $rows = [
+            ['voucher_id' => 4401, 'voucher_no' => 'CON/0001', 'voucher_date' => '2026-09-15', 'grand_total' => 40000.0],
+        ];
+    } elseif ($type === 11) {      // purchases, with two that look alike and one missing its date
+        $rows = [
+            ['voucher_id' => 4501, 'voucher_no' => 'PUR/0001', 'voucher_date' => '2026-09-10',
+             'account_id' => 601, 'account_name' => 'Mahalaxmi Distributors',
+             'supplier_invoice_no' => 'MD-7812', 'supplier_invoice_date' => '2026-09-09', 'grand_total' => 24000.0],
+            ['voucher_id' => 4502, 'voucher_no' => 'PUR/0002', 'voucher_date' => '2026-09-11',
+             'account_id' => 601, 'account_name' => 'Mahalaxmi Distributors',
+             'supplier_invoice_no' => 'MD/7812', 'supplier_invoice_date' => '2026-09-09', 'grand_total' => 24000.0],
+            ['voucher_id' => 4503, 'voucher_no' => 'PUR/0003', 'voucher_date' => '2026-09-12',
+             'account_id' => 602, 'account_name' => 'R.K. Industries',
+             'supplier_invoice_no' => 'RKI-4490', 'grand_total' => 32500.0],
+            // Nothing wrong with this one. It must not appear in the queue:
+            // a clean bill is recorded, not "awaiting review".
+            ['voucher_id' => 4504, 'voucher_no' => 'PUR/0004', 'voucher_date' => '2026-09-13',
+             'account_id' => 603, 'account_name' => 'Aarti Plastics',
+             'supplier_invoice_no' => 'AP-9021', 'supplier_invoice_date' => '2026-09-12', 'grand_total' => 11800.0],
+        ];
+    }
+
+    echo json_encode(['data' => $rows, 'meta' => ['total' => count($rows), 'limit' => 500, 'offset' => 0]]);
+    exit;
+}
+
+if (str_contains($path, '/reports/account-summary')) {
+    echo json_encode(['data' => [
+        ['account_id' => 9001, 'account_name' => 'Cash in hand', 'group_name' => 'Cash-in-hand', 'closing_balance' => 42500.0],
+        ['account_id' => 9002, 'account_name' => 'HDFC Current', 'group_name' => 'Bank Accounts', 'closing_balance' => 282000.0],
+    ]]);
+    exit;
+}
+
 http_response_code(404);
 echo json_encode(['error' => ['code' => 'not_found', 'message' => 'Stub has no route for ' . $path], 'message' => 'no stub route']);

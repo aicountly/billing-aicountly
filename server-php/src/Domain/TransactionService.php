@@ -354,6 +354,20 @@ final class TransactionService
 
         if (($against = self::id($input['against_voucher_id'] ?? null)) !== null) {
             $payload['against_voucher_id'] = $against;
+            $payload['against_voucher_no'] = self::text($input['against_voucher_no'] ?? null);
+        }
+
+        // A note without a reason is a note somebody has to ring up about. The
+        // codes are Billing's own vocabulary for the shopkeeper's screen; Books
+        // is sent the code and the words, and decides what the accounting is.
+        if ($kind === 'credit_note' || $kind === 'debit_note') {
+            $reason = self::text($input['reason_code'] ?? null);
+            if ($reason !== null) {
+                $payload['reason_code'] = $reason;
+            }
+            // A price adjustment returns no goods. Saying so explicitly keeps a
+            // value-only credit from being read downstream as stock coming back.
+            $payload['value_adjustment_only'] = (bool) ($input['value_adjustment_only'] ?? false);
         }
 
         return $payload;

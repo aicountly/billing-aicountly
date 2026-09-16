@@ -10,9 +10,28 @@ with a small PHP API alongside it. Both halves deploy to cPanel.
 
 ## What this app does today
 
-Login → Dashboard. The dashboard shows a welcome message and a **Log out**
-button, and nothing else. No navigation, no modules, no placeholder cards —
-those arrive with the product.
+Login → the dashboard your Billing profile starts on. An owner lands on the
+business overview; a counter biller lands on the biller desk and is never shown
+the other four.
+
+Five dashboards, all reading live from Smart Books and Inventory:
+
+| | |
+|---|---|
+| **Overview** | sales, what you are owed, what you owe, what is in hand |
+| **Biller desk** | the counter screen — the next bill, and this user's own work |
+| **Receivables** | ageing, who to chase, what they promised |
+| **Payables** | what falls due, and bills worth a second look |
+| **Cash & compliance** | the day's money, the day-close checklist, document status |
+
+Behind them: sales and purchases, credit and debit notes with their original
+document, receipts and payments with allocation, bank deposits and withdrawals,
+ten live reports with CSV export, and Billing profiles deciding who sees what.
+
+See [docs/BILLING_IMPLEMENTATION_STATUS.md](docs/BILLING_IMPLEMENTATION_STATUS.md)
+for what each figure means, and
+[docs/BILLING_API_DEPENDENCIES.md](docs/BILLING_API_DEPENDENCIES.md) for the two
+capabilities no product in this deployment serves yet.
 
 Signing in is the AICOUNTLY portal's job, the same as every other AICOUNTLY
 SaaS: the app redirects to the portal, the portal returns an `auth_token`, and
@@ -53,6 +72,11 @@ same-origin.
 | `npm run build` | Type-check, then build to `web/dist/` |
 | `npm run typecheck` | Type-check only |
 | `npm run preview` | Serve the production build locally |
+
+`web/visual.html` is a development-only photo booth: it mounts the real
+dashboard components against fixtures so the screens can be checked at four
+widths without a portal session or a company's data. `vite build` takes
+`index.html` only, so none of it reaches the deployed bundle.
 
 The PHP API has no build step and no dependencies. To run it locally:
 

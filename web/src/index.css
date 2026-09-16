@@ -1,66 +1,79 @@
-/* AICOUNTLY 2026 design tokens — the same palette Books and Inventory use, so a
-   user moving between products does not feel they have changed application. */
+/* ---------------------------------------------------------------------------
+   AICOUNTLY Billing — design tokens
+
+   Green and white, light mint surfaces, thin borders, restrained shadow. The
+   product is used at a counter in daylight and printed from the same screen, so
+   it is LIGHT ONLY: there is no prefers-color-scheme block, and `color-scheme`
+   is declared so the browser does not darken form controls into a scheme the
+   rest of the page does not follow.
+
+   Both naming schemes live here on purpose. `--billing-*` is what the dashboard
+   components use. The short names (--fg, --surface, --accent…) are what the
+   transaction screens were already written against, and they are defined as the
+   same colours rather than left behind, so every screen changed palette at once
+   instead of the app having two.
+   --------------------------------------------------------------------------- */
 
 :root {
-  --bg: #ffffff;
-  --fg: #18181b;
-  --muted: #71717a;
-  --border: #e4e4e7;
-  --accent: #18181b;
-  --accent-fg: #fafafa;
+  color-scheme: light;
 
-  --surface: #ffffff;
-  --surface-2: #f4f4f5;
-  --surface-3: #e4e4e7;
-  --border-strong: #d4d4d8;
-  --link: #1d4ed8;
-  --focus: #2563eb;
-  --danger: #b91c1c;
-  --danger-bg: #fef2f2;
-  --success: #15803d;
-  --success-bg: #f0fdf4;
-  --warning: #b45309;
-  --warning-bg: #fffbeb;
-  --info: #1d4ed8;
-  --info-bg: #eff6ff;
+  /* Brand. #25b003 is the mark; actions use the darker green because white text
+     on #25b003 is about 2.4:1 and fails against anybody reading it at an angle
+     in sunlight. --billing-action is 5.6:1 on white. */
+  --billing-brand: #25b003;
+  --billing-action: #187a12;
+  --billing-action-hover: #125e0d;
+  --billing-mint: #eef9ec;
+  --billing-mint-strong: #d9efd4;
+  --billing-bg: #f6f9f7;
+  --billing-surface: #ffffff;
+  --billing-surface-2: #f7faf7;
+  --billing-text: #18251e;
+  --billing-muted: #5b6b62;
+  --billing-border: #e1e9e3;
+  --billing-border-strong: #c7d4ca;
+  --billing-danger: #b42318;
+  --billing-danger-bg: #fff0ef;
+  --billing-warning: #8a4b08;
+  --billing-warning-bg: #fff4df;
+  --billing-info: #14532d;
+  --billing-info-bg: #eef9ec;
+  --billing-radius: 16px;
+  --billing-radius-sm: 10px;
+  --billing-shadow: 0 4px 20px rgb(24 55 35 / 4%);
+  --billing-shadow-lg: 0 18px 44px rgb(24 55 35 / 14%);
 
-  --radius: 0.5rem;
-  --radius-sm: 0.375rem;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-lg: 0 10px 40px rgba(15, 23, 42, 0.16);
+  /* The names the transaction screens already use, pointed at the same palette. */
+  --bg: var(--billing-bg);
+  --fg: var(--billing-text);
+  --muted: var(--billing-muted);
+  --border: var(--billing-border);
+  --border-strong: var(--billing-border-strong);
+  --accent: var(--billing-action);
+  --accent-fg: #ffffff;
+  --surface: var(--billing-surface);
+  --surface-2: var(--billing-surface-2);
+  --surface-3: var(--billing-mint);
+  --link: var(--billing-action);
+  --focus: var(--billing-action);
+  --danger: var(--billing-danger);
+  --danger-bg: var(--billing-danger-bg);
+  --success: #216b18;
+  --success-bg: #eaf7e7;
+  --warning: var(--billing-warning);
+  --warning-bg: var(--billing-warning-bg);
+  --info: var(--billing-info);
+  --info-bg: var(--billing-info-bg);
+
+  --radius: var(--billing-radius-sm);
+  --radius-sm: 8px;
+  --shadow: var(--billing-shadow);
+  --shadow-lg: var(--billing-shadow-lg);
   --sidebar-w: 15rem;
-  --header-h: 3.5rem;
+  --header-h: 4rem;
 
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   font-size: 14px;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #09090b;
-    --fg: #fafafa;
-    --muted: #a1a1aa;
-    --border: #27272a;
-    --accent: #fafafa;
-    --accent-fg: #09090b;
-
-    --surface: #111113;
-    --surface-2: #18181b;
-    --surface-3: #27272a;
-    --border-strong: #3f3f46;
-    --link: #93c5fd;
-    --focus: #60a5fa;
-    --danger: #fca5a5;
-    --danger-bg: #2a1215;
-    --success: #86efac;
-    --success-bg: #0f2418;
-    --warning: #fcd34d;
-    --warning-bg: #2a2008;
-    --info: #93c5fd;
-    --info-bg: #0f1a2e;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --shadow-lg: 0 10px 40px rgba(0, 0, 0, 0.6);
-  }
 }
 
 * { box-sizing: border-box; }
@@ -68,19 +81,19 @@
 body {
   margin: 0;
   min-height: 100vh;
-  background: var(--bg);
-  color: var(--fg);
+  background: var(--billing-bg);
+  color: var(--billing-text);
   -webkit-font-smoothing: antialiased;
 }
 
-a { color: var(--link); text-decoration: none; }
+a { color: var(--billing-action); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
 button, input, select, textarea { font: inherit; color: inherit; }
 
 :focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
+  outline: 3px solid var(--billing-action);
+  outline-offset: 3px;
 }
 
 /* Tabular figures everywhere money or quantity appears: a column of amounts
@@ -91,41 +104,35 @@ button, input, select, textarea { font: inherit; color: inherit; }
   white-space: nowrap;
 }
 
+.spin { animation: billing-spin 1s linear infinite; }
+
+@keyframes billing-spin {
+  to { transform: rotate(360deg); }
+}
+
 /* ---------------------------------------------------------------------------
    Billing is used on a phone behind a counter at least as often as on a
-   desktop, so the sidebar becomes a bottom bar below 48rem rather than a
-   hamburger nobody opens.
+   desktop, so the sidebar becomes a real drawer below 48rem — opened from a
+   button in the header, not merely hidden.
    --------------------------------------------------------------------------- */
 
-.billing-bottombar {
-  display: none;
-}
-
 @media (max-width: 48rem) {
-  .billing-sidebar {
-    display: none;
-  }
-
-  .billing-bottombar {
-    display: flex;
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: var(--surface);
-    border-top: 1px solid var(--border);
-    z-index: 30;
-    /* Clear of the home indicator on a phone. */
-    padding-bottom: env(safe-area-inset-bottom, 0);
-  }
-}
-
-/* Touch targets big enough to hit without looking. */
-@media (max-width: 48rem) {
+  /* Touch targets big enough to hit without looking. */
   input,
   select,
   textarea,
   button {
     min-height: 2.75rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
   }
 }

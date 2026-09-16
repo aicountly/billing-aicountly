@@ -26,6 +26,14 @@ final class Permissions
 
     /** @var array<string, array<string, string>> */
     public const CATALOG = [
+        // Which dashboard a person lands on, and whether they get one at all.
+        // The biller holds `biller.desk` and NOT `overview.view`, which is the
+        // whole point: the counter gets a till, the owner gets the business.
+        'Dashboards' => [
+            'overview.view'  => 'See the business overview',
+            'biller.desk'    => 'Use the biller desk',
+            'compliance.view' => 'Review document checks',
+        ],
         'Selling' => [
             'sale.view'    => 'See bills',
             'sale.create'  => 'Make a bill',
@@ -49,6 +57,7 @@ final class Permissions
             'payable.view'    => 'See money to pay',
             'statement.view'  => 'See a party statement',
             'reminder.send'   => 'Send a payment reminder',
+            'promise.manage'  => 'Record what a customer promised to pay',
         ],
         'Notes' => [
             'credit_note.create' => 'Make a credit note',
@@ -68,6 +77,7 @@ final class Permissions
         ],
         'Administration' => [
             'reports.view'    => 'See reports',
+            'export.data'     => 'Export a list to a file',
             'settings.manage' => 'Change Billing settings',
             'access.manage'   => 'Manage Billing profiles',
             'recurring.manage' => 'Manage recurring bills and reminders',
@@ -86,31 +96,31 @@ final class Permissions
         'biller' => [
             'name' => 'Biller',
             'description' => 'Makes bills at the counter. Cannot see cost, profit, payables or the bank.',
-            'permissions' => ['sale.view', 'sale.create', 'receipt.create', 'einvoice.generate', 'eway.generate'],
+            'permissions' => ['biller.desk', 'sale.view', 'sale.create', 'receipt.create', 'einvoice.generate', 'eway.generate'],
         ],
         'sales_biller' => [
             'name' => 'Sales biller',
             'description' => 'Bills, collects and chases customers.',
             'permissions' => [
-                'sale.view', 'sale.create', 'quotation.create', 'receipt.create',
-                'receivable.view', 'statement.view', 'reminder.send',
+                'biller.desk', 'sale.view', 'sale.create', 'quotation.create', 'receipt.create',
+                'receivable.view', 'statement.view', 'reminder.send', 'promise.manage',
                 'credit_note.create', 'einvoice.generate', 'eway.generate',
             ],
         ],
         'purchase_operator' => [
             'name' => 'Purchase operator',
             'description' => 'Records purchases and supplier dues.',
-            'permissions' => ['purchase.view', 'purchase.create', 'payable.view', 'statement.view', 'debit_note.create', 'cost.view'],
+            'permissions' => ['purchase.view', 'purchase.create', 'payable.view', 'statement.view', 'debit_note.create', 'cost.view', 'payment.create'],
         ],
         'cashier' => [
             'name' => 'Cashier',
             'description' => 'Cash sales, receipts, and moving money between cash and bank.',
-            'permissions' => ['sale.view', 'sale.create', 'receipt.create', 'payment.create', 'contra.create', 'cash.view', 'bank.view'],
+            'permissions' => ['biller.desk', 'compliance.view', 'sale.view', 'sale.create', 'receipt.create', 'payment.create', 'contra.create', 'cash.view', 'bank.view'],
         ],
         'collection' => [
             'name' => 'Collection',
             'description' => 'Chases what customers owe, and records what comes in.',
-            'permissions' => ['receivable.view', 'statement.view', 'receipt.create', 'reminder.send', 'sale.view'],
+            'permissions' => ['receivable.view', 'statement.view', 'receipt.create', 'reminder.send', 'promise.manage', 'sale.view'],
         ],
         'owner' => [
             'name' => 'Owner',

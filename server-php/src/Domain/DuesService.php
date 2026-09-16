@@ -40,7 +40,7 @@ final class DuesService
     {
         Permissions::assert($this->ctx, $this->auth, 'receivable.view');
 
-        return $this->dues('debtor', $filters, 'Money to collect');
+        return $this->orFail($this->dues('debtor', $filters, 'Money to collect'), 'money to collect');
     }
 
     /** @param array<string, mixed> $filters */
@@ -48,12 +48,61 @@ final class DuesService
     {
         Permissions::assert($this->ctx, $this->auth, 'payable.view');
 
-        return $this->dues('creditor', $filters, 'Money to pay');
+        return $this->orFail($this->dues('creditor', $filters, 'Money to pay'), 'money to pay');
+    }
+
+    /**
+     * The same reading, for a screen that must survive it being unavailable.
+     *
+     * A dashboard draws four cards from four sources. If one of them halts the
+     * request the user gets an error page instead of the three figures that were
+     * perfectly readable, so the dashboards call these and render an unavailable
+     * card for a null. The endpoints above keep halting, because a request that
+     * asked only for receivables and cannot have them is a failed request.
+     *
+     * Not a softer permission check: an unauthorised caller still gets nothing.
+     *
+     * @param array<string, mixed> $filters
+     * @return array<string, mixed>|null
+     */
+    public function tryReceivables(array $filters = []): ?array
+    {
+        if (!Permissions::allows($this->ctx, $this->auth, 'receivable.view')) {
+            return null;
+        }
+
+        return $this->dues('debtor', $filters, 'Money to collect')['data'];
     }
 
     /**
      * @param array<string, mixed> $filters
+     * @return array<string, mixed>|null
+     */
+    public function tryPayables(array $filters = []): ?array
+    {
+        if (!Permissions::allows($this->ctx, $this->auth, 'payable.view')) {
+            return null;
+        }
+
+        return $this->dues('creditor', $filters, 'Money to pay')['data'];
+    }
+
+    /**
+     * @param array{ok:bool, reason:?string, data:?array<string,mixed>} $reading
      * @return array<string, mixed>
+     */
+    private function orFail(array $reading, string $what): array
+    {
+        if (!$reading['ok'] || $reading['data'] === null) {
+            Http::error(503, 'books_unavailable', 'Could not reach Smart Books to work out ' . $what . '. Please retry.');
+        }
+
+        return $reading['data'];
+    }
+
+    /**
+     * @param array<string, mixed> $filters
+     * @return array{ok:bool, reason:?string, data:?array<string,mixed>}
      */
     private function dues(string $partyType, array $filters, string $title): array
     {
@@ -68,17 +117,18 @@ final class DuesService
             ]);
 
         if (!$response['ok']) {
-            Http::error(
-                503,
-                'books_unavailable',
-                'Could not reach Smart Books to work out ' . strtolower($title) . '. Please retry.',
-            );
+            return ['ok' => false, 'reason' => 'Smart Books did not answer.', 'data' => null];
         }
 
         $rows = (array) ($response['body']['data'] ?? []);
         $today = new \DateTimeImmutable($asOn);
 
-        $buckets = ['current' => 0.0, '1_30' => 0.0, '31_60' => 0.0, '61_90' => 0.0, '90_plus' => 0.0];
+        // Mutually exclusive and exhaustive: every bill lands in exactly one,
+        // so the buckets add up to the total shown above them. A bill Books gave
+        // no due date gets its own bucket rather than being quietly filed under
+        // "not yet due" — an undated bill might be months late, and hiding it in
+        // the green bar is how it stays unchased.
+        $buckets = ['current' => 0.0, '1_30' => 0.0, '31_60' => 0.0, '61_90' => 0.0, '90_plus' => 0.0, 'no_due_date' => 0.0];
         $byParty = [];
         $total = 0.0;
         $overdue = 0.0;
@@ -113,7 +163,7 @@ final class DuesService
             // 60-day terms raised 45 days ago is not overdue, and putting it in
             // the 31–60 bucket would have somebody chasing it.
             if ($days === null) {
-                $buckets['current'] += $balance;
+                $buckets['no_due_date'] += $balance;
             } elseif ($days >= 0) {
                 $buckets['current'] += $balance;
                 if ($days === 0) {
@@ -170,7 +220,7 @@ final class DuesService
         $parties = array_values($byParty);
         usort($parties, static fn (array $a, array $b) => $b['total'] <=> $a['total']);
 
-        return [
+        return ['ok' => true, 'reason' => null, 'data' => [
             'title'    => $title,
             'as_on'    => $asOn,
             'source'   => 'books',
@@ -179,6 +229,10 @@ final class DuesService
             'due_today' => round($dueToday, 2),
             'due_this_week' => round($dueThisWeek, 2),
             'ageing'   => array_map(static fn (float $value) => round($value, 2), $buckets),
+            // Asserted here as well as in the tests, because a bucket total that
+            // does not add up to the headline is the one error on this screen a
+            // user cannot spot and cannot act on.
+            'ageing_reconciles' => abs(array_sum($buckets) - $total) < 0.01,
             'parties'  => array_map(static function (array $party) {
                 $party['total'] = round($party['total'], 2);
                 $party['overdue'] = round($party['overdue'], 2);
@@ -187,7 +241,7 @@ final class DuesService
             }, $parties),
             'bills'    => $bills,
             'note'     => 'Read from Smart Books just now. Billing keeps no balance of its own, so this never disagrees with the accounts.',
-        ];
+        ]];
     }
 
     /**
