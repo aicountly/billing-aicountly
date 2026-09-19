@@ -345,6 +345,82 @@ check('money cannot be moved between the same account twice', function () use ($
     );
 });
 
+check('a cheque deposit without a cheque number is refused', function () use ($ctx, $auth) {
+    resetDatabase();
+    assertThrows(
+        static fn () => (new TransactionService($ctx, $auth))->create('bank_deposit', [
+            'amount' => 5000, 'from_account_id' => 9001, 'to_account_id' => 9002, 'payment_mode' => 'cheque',
+        ]),
+        'cheque number',
+        'a cheque deposit with no number',
+    );
+});
+
+check('a draft is stored here and never reaches Books', function () use ($ctx, $auth) {
+    resetDatabase();
+    $draft = (new TransactionService($ctx, $auth))->draft('bank_deposit', [
+        'amount' => 5000, 'from_account_id' => 9001, 'to_account_id' => 9002,
+    ]);
+
+    assertSame('DRAFT', $draft['status'], 'it is a draft');
+    assertTrue($draft['books_voucher_id'] === null, 'no voucher was created');
+
+    foreach (stubRequests() as $request) {
+        assertTrue(!str_contains($request['path'], '/vouchers/drafts'), 'Books was not called');
+    }
+
+    // The counter's "not saved yet" screen is where an unfinished entry lives,
+    // whether it failed or was never sent.
+    $open = (new TransactionService($ctx, $auth))->unfinished();
+    assertSame(1, count($open), 'the draft is listed as unfinished');
+});
+
+check('a draft is validated as strictly as a real save', function () use ($ctx, $auth) {
+    resetDatabase();
+    assertThrows(
+        static fn () => (new TransactionService($ctx, $auth))->draft('bank_deposit', [
+            'amount' => 0, 'from_account_id' => 9001, 'to_account_id' => 9002,
+        ]),
+        'Enter the amount',
+        'a draft with no amount',
+    );
+});
+
+check('posting a draft drives the same row, so a draft is never a second voucher', function () use ($ctx, $auth) {
+    resetDatabase();
+    $service = new TransactionService($ctx, $auth);
+
+    $draft = $service->draft('bank_deposit', [
+        'amount' => 5000, 'from_account_id' => 9001, 'to_account_id' => 9002,
+    ]);
+    $edited = $service->updateDraft((int) $draft['request_id'], [
+        'amount' => 7500, 'from_account_id' => 9001, 'to_account_id' => 9002, 'reference' => 'DEP/9',
+    ]);
+    assertSame((int) $draft['request_id'], (int) $edited['request_id'], 'editing kept the same row');
+    assertSame(7500.0, (float) $edited['payload']['amount'], 'and holds what was typed second');
+
+    $posted = $service->post((int) $draft['request_id']);
+    assertSame('POSTED', $posted['status'], 'it posted');
+    assertSame((int) $draft['request_id'], (int) $posted['request_id'], 'on the same request row');
+
+    assertSame(1, (int) Db::scalar('SELECT COUNT(*) FROM billing_transaction_requests'), 'one row, one deposit');
+});
+
+check('a draft cannot be edited once it has been sent', function () use ($ctx, $auth) {
+    resetDatabase();
+    $service = new TransactionService($ctx, $auth);
+    $draft = $service->draft('bank_deposit', ['amount' => 5000, 'from_account_id' => 9001, 'to_account_id' => 9002]);
+    $service->post((int) $draft['request_id']);
+
+    assertThrows(
+        static fn () => $service->updateDraft((int) $draft['request_id'], [
+            'amount' => 1, 'from_account_id' => 9001, 'to_account_id' => 9002,
+        ]),
+        'already been sent',
+        'editing a posted request',
+    );
+});
+
 echo "\nBilling profiles\n";
 
 check('the shipped profiles are created on first use', function () use ($ctx) {

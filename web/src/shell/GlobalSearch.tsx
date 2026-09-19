@@ -44,6 +44,7 @@ export function GlobalSearch() {
   const [active, setActive] = useState(0)
 
   const box = useRef<HTMLDivElement | null>(null)
+  const field = useRef<HTMLInputElement | null>(null)
 
   const maySeeParties = can('sale.view') || can('purchase.view') || can('receivable.view')
   const maySeeItems = can('sale.view') && (session?.settings.maintains_stock ?? true)
@@ -129,6 +130,26 @@ export function GlobalSearch() {
     return () => document.removeEventListener('mousedown', onPointerDown)
   }, [])
 
+  /**
+   * Ctrl/Cmd+K puts the cursor here from anywhere in the app.
+   *
+   * The browser's own Ctrl+K is a search too, so taking it costs the user
+   * nothing they were using on this page. It is the only global shortcut this
+   * shell claims, which is why it is bound here rather than in a registry.
+   */
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (!(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey) return
+      if (event.code !== 'KeyK') return
+      event.preventDefault()
+      field.current?.focus()
+      field.current?.select()
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
   function choose(result: Result) {
     setOpen(false)
     setTerm('')
@@ -146,6 +167,7 @@ export function GlobalSearch() {
     <div className="billing-search" ref={box}>
       <Search size={15} className="billing-search__icon" aria-hidden />
       <input
+        ref={field}
         className="billing-search__input"
         type="search"
         role="combobox"
@@ -172,6 +194,10 @@ export function GlobalSearch() {
           }
         }}
       />
+      <span className="billing-search__hint" aria-hidden="true">
+        <kbd>Ctrl</kbd>
+        <kbd>K</kbd>
+      </span>
 
       {open && (
         <div className="billing-search__results" id={listId} role="listbox">

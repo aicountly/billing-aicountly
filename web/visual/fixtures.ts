@@ -61,7 +61,17 @@ export const ownerSession: BillingSession = {
       ],
     },
     { key: 'purchases', label: 'Purchases', path: '/purchases', children: [] },
-    { key: 'money', label: 'Money', path: '/money-in', children: [] },
+    {
+      key: 'money',
+      label: 'Money',
+      path: '/money-in',
+      children: [
+        { label: 'Money received', path: '/money-in/new' },
+        { label: 'Money paid', path: '/money-out/new' },
+        { label: 'Bank deposit', path: '/bank-cash/deposit' },
+        { label: 'Bank withdrawal', path: '/bank-cash/withdrawal' },
+      ],
+    },
     { key: 'receivables', label: 'Money to Collect', path: '/receivables', children: [] },
     { key: 'payables', label: 'Money to Pay', path: '/payables', children: [] },
     { key: 'parties', label: 'Parties', path: '/parties', children: [] },
@@ -430,4 +440,52 @@ export const compliance: ComplianceDashboard = {
     can_pay: true,
   },
   generated_at: '2026-09-16T09:12:00Z',
+}
+
+// ---------------------------------------------------------------------------
+// Bank deposit
+//
+// The three live reads behind the screen, in the shapes their endpoints return.
+// Balances and account kinds come from `v1/cash-bank`; the names and the masked
+// numbers from `v1/catalog/cash-bank`, which is a relay of Books' own master
+// rows and therefore carries whatever extra fields Books happens to send.
+// ---------------------------------------------------------------------------
+
+export const cashBankCatalog = [
+  { acc_id: 9001, acc_name: 'Cash in Hand', group_name: 'Cash-in-hand', is_active: 1 },
+  { acc_id: 9005, acc_name: 'Counter Cash', group_name: 'Cash-in-hand', is_active: 1 },
+  { acc_id: 9002, acc_name: 'HDFC Bank - Main', group_name: 'Bank Accounts', bank_name: 'Current account', bank_acc_no: '50200012343408', is_active: 1 },
+  { acc_id: 9003, acc_name: 'ICICI Bank - Operating', group_name: 'Bank Accounts', bank_name: 'Current account', bank_acc_no: '001905001294', is_active: 1 },
+  { acc_id: 9004, acc_name: 'Axis Bank - Current', group_name: 'Bank Accounts', bank_name: 'Current account', bank_acc_no: '917020041127', is_active: 1 },
+]
+
+export const cashBankBalances = {
+  available: true,
+  cash: 227400,
+  bank: 1364200,
+  source: 'books',
+  accounts: [
+    { account_id: 9001, account_name: 'Cash in Hand', balance: 182400, kind: 'cash' },
+    { account_id: 9005, account_name: 'Counter Cash', balance: 45000, kind: 'cash' },
+    { account_id: 9002, account_name: 'HDFC Bank - Main', balance: 845200, kind: 'bank' },
+    { account_id: 9003, account_name: 'ICICI Bank - Operating', balance: 293000, kind: 'bank' },
+    { account_id: 9004, account_name: 'Axis Bank - Current', balance: 226000, kind: 'bank' },
+  ],
+}
+
+export const bankDeposits = {
+  available: true,
+  reason: null,
+  kind: 'bank_deposit',
+  from: '2026-06-21',
+  to: '2026-09-19',
+  complete: true,
+  source: 'books',
+  note: 'Read from Smart Books just now, for entries recorded here since 2026-06-21. An entry made directly in Smart Books is not listed.',
+  movements: [
+    { request_id: 2101, voucher_id: 5101, voucher_no: 'CON-0091', date: '2026-09-18', amount: 150000, kind: 'bank_deposit', payment_mode: 'cash', reference: 'DEP/01984', from_account_id: 9001, from_account_name: 'Cash in Hand', to_account_id: 9002, to_account_name: 'HDFC Bank - Main' },
+    { request_id: 2098, voucher_id: 5094, voucher_no: 'CON-0088', date: '2026-09-16', amount: 75000, kind: 'bank_deposit', payment_mode: 'cheque', reference: '004217', from_account_id: 9001, from_account_name: 'Cash in Hand', to_account_id: 9003, to_account_name: 'ICICI Bank - Operating' },
+    { request_id: 2090, voucher_id: 5081, voucher_no: 'CON-0084', date: '2026-09-12', amount: 230500, kind: 'bank_deposit', payment_mode: 'cash', reference: 'DEP/01952', from_account_id: 9005, from_account_name: 'Counter Cash', to_account_id: 9004, to_account_name: 'Axis Bank - Current' },
+    { request_id: 2077, voucher_id: 5063, voucher_no: 'CON-0079', date: '2026-09-08', amount: 95000, kind: 'bank_deposit', payment_mode: 'cheque', reference: '004198', from_account_id: 9001, from_account_name: 'Cash in Hand', to_account_id: 9002, to_account_name: 'HDFC Bank - Main' },
+  ],
 }

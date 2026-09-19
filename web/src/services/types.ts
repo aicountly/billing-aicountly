@@ -77,7 +77,8 @@ export interface TransactionRequest {
   request_id: number
   request_uuid: string
   kind: string
-  status: 'PENDING' | 'POSTING' | 'POSTED' | 'FAILED' | 'CANCELLED'
+  /** DRAFT has never been sent to Books; the rest describe an attempt to. */
+  status: 'DRAFT' | 'PENDING' | 'POSTING' | 'POSTED' | 'FAILED' | 'CANCELLED'
   party_account_id: number | null
   transaction_date: string
   payload: Record<string, unknown> | string
@@ -233,7 +234,59 @@ export interface CatalogParty {
   gstin?: string | null
 }
 
+/**
+ * A cash or bank ledger, as Books describes it.
+ *
+ * The first two fields are the contract; the rest are read opportunistically,
+ * because Books spells the group and the account number differently across
+ * deployments and a picker that shows nothing extra is better than one that
+ * shows the wrong thing. Nothing here is stored — it is rendered and dropped.
+ */
 export interface CashBankAccount {
   acc_id: number
   acc_name: string
+  group_name?: string | null
+  nature?: string | null
+  acc_group?: string | null
+  /** Only ever rendered as its last four digits. */
+  bank_acc_no?: string | null
+  account_number?: string | null
+  bank_name?: string | null
+  is_active?: boolean | number | null
+}
+
+/**
+ * One movement between the business's own cash and bank accounts.
+ *
+ * Read from Books' contra register on the request that draws it; Billing holds
+ * only the reference that says which of them was a deposit. `amount` is null
+ * when the register did not spell the figure under a key this app knows — the
+ * row is then drawn without an amount rather than with a zero.
+ */
+export interface CashBankMovement {
+  request_id: number
+  voucher_id: number
+  voucher_no: string | null
+  date: string | null
+  amount: number | null
+  kind: 'bank_deposit' | 'bank_withdrawal' | 'bank_transfer'
+  payment_mode: string
+  reference: string | null
+  from_account_id: number | null
+  from_account_name: string | null
+  to_account_id: number | null
+  to_account_name: string | null
+}
+
+export interface CashBankMovements {
+  available: boolean
+  reason: string | null
+  kind: string
+  from: string
+  to: string
+  movements: CashBankMovement[]
+  /** False when more exist in the window than one register page could hold. */
+  complete: boolean
+  source: string
+  note?: string
 }

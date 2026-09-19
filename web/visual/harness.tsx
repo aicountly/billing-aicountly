@@ -24,6 +24,8 @@ import BillerDesk from '../src/dashboards/BillerDesk'
 import Receivables from '../src/dashboards/Receivables'
 import Payables from '../src/dashboards/Payables'
 import CashCompliance from '../src/dashboards/CashCompliance'
+import BankDeposit from '../src/pages/BankDeposit'
+import { ToastProvider } from '../src/ui/toast'
 import { saveSession, setAuthToken } from '../src/auth/tokens'
 import { setScope } from '../src/services/api'
 import * as fixtures from './fixtures'
@@ -40,6 +42,7 @@ const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
   receivables: { path: '/dashboard/receivables', element: <Receivables /> },
   payables: { path: '/dashboard/payables', element: <Payables /> },
   'cash-compliance': { path: '/dashboard/cash-compliance', element: <CashCompliance /> },
+  'bank-deposit': { path: '/bank-cash/deposit', element: <BankDeposit /> },
 }
 
 /** The fixture behind each endpoint the screens call. */
@@ -59,11 +62,16 @@ const RESPONSES: Array<[RegExp, unknown]> = [
     { item_id: 2, item_name: 'Blue Ball Pen', item_sku: 'PEN-BL', unit_id: 1, hsn_sac: '9608', mrp: '12' },
     { item_id: 3, item_name: 'Stapler', item_sku: 'STP-01', unit_id: 1, hsn_sac: '8472', mrp: '450' },
   ]],
-  [/v1\/manage\/companies/, { data: [{ cmp_id: 1, cmp_name: 'Sharma Enterprises' }], meta: { total: 1 } }],
+  // Bank deposit's three live reads. Order matters: the movements pattern has
+  // to be tried before the bare cash-bank one, which would otherwise swallow it.
+  [/v1\/cash-bank\/movements/, fixtures.bankDeposits],
+  [/v1\/catalog\/cash-bank/, fixtures.cashBankCatalog],
+  [/v1\/cash-bank/, fixtures.cashBankBalances],
+  [/v1\/manage\/companies\b/, { data: [{ cmp_id: 1, cmp_name: 'Sharma Enterprises' }], meta: { total: 1 } }],
   [/v1\/manage\/companyinfo/, {
     cmp_id: 1,
     cmp_name: 'Sharma Enterprises',
-    fy_list: [{ fy_id: 4, fy_name: 'FY 2026–27' }],
+    fy_list: [{ fy_id: 4, fy_name: 'FY 2026-27', fy_start: '2026-04-01', fy_end: '2027-03-31' }],
     branch_list: [{ bo_id: 1, bo_name: 'Main Branch', is_head_office: true }],
   }],
 ]
@@ -115,13 +123,15 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <AuthProvider>
       <BillingProvider>
-        <MemoryRouter initialEntries={[target.path]}>
-          <Routes>
-            <Route element={<AppShell />}>
-              <Route path={target.path} element={target.element} />
-            </Route>
-          </Routes>
-        </MemoryRouter>
+        <ToastProvider>
+          <MemoryRouter initialEntries={[target.path]}>
+            <Routes>
+              <Route element={<AppShell />}>
+                <Route path={target.path} element={target.element} />
+              </Route>
+            </Routes>
+          </MemoryRouter>
+        </ToastProvider>
       </BillingProvider>
     </AuthProvider>
   </StrictMode>,

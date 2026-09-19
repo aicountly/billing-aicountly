@@ -107,6 +107,47 @@ to walk out with the ledger. The file is the full filtered set; when the read
 could not be completed the export is refused rather than silently short. Every
 text cell is neutralised against spreadsheet formula injection.
 
+## Bank deposit
+
+`/bank-cash/deposit` — the counter's takings, into the bank. Permission:
+`contra.create`. It is a **contra voucher in Smart Books**: the chosen bank
+account debited, the chosen cash account credited. Billing sends the amount,
+the two account ids and the date, and keeps the voucher reference.
+
+Four live reads on load, and none per row:
+
+| Call | Gives | Owner |
+|---|---|---|
+| `v1/catalog/cash-bank` | the ledgers to choose between | Books |
+| `v1/cash-bank` | their balances and cash/bank kind, if the profile may see them | Books |
+| `v1/cash-bank/movements?kind=bank_deposit` | the last few deposits | Books, filtered by this product's request log |
+| `v1/manage/companyinfo` | the financial year's own start and end dates | Manage |
+
+**Recent deposits is a join, not a table read.** Books holds the contra
+vouchers and is the only authority for what they are worth; it does not record
+which of them a shopkeeper called a deposit rather than a withdrawal. Billing
+does, because Billing asked for them. So the amount, the date and the number
+come from the register and the request log supplies only *which vouchers were
+deposits*. A deposit cancelled in Books drops off the list on the next load.
+One entered directly in Books never appears, and the panel says so.
+
+**What the screen does with what it reads.** The summary updates as the form is
+typed. A deposit larger than the source account's balance draws a warning and
+does not block — the till, not Billing, decides whether there is cash in the
+drawer. A deposit matching one already on the recent list for the same day,
+amount and pair of accounts is flagged from the rows already on screen, with no
+extra request and no scan of the ledger.
+
+**Drafts.** `Save as draft` writes the same `billing_transaction_requests` row
+the posted path writes, in status `DRAFT` — validated identically, never sent to
+Books. It is not a second store and it is not `localStorage`: a day's takings
+typed at the counter belong on the server, where the back office can see them.
+A draft is listed under *Entries not saved yet*, reopens into this screen, and
+posts on its original row and therefore its original idempotency key.
+
+**Attachments are not available**, and the screen says so rather than offering
+a drop zone that discards the file. See `BILLING_API_DEPENDENCIES.md`.
+
 ## Permissions added
 
 | Permission | Grants |
@@ -136,10 +177,14 @@ approximated.
 
 ## Verification
 
-* `server-php/tests/run.sh` — 56 passing, 0 failing, against a real PostgreSQL
+* `server-php/tests/run.sh` — 67 passing, 0 failing, against a real PostgreSQL
   and a stub standing in for Books and Inventory.
-* `npm run build` in `web/` — `tsc -b` clean, six lazy chunks.
-* Visual pass at 1440, 1024, 768 and 390 px across all five dashboards, via
-  `web/visual.html` — a development-only entry point that mounts the real
-  components against fixtures. `vite build` does not include it, and no fake
-  record is written anywhere.
+* `npm run build` in `web/` — `tsc -b` clean, seven lazy chunks.
+* Visual pass at 1680, 1440, 1280, 900 and 390 px across the five dashboards and
+  Bank deposit, via `web/visual.html` — a development-only entry point that
+  mounts the real components against fixtures. `vite build` does not include it,
+  and no fake record is written anywhere.
+* Bank deposit exercised through the browser at those widths: required-field
+  validation and focus, the account combobox by keyboard, the balance warning,
+  the duplicate warning, cheque mode and its cheque-number rule, `Ctrl`+`K` from
+  inside the form, and the unsaved-changes guard on a sidebar link.

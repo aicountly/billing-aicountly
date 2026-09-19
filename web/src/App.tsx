@@ -18,6 +18,7 @@ import {
   Unfinished,
 } from './pages/Misc'
 import { Notice } from './ui'
+import { ToastProvider } from './ui/toast'
 import { initAnalytics, trackPageView } from './utils/analytics'
 import './App.css'
 
@@ -34,6 +35,13 @@ const Receivables = lazy(() => import('./dashboards/Receivables'))
 const Payables = lazy(() => import('./dashboards/Payables'))
 const CashCompliance = lazy(() => import('./dashboards/CashCompliance'))
 const Reports = lazy(() => import('./pages/Reports'))
+
+/**
+ * Bank deposit is split out too. It is the only transaction screen with its own
+ * stylesheet and its own pickers, and a counter machine opening the biller desk
+ * should not download either.
+ */
+const BankDeposit = lazy(() => import('./pages/BankDeposit'))
 
 initAnalytics()
 
@@ -162,9 +170,19 @@ function Shell() {
 
         <Route path="bank-cash">
           <Route index element={<RequireScope><BankCashOverview /></RequireScope>} />
-          <Route path="deposit" element={<RequireScope><BankCash kind="bank_deposit" /></RequireScope>} />
+          <Route
+            path="deposit"
+            element={
+              <Suspense fallback={<Loading />}>
+                <RequireScope><BankDeposit /></RequireScope>
+              </Suspense>
+            }
+          />
           <Route path="withdrawal" element={<RequireScope><BankCash kind="bank_withdrawal" /></RequireScope>} />
           <Route path="transfer" element={<RequireScope><BankCash kind="bank_transfer" /></RequireScope>} />
+          {/* A saved deposit lands here, the same way a receipt lands on
+              /money-in/:id. Declared last so it cannot shadow the three above. */}
+          <Route path=":id" element={<RequireScope><TransactionDetail /></RequireScope>} />
         </Route>
 
         {/* The bill-by-bill lists. The dashboards summarise them and link here. */}
@@ -251,10 +269,12 @@ export default function App() {
 
   return (
     <BillingProvider>
-      <BrowserRouter>
-        <PageViews />
-        <Gate />
-      </BrowserRouter>
+      <ToastProvider>
+        <BrowserRouter>
+          <PageViews />
+          <Gate />
+        </BrowserRouter>
+      </ToastProvider>
     </BillingProvider>
   )
 }

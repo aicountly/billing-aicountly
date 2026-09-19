@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Aicountly\Api;
 
+use Aicountly\Api\Controllers\BankCashController;
 use Aicountly\Api\Controllers\CatalogController;
 use Aicountly\Api\Controllers\DashboardController;
 use Aicountly\Api\Controllers\DashboardsController;
@@ -55,6 +56,9 @@ final class Routes
         // kind: sale | purchase | receipt | payment | credit_note | debit_note
         //     | expense | bank_deposit | bank_withdrawal | bank_transfer
         $router->post('v1/transactions/{kind}', [TransactionsController::class, 'create']);
+        // Typed but not sent. Same validation, same row, no voucher.
+        $router->post('v1/transactions/{kind}/draft', [TransactionsController::class, 'saveDraft']);
+        $router->put('v1/transactions/{id}/draft', [TransactionsController::class, 'updateDraft']);
         $router->get('v1/transactions/unfinished', [TransactionsController::class, 'unfinished']);
         // Invoices a credit note (or bills a debit note) can be raised against.
         $router->get('v1/original-documents', [TransactionsController::class, 'originalDocuments']);
@@ -68,6 +72,9 @@ final class Routes
         $router->get('v1/payables', [DuesController::class, 'payables']);
         $router->get('v1/parties/{accountId}/statement', [DuesController::class, 'statement']);
         $router->get('v1/cash-bank', [DuesController::class, 'cashAndBank']);
+        // Recent deposits / withdrawals / transfers: Books' contra register,
+        // narrowed to the ones this product recorded.
+        $router->get('v1/cash-bank/movements', [BankCashController::class, 'movements']);
         $router->get('v1/open-bills', [DuesController::class, 'openBills']);
 
         // Recurring bills and payment reminders — business automation, not sync.

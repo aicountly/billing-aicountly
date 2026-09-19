@@ -138,6 +138,46 @@ Every extracted field must arrive reviewable, and nothing is posted until a
 person has approved it. **Until this exists**, the panel offers the manual path,
 which records exactly the same purchase bill.
 
+## Not available: document storage
+
+**Bank deposit shows an unavailable state for this, with this file named on it.**
+
+A deposit slip, a cheque image, a signed acknowledgement — every money screen in
+this product has an obvious place for one, and there is nowhere in this
+deployment to put it. Billing does not add a document store of its own: a file
+saved beside this API would sit in the folder the deploy rsyncs with `--delete`,
+and a slip that disappears on the next release is worse than one that was never
+accepted.
+
+### The contract Billing would need
+
+Owner: an AICOUNTLY document service (Drive is the obvious candidate; it is in
+the app launcher but serves no API here).
+
+```
+POST <DOCUMENT_STORE_BASE>/v1/documents
+  Idempotency-Key: <billing key>
+  multipart: file=<pdf|jpg|png>, scope=cmp_id/fy_id, kind=billing.bank_deposit
+  → { data: { document_id, document_uuid, filename, size, content_type,
+              uploaded_at, url } }
+
+GET <DOCUMENT_STORE_BASE>/v1/documents/{id}
+  → the file, or a short-lived signed URL
+
+DELETE <DOCUMENT_STORE_BASE>/v1/documents/{id}
+```
+
+Authentication: the caller's `Authorization: Bearer <ses_key>`, so the document
+service applies that user's own permissions.
+
+Billing would keep the `document_uuid` against the transaction request and
+nothing else — the same rule as every other reference in this product. The
+existing `attachment_ref` field on the expense payload is the shape that
+reference already takes.
+
+**Until this exists**, the Attachments section explains the gap and points at
+the Reference field, which is what a bank statement is actually matched on.
+
 ## Not depended on: Aicountly Pay
 
 Nothing in this product requires a payment gateway, and nothing in it moves
