@@ -237,3 +237,51 @@ export interface CashBankAccount {
   acc_id: number
   acc_name: string
 }
+
+/**
+ * An expense this product recorded, as `v1/expenses/recent` describes it.
+ *
+ * The names are resolved live from Books on that request; `null` means Books
+ * did not answer, not that the account is missing.
+ */
+export interface RecentExpense {
+  request_id: number
+  date: string
+  amount: number | null
+  note: string | null
+  reference_no: string | null
+  category_id: number | null
+  category_name: string | null
+  paid_from_id: number | null
+  paid_from_name: string | null
+  party_account_id: number | null
+  voucher_id: number | null
+  voucher_no: string | null
+}
+
+export interface RecentExpenses {
+  rows: RecentExpense[]
+  /** False when Books did not answer: the amounts still stand, the chips do not. */
+  names_available: boolean
+  basis: string
+}
+
+/** One thing a deployment either can or cannot do, with the reason when it cannot. */
+export interface DocumentCapability {
+  available: boolean
+  reason: string | null
+  accepts?: string[]
+  max_bytes?: number
+}
+
+/** Whether a bill file can be kept here, and whether it can be read automatically. */
+export interface ExpenseCapabilities {
+  bill_storage: DocumentCapability
+  bill_extraction: DocumentCapability
+}
+
+/** An expense head or a cash/bank account, as Books' account list describes it. */
+export interface CatalogAccount {
+  acc_id: number
+  acc_name: string
+}

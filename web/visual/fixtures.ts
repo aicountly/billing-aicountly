@@ -60,7 +60,16 @@ export const ownerSession: BillingSession = {
         { label: 'Credit note', path: '/more/credit-note' },
       ],
     },
-    { key: 'purchases', label: 'Purchases', path: '/purchases', children: [] },
+    {
+      key: 'purchases',
+      label: 'Purchases',
+      path: '/purchases',
+      children: [
+        { label: 'New purchase', path: '/purchases/new' },
+        { label: 'Debit note', path: '/more/debit-note' },
+        { label: 'Expense', path: '/more/expense' },
+      ],
+    },
     { key: 'money', label: 'Money', path: '/money-in', children: [] },
     { key: 'receivables', label: 'Money to Collect', path: '/receivables', children: [] },
     { key: 'payables', label: 'Money to Pay', path: '/payables', children: [] },
@@ -430,4 +439,99 @@ export const compliance: ComplianceDashboard = {
     can_pay: true,
   },
   generated_at: '2026-09-16T09:12:00Z',
+}
+
+// ---------------------------------------------------------------------------
+// Purchases → Expense
+// ---------------------------------------------------------------------------
+
+/** Expense heads, as Books' account list returns them. */
+export const expenseAccounts = [
+  { acc_id: 810, acc_name: 'Office Supplies' },
+  { acc_id: 811, acc_name: 'Travel & Conveyance' },
+  { acc_id: 812, acc_name: 'Rent' },
+  { acc_id: 813, acc_name: 'Electricity & Utilities' },
+  { acc_id: 814, acc_name: 'Professional Fees' },
+  { acc_id: 815, acc_name: 'Marketing & Advertising' },
+  { acc_id: 816, acc_name: 'Repairs & Maintenance' },
+  { acc_id: 817, acc_name: 'Printing & Stationery' },
+  { acc_id: 818, acc_name: 'Staff Welfare' },
+  { acc_id: 819, acc_name: 'Other Expenses' },
+]
+
+export const cashBankAccounts = [
+  { acc_id: 101, acc_name: 'Cash in hand' },
+  { acc_id: 102, acc_name: 'HDFC Bank · 4471' },
+  { acc_id: 103, acc_name: 'ICICI Current · 9082' },
+]
+
+export const taxCategories = [
+  { tax_cat_id: 1, tax_cat_name: 'GST 18% — input credit' },
+  { tax_cat_id: 2, tax_cat_name: 'GST 12% — input credit' },
+  { tax_cat_id: 3, tax_cat_name: 'GST 5% — input credit' },
+  { tax_cat_id: 4, tax_cat_name: 'Exempt' },
+]
+
+export const expenseCapabilities = {
+  bill_storage: {
+    available: false,
+    reason: 'No document service here, so the file itself cannot be kept — record where the bill is.',
+    accepts: ['application/pdf', 'image/jpeg', 'image/png'],
+    max_bytes: 10485760,
+  },
+  bill_extraction: {
+    available: false,
+    reason:
+      'Needs a document-extraction service, and none is configured for this deployment. Typing the details records exactly the same expense.',
+  },
+}
+
+export const recentExpenses = {
+  rows: [
+    {
+      request_id: 9104, date: '2026-09-15', amount: 2450, note: 'Office stationery', reference_no: 'INV-2291',
+      category_id: 810, category_name: 'Office Supplies', paid_from_id: 101, paid_from_name: 'Cash in hand',
+      party_account_id: null, voucher_id: 55201, voucher_no: 'PAY/0091',
+    },
+    {
+      request_id: 9103, date: '2026-09-14', amount: 1320, note: 'Client meeting — cab', reference_no: null,
+      category_id: 811, category_name: 'Travel & Conveyance', paid_from_id: 101, paid_from_name: 'Cash in hand',
+      party_account_id: null, voucher_id: 55188, voucher_no: 'PAY/0090',
+    },
+    {
+      request_id: 9102, date: '2026-09-12', amount: 999, note: 'Internet bill', reference_no: 'ACT-88213',
+      category_id: 813, category_name: 'Electricity & Utilities', paid_from_id: 102, paid_from_name: 'HDFC Bank · 4471',
+      party_account_id: 604, voucher_id: 55140, voucher_no: 'PAY/0088',
+    },
+    {
+      request_id: 9101, date: '2026-09-10', amount: 4000, note: 'Accounting software subscription', reference_no: 'SUB-5512',
+      category_id: 814, category_name: 'Professional Fees', paid_from_id: 102, paid_from_name: 'HDFC Bank · 4471',
+      party_account_id: 605, voucher_id: 55102, voucher_no: 'PAY/0085',
+    },
+  ],
+  names_available: true,
+  basis:
+    "Expenses recorded from Billing in this company and year. Expenses entered directly in Smart Books are in Books' own register.",
+}
+
+export const suppliers = [
+  { acc_id: 601, acc_name: 'Shree Stationers', gstin: '29ABCDE1234F1Z5' },
+  { acc_id: 604, acc_name: 'Airtel Broadband', gstin: '29AAACB2894G1ZX' },
+  { acc_id: 605, acc_name: 'Nandi & Associates', gstin: null },
+]
+
+/** What the API returns when the harness "saves" an expense. */
+export const savedExpense = {
+  request_id: 9105,
+  request_uuid: '8f2c1a10-0000-4000-8000-000000009105',
+  kind: 'expense',
+  status: 'POSTED',
+  party_account_id: null,
+  transaction_date: '2026-09-19',
+  payload: {},
+  books_voucher_id: 55260,
+  books_voucher_uuid: 'v-55260',
+  books_voucher_no: 'PAY/0092',
+  last_error: null,
+  created_at: '2026-09-19T06:10:00Z',
 }
