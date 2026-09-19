@@ -67,7 +67,7 @@ export const ownerSession: BillingSession = {
     { key: 'parties', label: 'Parties', path: '/parties', children: [] },
     { key: 'items', label: 'Items', path: '/items', children: [] },
     { key: 'reports', label: 'Reports', path: '/reports', children: [] },
-    { key: 'more', label: 'Settings', path: '/more', children: [] },
+    { key: 'more', label: 'Settings', path: '/settings', children: [] },
   ],
   dashboards: [
     { key: 'overview', label: 'Overview', path: '/dashboard/overview' },
@@ -91,7 +91,7 @@ export const billerSession: BillingSession = {
     { key: 'sales', label: 'Sales', path: '/sales', children: [{ label: 'New bill', path: '/sales/new' }] },
     { key: 'money', label: 'Money', path: '/money-in', children: [] },
     { key: 'parties', label: 'Parties', path: '/parties', children: [] },
-    { key: 'more', label: 'Settings', path: '/more', children: [] },
+    { key: 'more', label: 'Settings', path: '/settings', children: [] },
   ],
   dashboards: [{ key: 'biller', label: 'Biller Desk', path: '/dashboard/biller' }],
   landing: '/dashboard/biller',
@@ -431,3 +431,61 @@ export const compliance: ComplianceDashboard = {
   },
   generated_at: '2026-09-16T09:12:00Z',
 }
+
+// ---------------------------------------------------------------------------
+// Settings
+//
+// The hub reads its own catalogue out of the bundle, so the only fixtures it
+// needs are the live reads behind the setup checklist and the detail panels:
+// the company from Manage, the accounts from Books, and Billing's own rules.
+// ---------------------------------------------------------------------------
+
+/** Manage's companyinfo, with the letterhead fields the checklist looks for. */
+export const companyInfo = {
+  cmp_id: 1,
+  comp_name: 'Sharma Enterprises',
+  gstin: '29ABCDE1234F1Z5',
+  ro_address: '14 Mahatma Gandhi Road\nIndiranagar, Bengaluru, 560038\nIndia',
+  fy_list: [
+    { fy_id: 4, fy_start: '2026-04-01', fy_end: '2027-03-31' },
+    { fy_id: 3, fy_start: '2025-04-01', fy_end: '2026-03-31' },
+  ],
+  branch_list: [
+    { bo_id: 1, bo_name: 'Main Branch', mark_ho: 1 },
+    { bo_id: 2, bo_name: 'Jayanagar', mark_ho: 0 },
+  ],
+}
+
+export const cashBankAccounts = [
+  { acc_id: 11, acc_name: 'Cash in hand' },
+  { acc_id: 12, acc_name: 'HDFC Bank — 4471' },
+]
+
+export const taxCategories = [
+  { tax_category_id: 1, name: 'GST 5%' },
+  { tax_category_id: 2, name: 'GST 12%' },
+  { tax_category_id: 3, name: 'GST 18%' },
+  { tax_category_id: 4, name: 'GST 28%' },
+]
+
+export const profiles = {
+  profiles: [
+    { profile_id: 1, profile_code: 'biller', profile_name: 'Biller', description: 'Makes bills at the counter.', template_key: 'biller', permissions: [], is_system: true, is_active: true, member_count: '2' },
+    { profile_id: 2, profile_code: 'owner', profile_name: 'Owner', description: 'Everything in Billing.', template_key: 'owner', permissions: [], is_system: true, is_active: true, member_count: '1' },
+  ],
+  catalog: {},
+}
+
+export const reminderRules = [
+  {
+    rule_id: 1,
+    rule_name: 'Chase three days late',
+    offset_days: 3,
+    repeat_days: 0,
+    max_reminders: 3,
+    channel: 'whatsapp',
+    message_template: null,
+    minimum_amount: '500',
+    is_active: true,
+  },
+]

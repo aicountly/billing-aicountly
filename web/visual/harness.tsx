@@ -24,6 +24,8 @@ import BillerDesk from '../src/dashboards/BillerDesk'
 import Receivables from '../src/dashboards/Receivables'
 import Payables from '../src/dashboards/Payables'
 import CashCompliance from '../src/dashboards/CashCompliance'
+import SettingsHome from '../src/pages/settings/SettingsHome'
+import SettingsCategory from '../src/pages/settings/SettingsCategory'
 import { saveSession, setAuthToken } from '../src/auth/tokens'
 import { setScope } from '../src/services/api'
 import * as fixtures from './fixtures'
@@ -40,7 +42,14 @@ const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
   receivables: { path: '/dashboard/receivables', element: <Receivables /> },
   payables: { path: '/dashboard/payables', element: <Payables /> },
   'cash-compliance': { path: '/dashboard/cash-compliance', element: <CashCompliance /> },
+  settings: { path: '/settings', element: <SettingsHome /> },
 }
+
+/**
+ *   /visual.html?screen=settings
+ *   /visual.html?screen=settings&category=taxes
+ */
+const SETTINGS_CATEGORY = params.get('category')
 
 /** The fixture behind each endpoint the screens call. */
 const RESPONSES: Array<[RegExp, unknown]> = [
@@ -60,12 +69,11 @@ const RESPONSES: Array<[RegExp, unknown]> = [
     { item_id: 3, item_name: 'Stapler', item_sku: 'STP-01', unit_id: 1, hsn_sac: '8472', mrp: '450' },
   ]],
   [/v1\/manage\/companies/, { data: [{ cmp_id: 1, cmp_name: 'Sharma Enterprises' }], meta: { total: 1 } }],
-  [/v1\/manage\/companyinfo/, {
-    cmp_id: 1,
-    cmp_name: 'Sharma Enterprises',
-    fy_list: [{ fy_id: 4, fy_name: 'FY 2026–27' }],
-    branch_list: [{ bo_id: 1, bo_name: 'Main Branch', is_head_office: true }],
-  }],
+  [/v1\/manage\/companyinfo/, fixtures.companyInfo],
+  [/v1\/catalog\/cash-bank/, fixtures.cashBankAccounts],
+  [/v1\/catalog\/tax-categories/, fixtures.taxCategories],
+  [/v1\/profiles/, fixtures.profiles],
+  [/v1\/reminders/, fixtures.reminderRules],
 ]
 
 const originalFetch = window.fetch.bind(window)
@@ -111,14 +119,29 @@ try {
 
 const target = SCREENS[screen] ?? SCREENS.overview
 
+// Settings is the one area with more than one screen and links between them,
+// so both of its routes are mounted whichever one the harness opens on — a
+// card that navigated to a route the harness had not registered would
+// photograph as a blank page.
+const settingsRoutes = (
+  <>
+    <Route path="/settings" element={<SettingsHome />} />
+    <Route path="/settings/:categoryId" element={<SettingsCategory />} />
+  </>
+)
+
+const entry =
+  screen === 'settings' && SETTINGS_CATEGORY ? `/settings/${SETTINGS_CATEGORY}` : target.path
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <AuthProvider>
       <BillingProvider>
-        <MemoryRouter initialEntries={[target.path]}>
+        <MemoryRouter initialEntries={[entry]}>
           <Routes>
             <Route element={<AppShell />}>
-              <Route path={target.path} element={target.element} />
+              {target.path !== '/settings' && <Route path={target.path} element={target.element} />}
+              {settingsRoutes}
             </Route>
           </Routes>
         </MemoryRouter>

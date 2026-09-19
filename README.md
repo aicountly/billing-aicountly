@@ -28,6 +28,13 @@ Behind them: sales and purchases, credit and debit notes with their original
 document, receipts and payments with allocation, bank deposits and withdrawals,
 ten live reports with CSV export, and Billing profiles deciding who sees what.
 
+Behind those, `/settings` is a hub over twelve categories — company, documents,
+users, taxes, money, preferences, items, parties, automation, security,
+integrations and advanced. Each row says plainly whether the setting lives in
+Billing, in the product that owns it, or nowhere yet, and the setup checklist on
+it is worked out from your actual configuration rather than fixed. See
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#settings).
+
 See [docs/BILLING_IMPLEMENTATION_STATUS.md](docs/BILLING_IMPLEMENTATION_STATUS.md)
 for what each figure means, and
 [docs/BILLING_API_DEPENDENCIES.md](docs/BILLING_API_DEPENDENCIES.md) for the two
@@ -74,9 +81,11 @@ same-origin.
 | `npm run preview` | Serve the production build locally |
 
 `web/visual.html` is a development-only photo booth: it mounts the real
-dashboard components against fixtures so the screens can be checked at four
-widths without a portal session or a company's data. `vite build` takes
-`index.html` only, so none of it reaches the deployed bundle.
+dashboard and settings components against fixtures so the screens can be checked
+at four widths without a portal session or a company's data — for example
+`/visual.html?screen=settings`, `?screen=settings&category=taxes`, or
+`?screen=overview&as=biller` to see what a counter biller is shown. `vite build`
+takes `index.html` only, so none of it reaches the deployed bundle.
 
 The PHP API has no build step and no dependencies. To run it locally:
 

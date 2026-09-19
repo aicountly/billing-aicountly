@@ -302,7 +302,7 @@ function UserMenu() {
               className="billing-menu__item"
               onClick={() => {
                 close()
-                navigate('/more')
+                navigate('/settings')
               }}
             >
               <Settings size={15} aria-hidden /> Settings
