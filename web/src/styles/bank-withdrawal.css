@@ -1,0 +1,414 @@
+/* ---------------------------------------------------------------------------
+   Bank withdrawal
+
+   The form on the left, the context on the right. Everything here is built from
+   the tokens in index.css — the green is --billing-action, the mint is
+   --billing-mint, and there is no second palette hiding in this file.
+
+   Two colours are introduced because the app had no name for them yet: a
+   restrained blue for "this is information, not a problem", and a muted violet
+   for the quick actions, which are shortcuts rather than accounting. Both are
+   declared once, as tokens, and used nowhere else.
+   --------------------------------------------------------------------------- */
+
+:root {
+  --billing-note: #1d5fa8;
+  --billing-note-bg: #f0f6fd;
+  --billing-note-border: #d6e6f7;
+  --billing-shortcut: #55359c;
+  --billing-shortcut-bg: #f6f3ff;
+  --billing-shortcut-border: #e4dcfa;
+}
+
+.bank-withdrawal-page {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+  padding-bottom: 8px;
+}
+
+/* ------------------------------------------------------------------ header */
+
+.bank-withdrawal-header {
+  align-items: flex-start;
+  margin-block: 24px 4px;
+}
+
+.bank-withdrawal-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.bank-withdrawal-title-icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: var(--billing-mint);
+  color: var(--billing-action);
+}
+
+.bank-withdrawal-header__side {
+  display: flex;
+  align-items: flex-end;
+  flex-direction: column;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+/* -------------------------------------------------------------------- grid */
+
+.bank-withdrawal-grid {
+  display: grid;
+  /* minmax(0, …) on the main column: without it one long account name in the
+     form widens the column, the grid and the page under it. */
+  grid-template-columns: minmax(0, 1.75fr) minmax(330px, 1fr);
+  align-items: start;
+  gap: 20px;
+}
+
+/* -------------------------------------------------------------------- form */
+
+.withdrawal-form-card { padding: 22px; }
+
+.withdrawal-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.withdrawal-info-strip,
+.withdrawal-warning-strip {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 18px 0 0;
+  padding: 12px 14px;
+  border: 1px solid var(--billing-note-border);
+  border-radius: 10px;
+  background: var(--billing-note-bg);
+  color: var(--billing-note);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.withdrawal-info-strip > svg,
+.withdrawal-warning-strip > svg { flex: 0 0 auto; margin-top: 1px; }
+
+.withdrawal-warning-strip {
+  border-color: #f3ddb6;
+  background: var(--billing-warning-bg);
+  color: var(--billing-warning);
+}
+
+.withdrawal-form-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--billing-border);
+}
+
+.withdrawal-footer-right { display: flex; gap: 10px; }
+
+/* ----------------------------------------------------------------- sidebar */
+
+.withdrawal-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.withdrawal-sidebar .billing-panel { padding: 18px; }
+
+.card-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.card-header-row h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.card-header-row h2 > svg { color: var(--billing-action); }
+
+.bank-balance-placeholder { margin: 14px 0 0; }
+
+/* --------------------------------------------------------- account balance */
+
+.account-balance-card {
+  background: linear-gradient(180deg, #f2faf0 0%, #fff 62%);
+  border-color: var(--billing-mint-strong);
+}
+
+.bank-balance-main {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid rgb(225 233 227 / 85%);
+  border-radius: 12px;
+  background: rgb(255 255 255 / 92%);
+}
+
+.bank-balance-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.bank-account-identification { display: flex; align-items: center; gap: 11px; min-width: 0; }
+
+.bank-logo-tile {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: var(--billing-note-bg);
+  color: var(--billing-note);
+}
+
+.bank-name {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.bank-number {
+  margin: 3px 0 0;
+  color: var(--billing-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.balance-value { text-align: right; flex-shrink: 0; }
+
+.balance-amount {
+  color: var(--billing-action);
+  font-size: 20px;
+  font-weight: 750;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.balance-unavailable { color: var(--billing-muted); font-size: 15px; font-weight: 650; }
+.balance-caption { margin-top: 3px; color: var(--billing-muted); font-size: 12px; }
+
+.balance-overdraft {
+  margin: 10px 0 0;
+  color: var(--billing-muted);
+  font-size: 12px;
+}
+
+.balance-preview {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0 0;
+  padding-top: 12px;
+  border-top: 1px dashed var(--billing-border);
+  font-size: 12.5px;
+}
+
+.balance-preview > div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.balance-preview dt { color: var(--billing-muted); }
+.balance-preview dd { margin: 0; font-weight: 600; }
+
+.balance-preview__total { padding-top: 6px; border-top: 1px solid var(--billing-border); }
+.balance-preview__total dt { color: var(--billing-text); font-weight: 650; }
+.balance-preview__total dd { color: var(--billing-action); font-weight: 750; }
+.balance-preview__negative { color: var(--billing-danger) !important; }
+
+.withdrawal-stats {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  margin-top: 12px;
+  padding: 11px 13px;
+  border-radius: 10px;
+  background: var(--billing-mint);
+}
+
+.withdrawal-stats__count { text-align: right; }
+.stat-label { color: var(--billing-muted); font-size: 11px; }
+.stat-value { margin-top: 2px; font-size: 14px; font-weight: 700; }
+
+/* -------------------------------------------------------- recent movements */
+
+.recent-withdrawals-scope { margin: 8px 0 0; color: var(--billing-muted); font-size: 12px; }
+
+.recent-withdrawals-list {
+  margin: 12px 0 0;
+  padding: 0;
+  border: 1px solid var(--billing-border);
+  border-radius: 12px;
+  list-style: none;
+  overflow: visible;
+}
+
+.recent-withdrawal-row {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 60px;
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--billing-border);
+}
+
+.recent-withdrawal-row:last-child { border-bottom: 0; }
+
+.withdrawal-date-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  min-height: 42px;
+  border-radius: 9px;
+  background: var(--billing-surface-2);
+}
+
+.withdrawal-day { font-size: 13px; font-weight: 700; }
+.withdrawal-month { margin-top: 1px; color: var(--billing-muted); font-size: 10px; text-transform: uppercase; }
+
+.withdrawal-row-main { min-width: 0; }
+.withdrawal-row-amount { display: block; font-size: 13.5px; font-weight: 700; text-align: left; }
+
+.withdrawal-row-meta {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--billing-muted);
+  font-size: 11.5px;
+}
+
+.recent-withdrawal-row .billing-badge {
+  display: block;
+  max-width: 7.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
+/* The row menu is positioned against this, not against the viewport. */
+.recent-withdrawal-row__menu { position: relative; display: inline-flex; }
+
+/* ---------------------------------------------------------- quick actions */
+
+.quick-actions-card {
+  border-color: var(--billing-shortcut-border);
+  background: linear-gradient(135deg, var(--billing-shortcut-bg) 0%, #fff 60%);
+}
+
+.quick-actions-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--billing-shortcut);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.quick-action-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.quick-action-btn {
+  /* The icon sits above the label rather than beside it: at sidebar width
+     three side-by-side labels wrap mid-phrase, and "View cash / book" with a
+     book icon stranded on the first line reads worse than a stacked tile. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 5px;
+  min-height: 62px;
+  padding: 9px 6px;
+  border: 1px solid var(--billing-shortcut-border);
+  border-radius: 9px;
+  background: rgb(255 255 255 / 80%);
+  color: var(--billing-shortcut);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 650;
+  text-align: center;
+  cursor: pointer;
+}
+
+.quick-action-btn > svg { flex: 0 0 auto; }
+.quick-action-btn:hover:not(:disabled) { background: #fff; }
+.quick-action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ------------------------------------------------------------- responsive */
+
+@media (max-width: 1279px) {
+  .bank-withdrawal-grid { grid-template-columns: minmax(0, 1fr); }
+
+  /* Tablet: the form first, then the three context cards side by side rather
+     than stacked into a column half a screen tall. */
+  .withdrawal-sidebar {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  .quick-actions-card { grid-column: 1 / -1; }
+}
+
+@media (max-width: 767px) {
+  .bank-withdrawal-header { flex-direction: column; align-items: stretch; gap: 14px; }
+  .bank-withdrawal-header__side { align-items: flex-start; flex-direction: row; justify-content: space-between; width: 100%; }
+  .withdrawal-form-grid { grid-template-columns: minmax(0, 1fr); }
+  /* align-items is reset as well as display: the tablet rule above sets it to
+     `start`, which on a column flex container shrinks every card to the width
+     of its own content. */
+  .withdrawal-sidebar { display: flex; flex-direction: column; align-items: stretch; }
+  .withdrawal-form-card { padding: 16px; }
+
+  /*
+   * Stacked, in the flow, at the end of the card.
+   *
+   * Deliberately NOT position: sticky. A sticky footer inside a card that is
+   * taller than the phone floats over the fields above it — on this form it
+   * covered the date and the bank account, which is a worse failure than
+   * scrolling to the bottom to save.
+   */
+  .withdrawal-form-footer {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .withdrawal-footer-right { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .withdrawal-form-footer .billing-button { width: 100%; }
+  .quick-action-buttons { grid-template-columns: minmax(0, 1fr); }
+  /* One per row: the label has the whole width, so the icon goes beside it. */
+  .quick-action-btn { flex-direction: row; gap: 8px; min-height: 46px; font-size: 13px; }
+  .recent-withdrawal-row { grid-template-columns: 38px minmax(0, 1fr) auto; row-gap: 6px; }
+  .recent-withdrawal-row__menu { grid-row: 1; grid-column: 3; }
+  .recent-withdrawal-row .billing-badge { grid-column: 2 / -1; justify-self: start; }
+}

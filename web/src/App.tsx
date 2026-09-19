@@ -8,6 +8,7 @@ import Onboarding from './pages/Onboarding'
 import SaleEditor from './pages/SaleEditor'
 import { DuesScreen, PartyStatement } from './pages/Dues'
 import { BankCash, MoneyScreen } from './pages/MoneyMovement'
+import BankWithdrawal from './pages/BankWithdrawal'
 import { Items, Parties } from './pages/Directory'
 import {
   BankCashOverview,
@@ -163,7 +164,10 @@ function Shell() {
         <Route path="bank-cash">
           <Route index element={<RequireScope><BankCashOverview /></RequireScope>} />
           <Route path="deposit" element={<RequireScope><BankCash kind="bank_deposit" /></RequireScope>} />
-          <Route path="withdrawal" element={<RequireScope><BankCash kind="bank_withdrawal" /></RequireScope>} />
+          {/* The withdrawal screen has its own page: it is the one contra with
+              a balance, a recent-activity list and a duplicate check beside the
+              form. Deposit and transfer keep the shared form. */}
+          <Route path="withdrawal" element={<RequireScope><BankWithdrawal /></RequireScope>} />
           <Route path="transfer" element={<RequireScope><BankCash kind="bank_transfer" /></RequireScope>} />
         </Route>
 

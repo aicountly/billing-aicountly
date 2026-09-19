@@ -18,6 +18,7 @@ require __DIR__ . '/../src/Autoload.php';
 
 Env::load(__DIR__ . '/../.env');
 
+use Aicountly\Api\Domain\BankCashService;
 use Aicountly\Api\Domain\BillerDeskService;
 use Aicountly\Api\Domain\CollectionsService;
 use Aicountly\Api\Domain\ComplianceService;
@@ -1203,6 +1204,123 @@ check('the audit log refuses UPDATE and DELETE', function () {
     );
     assertThrows(static fn () => Db::run("UPDATE billing_audit_log SET action = 'tampered'"), 'append-only', 'audit UPDATE');
     assertThrows(static fn () => Db::run('DELETE FROM billing_audit_log'), 'append-only', 'audit DELETE');
+});
+
+echo "\nBank and cash\n";
+
+check('the ledger list carries the kind, the number and the balance', function () use ($ctx, $auth) {
+    resetDatabase();
+    $answer = (new BankCashService($ctx, $auth))->accounts();
+    $byId = [];
+    foreach ($answer['accounts'] as $row) {
+        $byId[$row['account_id']] = $row;
+    }
+
+    assertSame(5, count($answer['accounts']), 'every cash and bank ledger is offered');
+    assertSame('cash', $byId[9001]['kind'], 'the accounting group decides: Cash-in-hand is cash');
+    assertSame('bank', $byId[9002]['kind'], 'and Bank Accounts is bank');
+    assertSame('502000123456', $byId[9002]['account_no'], 'the account number comes through for the picker');
+    assertSame(282000.0, $byId[9002]['balance'], 'the balance is merged from the account summary');
+    assertTrue($answer['balances_available'], 'balances were readable');
+
+    // Axis is in the master list but not in the summary. That is a missing
+    // balance, which is not the same as a balance of zero.
+    assertSame(null, $byId[9003]['balance'], 'an account with no summary row has no balance, not zero');
+
+    // No group at all: the name is the only thing left to classify on.
+    assertSame('cash', $byId[9005]['kind'], 'a petty cash tin with no group still reads as cash');
+});
+
+check('a biller is offered the accounts but not the balances', function () use ($ctx) {
+    resetDatabase();
+    $biller = userWithProfile($ctx, 'user-biller-bank', 'biller');
+
+    $answer = (new BankCashService($ctx, $biller))->accounts();
+    assertSame(5, count($answer['accounts']), 'the list is not the secret');
+    assertTrue(!$answer['balances_available'], 'the balances are');
+    foreach ($answer['accounts'] as $row) {
+        assertSame(null, $row['balance'], 'no balance reaches a profile without cash.view or bank.view');
+    }
+});
+
+check('recent withdrawals are the contras that take money OUT of the bank', function () use ($ctx, $auth) {
+    resetDatabase();
+    $answer = (new BankCashService($ctx, $auth))->withdrawals(9002, 30, 5);
+
+    assertTrue($answer['available'], 'the ledger was readable');
+    assertSame(2, count($answer['entries']), 'two of the four rows are withdrawals');
+    assertSame(75000.0, $answer['stats']['total'], 'and they total 75,000');
+    assertSame(2, $answer['stats']['count'], 'counted, not guessed');
+
+    $numbers = array_column($answer['entries'], 'voucher_no');
+    assertSame(['CON/0041', 'CON/0034'], $numbers, 'newest first');
+    // The two that must never appear: money paid to a supplier out of the same
+    // bank, and a contra going the other way — which is a deposit.
+    assertTrue(!in_array('PAY/0007', $numbers, true), 'a payment out of the bank is not a cash withdrawal');
+    assertTrue(!in_array('CON/0038', $numbers, true), 'a contra INTO the bank is a deposit, not a withdrawal');
+
+    assertSame('CHQ002341', $answer['entries'][0]['reference'], 'the instrument number is carried for the row');
+    assertSame('Cash in hand', $answer['entries'][0]['cash_account_name'], 'and the other side of the entry');
+});
+
+check('with no account chosen, several banks are read and the answer says which', function () use ($ctx, $auth) {
+    resetDatabase();
+    $answer = (new BankCashService($ctx, $auth))->withdrawals(null, 30, 5);
+
+    assertSame(3, count($answer['scanned']), 'the three bank ledgers were read');
+    assertSame(3, count($answer['entries']), 'and their withdrawals are merged');
+    assertSame('CON/0028', $answer['entries'][2]['voucher_no'], 'the oldest of the three is the Axis one');
+    assertSame(9003, $answer['entries'][2]['bank_account_id'], 'each entry says which bank it came out of');
+});
+
+check('a cash account is not a bank account', function () use ($ctx, $auth) {
+    resetDatabase();
+    $answer = (new BankCashService($ctx, $auth))->withdrawals(9001, 30, 5);
+
+    assertTrue(!$answer['available'], 'asking for a cash ledger is refused');
+    assertSame([], $answer['entries'], 'and nothing is invented for it');
+});
+
+check('a ledger that does not name the voucher type reports nothing rather than everything', function () use ($ctx, $auth) {
+    resetDatabase();
+    // 9004 answers with rows that carry no voucher type. Listing its credits
+    // would present every payment out of that bank as a cash withdrawal.
+    $answer = (new BankCashService($ctx, $auth))->withdrawals(9004, 30, 5);
+
+    assertTrue(!$answer['available'], 'it says it could not tell');
+    assertTrue(str_contains((string) $answer['reason'], 'did not say'), 'and says why');
+    assertSame([], $answer['entries'], 'rather than listing a credit it cannot classify');
+});
+
+check('Books being unreachable is an unavailable answer, never a zero', function () use ($ctx, $auth) {
+    resetDatabase();
+    stubFail('account-ledger', 503);
+    try {
+        $answer = (new BankCashService($ctx, $auth))->withdrawals(9002, 30, 5);
+    } finally {
+        stubRecover();
+    }
+
+    assertTrue(!$answer['available'], 'the reading is unavailable');
+    assertTrue(!isset($answer['stats']), 'and there is no total to mistake for a quiet month');
+});
+
+check('a profile without bank.view gets a reason, not a 403 that breaks the form', function () use ($ctx) {
+    resetDatabase();
+    $biller = userWithProfile($ctx, 'user-biller-activity', 'biller');
+
+    $answer = (new BankCashService($ctx, $biller))->withdrawals(null, 30, 5);
+    assertTrue(!$answer['available'], 'the activity is withheld');
+    assertTrue(str_contains((string) $answer['reason'], 'profile'), 'with a reason the user can act on');
+});
+
+check('a cashier may see bank activity', function () use ($ctx) {
+    resetDatabase();
+    $cashier = userWithProfile($ctx, 'user-cashier-bank', 'cashier');
+
+    $answer = (new BankCashService($ctx, $cashier))->withdrawals(9002, 30, 5);
+    assertTrue($answer['available'], 'bank.view is what this reads');
+    assertSame(2, count($answer['entries']), 'and it sees the same two withdrawals');
 });
 
 echo "\nTenant isolation\n";

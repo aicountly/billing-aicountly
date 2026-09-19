@@ -18,6 +18,7 @@ the absence as a zero.
 | What did I sell, and to whom? | **Smart Books** | `registers?vch_type_id=…`, live |
 | Who owes me, whom do I owe? | **Smart Books** | `reports/bill-by-bill`, live, aged in Billing |
 | How much cash and bank? | **Smart Books** | `reports/account-summary`, live |
+| What has been withdrawn from the bank? | **Smart Books** | `reports/account-ledger`, live, filtered to contras |
 | What is this party's ledger? | **Smart Books** | `reports/account-ledger`, live |
 | What is the tax on this bill? | **Smart Books** | computed there; Billing sends no tax fields |
 | Is this item in stock? | **Inventory** | `InventoryClient`, live |
@@ -33,8 +34,8 @@ the absence as a zero.
 | `GET registers` | all five dashboards, every register report |
 | `GET reports/bill-by-bill` | receivables, payables, ageing, reminder candidates |
 | `GET reports/account-summary` | cash and bank cards, cash & compliance |
-| `GET reports/account-ledger` | party statement |
-| `GET masters/accounts` | party and cash/bank pickers |
+| `GET reports/account-ledger` | party statement, recent bank withdrawals |
+| `GET masters/accounts` | party and cash/bank pickers, the bank withdrawal screen |
 | `GET masters/tax-categories` | line tax category picker |
 | `POST vouchers/drafts`, `POST vouchers/drafts/{id}/post` | every transaction |
 | `POST receipt-vouchers/{id}/settlement` | receipt allocation |
@@ -54,6 +55,22 @@ the absence as a zero.
 
 `GET companies`, `GET companyinfo` — the company, branch and financial-year
 switcher. Read on the request that draws it; the three ids are all Billing keeps.
+
+### A note on the bank withdrawal screen
+
+Its balance, its thirty-day total and its recent-withdrawal list are all the two
+Books endpoints above, read on the request that draws the screen. Billing keeps
+no list of withdrawals, which is why the screen can say three different things:
+
+* **an empty list** — Books answered and there were none in the period
+* **unavailable, with a reason** — the profile lacks `bank.view`, or Books did
+  not answer
+* **unavailable, because the ledger did not name the voucher type** — without it
+  every credit on a bank ledger looks alike, and a supplier payment would be
+  listed as a cash withdrawal
+
+The third is the one worth stating: the screen would rather show nothing than
+show a list it cannot vouch for.
 
 ---
 

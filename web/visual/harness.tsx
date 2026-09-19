@@ -24,6 +24,7 @@ import BillerDesk from '../src/dashboards/BillerDesk'
 import Receivables from '../src/dashboards/Receivables'
 import Payables from '../src/dashboards/Payables'
 import CashCompliance from '../src/dashboards/CashCompliance'
+import BankWithdrawal from '../src/pages/BankWithdrawal'
 import { saveSession, setAuthToken } from '../src/auth/tokens'
 import { setScope } from '../src/services/api'
 import * as fixtures from './fixtures'
@@ -40,6 +41,7 @@ const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
   receivables: { path: '/dashboard/receivables', element: <Receivables /> },
   payables: { path: '/dashboard/payables', element: <Payables /> },
   'cash-compliance': { path: '/dashboard/cash-compliance', element: <CashCompliance /> },
+  'bank-withdrawal': { path: '/bank-cash/withdrawal', element: <BankWithdrawal /> },
 }
 
 /** The fixture behind each endpoint the screens call. */
@@ -63,9 +65,11 @@ const RESPONSES: Array<[RegExp, unknown]> = [
   [/v1\/manage\/companyinfo/, {
     cmp_id: 1,
     cmp_name: 'Sharma Enterprises',
-    fy_list: [{ fy_id: 4, fy_name: 'FY 2026–27' }],
+    fy_list: [{ fy_id: 4, fy_name: 'FY 2026–27', fy_start: '2026-04-01', fy_end: '2027-03-31' }],
     branch_list: [{ bo_id: 1, bo_name: 'Main Branch', is_head_office: true }],
   }],
+  [/v1\/bank-cash\/accounts/, fixtures.bankCashAccounts],
+  [/v1\/bank-cash\/withdrawals/, fixtures.bankWithdrawals],
 ]
 
 const originalFetch = window.fetch.bind(window)

@@ -176,6 +176,72 @@ if (str_contains($path, '/masters/accounts/')) {
     echo json_encode(['data' => ['acc_id' => 501, 'acc_name' => 'Northern Distributors', 'credit_limit' => 500000, 'credit_days' => 30]]);
     exit;
 }
+
+/**
+ * The ledger master list.
+ *
+ * `nature=cash_bank` is what the bank-and-cash screens ask for. Axis is
+ * deliberately ABSENT from the account-summary answer below, so a reader has to
+ * cope with an account it has no balance for; and "Petty cash tin" carries no
+ * accounting group at all, which is the case that forces classification to fall
+ * back to the name.
+ */
+if (str_contains($path, '/masters/accounts')) {
+    $nature = (string) ($_GET['nature'] ?? '');
+    if ($nature !== 'cash_bank') {
+        echo json_encode(['data' => [
+            ['acc_id' => 501, 'acc_name' => 'Northern Distributors'],
+            ['acc_id' => 601, 'acc_name' => 'Aarti Plastics'],
+        ], 'meta' => ['total' => 2]]);
+        exit;
+    }
+
+    echo json_encode(['data' => [
+        ['acc_id' => 9001, 'acc_name' => 'Cash in hand', 'group_name' => 'Cash-in-hand'],
+        ['acc_id' => 9002, 'acc_name' => 'HDFC Current', 'group_name' => 'Bank Accounts', 'bank_account_no' => '502000123456'],
+        ['acc_id' => 9003, 'acc_name' => 'Axis Current', 'group_name' => 'Bank Accounts', 'bank_account_no' => '998877665544'],
+        ['acc_id' => 9004, 'acc_name' => 'Untyped Bank', 'group_name' => 'Bank Accounts'],
+        ['acc_id' => 9005, 'acc_name' => 'Petty cash tin'],
+    ], 'meta' => ['total' => 5]]);
+    exit;
+}
+
+/**
+ * An account's own ledger.
+ *
+ * 9002 carries the four cases that matter to the withdrawal screen: a contra
+ * OUT of the bank (a withdrawal), a payment out of the bank (not one), a contra
+ * INTO the bank (a deposit, not one) and a second withdrawal. 9004's rows carry
+ * no voucher type at all, which must read as "cannot tell" rather than as four
+ * withdrawals.
+ */
+if (str_contains($path, '/reports/account-ledger')) {
+    $account = (int) ($_GET['account_id'] ?? 0);
+    $rows = match ($account) {
+        9002 => [
+            ['voucher_id' => 7101, 'voucher_no' => 'CON/0041', 'voucher_date' => '2026-09-18', 'voucher_type' => 'Contra',
+             'debit' => 0, 'credit' => 25000, 'particulars' => 'Cash in hand', 'instrument_no' => 'CHQ002341'],
+            ['voucher_id' => 7102, 'voucher_no' => 'PAY/0007', 'voucher_date' => '2026-09-17', 'voucher_type' => 'Payment',
+             'debit' => 0, 'credit' => 60000, 'particulars' => 'Aarti Plastics'],
+            ['voucher_id' => 7103, 'voucher_no' => 'CON/0038', 'voucher_date' => '2026-09-15', 'voucher_type' => 'Contra',
+             'debit' => 40000, 'credit' => 0, 'particulars' => 'Cash in hand'],
+            ['voucher_id' => 7104, 'voucher_no' => 'CON/0034', 'voucher_date' => '2026-09-12', 'voucher_type' => 'Contra',
+             'debit' => 0, 'credit' => 50000, 'particulars' => 'Cash in hand', 'instrument_no' => 'CHQ002333'],
+        ],
+        9003 => [
+            ['voucher_id' => 7201, 'voucher_no' => 'CON/0028', 'voucher_date' => '2026-09-05', 'voucher_type' => 'Contra',
+             'debit' => 0, 'credit' => 15000, 'particulars' => 'Petty cash tin', 'instrument_no' => 'Slip No. 4456'],
+        ],
+        9004 => [
+            ['voucher_id' => 7301, 'voucher_no' => 'XX/0001', 'voucher_date' => '2026-09-14', 'debit' => 0, 'credit' => 9000],
+            ['voucher_id' => 7302, 'voucher_no' => 'XX/0002', 'voucher_date' => '2026-09-13', 'debit' => 5000, 'credit' => 0],
+        ],
+        default => [],
+    };
+
+    echo json_encode(['data' => $rows, 'meta' => ['total' => count($rows)]]);
+    exit;
+}
 if (str_contains($path, '/reports/bill-by-bill')) {
     echo json_encode(['data' => [
         ['bill_no' => 'INV/0001', 'bill_date' => '2026-08-01', 'due_date' => '2026-08-31', 'balance' => 120000.0],

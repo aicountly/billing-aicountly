@@ -14,7 +14,7 @@ import type {
   PayablesDashboard,
   ReceivablesDashboard,
 } from '../src/dashboards/types'
-import type { BillingSession } from '../src/services/types'
+import type { BankWithdrawalActivity, BillingSession, LedgerAccounts } from '../src/services/types'
 
 const PERIOD = {
   key: 'month',
@@ -61,7 +61,17 @@ export const ownerSession: BillingSession = {
       ],
     },
     { key: 'purchases', label: 'Purchases', path: '/purchases', children: [] },
-    { key: 'money', label: 'Money', path: '/money-in', children: [] },
+    {
+      key: 'money',
+      label: 'Money',
+      path: '/money-in',
+      children: [
+        { label: 'Money received', path: '/money-in/new' },
+        { label: 'Money paid', path: '/money-out/new' },
+        { label: 'Bank deposit', path: '/bank-cash/deposit' },
+        { label: 'Bank withdrawal', path: '/bank-cash/withdrawal' },
+      ],
+    },
     { key: 'receivables', label: 'Money to Collect', path: '/receivables', children: [] },
     { key: 'payables', label: 'Money to Pay', path: '/payables', children: [] },
     { key: 'parties', label: 'Parties', path: '/parties', children: [] },
@@ -430,4 +440,49 @@ export const compliance: ComplianceDashboard = {
     can_pay: true,
   },
   generated_at: '2026-09-16T09:12:00Z',
+}
+
+// ---------------------------------------------------------------------------
+// Bank withdrawal
+// ---------------------------------------------------------------------------
+
+export const bankCashAccounts: LedgerAccounts = {
+  accounts: [
+    { account_id: 9001, account_name: 'Cash In Hand', account_no: null, kind: 'cash', group: 'Cash-in-hand', balance: 42500, overdraft_limit: null },
+    { account_id: 9005, account_name: 'Petty Cash', account_no: null, kind: 'cash', group: 'Cash-in-hand', balance: 6200, overdraft_limit: null },
+    { account_id: 9002, account_name: 'HDFC Bank', account_no: '502000123456', kind: 'bank', group: 'Bank Accounts', balance: 1248500, overdraft_limit: null },
+    { account_id: 9003, account_name: 'ICICI Bank', account_no: '123456789012', kind: 'bank', group: 'Bank Accounts', balance: 386400, overdraft_limit: null },
+    { account_id: 9004, account_name: 'Axis Bank', account_no: '998877665544', kind: 'bank', group: 'Bank Accounts', balance: 91250, overdraft_limit: null },
+  ],
+  balances_available: true,
+  balances_reason: null,
+  may_see_cash: true,
+  may_see_bank: true,
+  source: 'books',
+  note: 'Accounts and balances come from Smart Books as this screen loads. Billing keeps no copy of either.',
+}
+
+export const bankWithdrawals: BankWithdrawalActivity = {
+  available: true,
+  reason: null,
+  from: '2026-08-21',
+  to: '2026-09-19',
+  days: 30,
+  account_id: null,
+  entries: [
+    { voucher_id: 7101, voucher_uuid: 'vch-w1', voucher_no: 'CON/0041', date: '2026-09-18', amount: 25000, bank_account_id: 9002, bank_account_name: 'HDFC Bank', cash_account_id: 9001, cash_account_name: 'Cash In Hand', reference: 'CHQ002341', narration: null },
+    { voucher_id: 7102, voucher_uuid: 'vch-w2', voucher_no: 'CON/0039', date: '2026-09-16', amount: 10000, bank_account_id: 9003, bank_account_name: 'ICICI Bank', cash_account_id: 9001, cash_account_name: 'Cash In Hand', reference: 'UTR987654321', narration: null },
+    { voucher_id: 7103, voucher_uuid: 'vch-w3', voucher_no: 'CON/0034', date: '2026-09-12', amount: 50000, bank_account_id: 9002, bank_account_name: 'HDFC Bank', cash_account_id: 9001, cash_account_name: 'Cash In Hand', reference: 'CHQ002333', narration: 'Cash for branch expenses' },
+    { voucher_id: 7104, voucher_uuid: 'vch-w4', voucher_no: 'CON/0028', date: '2026-09-05', amount: 15000, bank_account_id: 9004, bank_account_name: 'Axis Bank', cash_account_id: 9005, cash_account_name: 'Petty Cash', reference: 'Slip No. 4456', narration: null },
+  ],
+  stats: { total: 235000, count: 12 },
+  scanned: [
+    { account_id: 9002, account_name: 'HDFC Bank' },
+    { account_id: 9003, account_name: 'ICICI Bank' },
+    { account_id: 9004, account_name: 'Axis Bank' },
+  ],
+  omitted_accounts: 0,
+  complete: true,
+  source: 'books',
+  note: 'Read from Smart Books just now. Billing keeps no list of its own.',
 }

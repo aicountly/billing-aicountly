@@ -237,3 +237,67 @@ export interface CashBankAccount {
   acc_id: number
   acc_name: string
 }
+
+/**
+ * A cash or bank ledger as Books files it, with the balance where this profile
+ * may see it. Rendered, never stored — `balance` is null when the profile may
+ * not see that half, which is not the same as a balance of zero.
+ */
+export interface LedgerAccount {
+  account_id: number
+  account_name: string
+  account_no: string | null
+  kind: 'cash' | 'bank'
+  group: string | null
+  balance: number | null
+  /** Only present where Books holds one. Absent is not zero. */
+  overdraft_limit: number | null
+}
+
+export interface LedgerAccounts {
+  accounts: LedgerAccount[]
+  balances_available: boolean
+  balances_reason: string | null
+  may_see_cash: boolean
+  may_see_bank: boolean
+  source: string
+  note: string
+}
+
+/** One bank-to-cash movement, read out of Books' own bank ledger. */
+export interface BankWithdrawalEntry {
+  voucher_id: number | null
+  voucher_uuid: string | null
+  voucher_no: string | null
+  date: string | null
+  amount: number
+  bank_account_id: number
+  bank_account_name: string
+  cash_account_id: number | null
+  cash_account_name: string | null
+  reference: string | null
+  narration: string | null
+}
+
+/**
+ * Recent bank withdrawals and what they come to.
+ *
+ * `available: false` is a first-class answer — no permission, Books silent, or
+ * a ledger that did not say which entries were contras. The screen shows the
+ * reason; it never renders the absence as an empty list.
+ */
+export interface BankWithdrawalActivity {
+  available: boolean
+  reason: string | null
+  from?: string
+  to?: string
+  days?: number
+  account_id?: number | null
+  entries: BankWithdrawalEntry[]
+  stats?: { total: number; count: number }
+  scanned?: Array<{ account_id: number; account_name: string }>
+  omitted_accounts?: number
+  complete?: boolean
+  source?: string
+  note?: string
+}

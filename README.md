@@ -73,9 +73,11 @@ same-origin.
 | `npm run typecheck` | Type-check only |
 | `npm run preview` | Serve the production build locally |
 
-`web/visual.html` is a development-only photo booth: it mounts the real
-dashboard components against fixtures so the screens can be checked at four
-widths without a portal session or a company's data. `vite build` takes
+`web/visual.html` is a development-only photo booth: it mounts the real screen
+components against fixtures so they can be checked at four widths without a
+portal session or a company's data — the five dashboards and the bank
+withdrawal form, chosen with `?screen=` (for example
+`/visual.html?screen=bank-withdrawal`). `vite build` takes
 `index.html` only, so none of it reaches the deployed bundle.
 
 The PHP API has no build step and no dependencies. To run it locally:

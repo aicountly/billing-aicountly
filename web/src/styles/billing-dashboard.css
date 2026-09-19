@@ -441,6 +441,51 @@
 
 .billing-button:disabled { opacity: 0.55; cursor: not-allowed; }
 
+.billing-button--danger { background: var(--billing-danger); border-color: var(--billing-danger); color: #fff; }
+.billing-button--danger:hover { background: #99190f; }
+
+/* A link that is really a button: it changes what is on screen rather than
+   where you are, so it must not be an <a> with no href. */
+.billing-linkbutton {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 2px;
+  border: 0;
+  background: transparent;
+  color: var(--billing-action);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.billing-linkbutton:hover { text-decoration: underline; }
+
+.billing-required { color: var(--billing-danger); }
+
+/* ------------------------------------------------------------ breadcrumbs */
+
+.billing-breadcrumb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--billing-muted);
+  font-size: 12.5px;
+}
+
+.billing-breadcrumb li + li::before {
+  content: '/';
+  margin-right: 6px;
+  color: var(--billing-border-strong);
+}
+
+.billing-breadcrumb [aria-current='page'] { color: var(--billing-text); font-weight: 650; }
+
 /* --------------------------------------------------------------- metrics */
 
 .billing-metrics {
@@ -786,6 +831,242 @@
 
 .billing-field__error { color: var(--billing-danger); font-size: 12px; }
 .billing-field__hint { color: var(--billing-muted); font-size: 12px; }
+
+/* ----------------------------------------------------- composite controls */
+
+/*
+ * An input with something fixed attached to it — a rupee sign, an icon. The
+ * ring is drawn on the WRAPPER with :focus-within so the border and the focus
+ * ring stay one shape; putting it on the inner input draws a rectangle inside
+ * a rectangle.
+ */
+.billing-currency-input,
+.billing-input-with-icon {
+  display: flex;
+  align-items: stretch;
+  min-height: 44px;
+  border: 1px solid var(--billing-border-strong);
+  border-radius: 9px;
+  background: #fff;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.billing-currency-input:hover,
+.billing-input-with-icon:hover { border-color: #b3c4b8; }
+
+.billing-currency-input:focus-within,
+.billing-input-with-icon:focus-within {
+  border-color: var(--billing-action);
+  box-shadow: 0 0 0 3px rgb(24 122 18 / 12%);
+}
+
+.billing-currency-input--invalid,
+.billing-input-with-icon--invalid { border-color: var(--billing-danger); }
+
+.billing-currency-input input,
+.billing-input-with-icon input,
+.billing-input-with-icon textarea {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.billing-currency-input input:focus,
+.billing-input-with-icon input:focus,
+.billing-input-with-icon textarea:focus { outline: none; }
+
+.billing-currency-input input {
+  font-size: 17px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.billing-currency-input__prefix {
+  flex: 0 0 42px;
+  display: grid;
+  place-items: center;
+  border-right: 1px solid var(--billing-border);
+  background: var(--billing-surface-2);
+  border-radius: 8px 0 0 8px;
+  color: var(--billing-muted);
+  font-weight: 700;
+}
+
+.billing-input-with-icon > svg {
+  flex: 0 0 auto;
+  align-self: center;
+  margin-left: 12px;
+  margin-right: -4px;
+  color: var(--billing-muted);
+}
+
+.billing-input-with-icon--top > svg { align-self: flex-start; margin-top: 13px; }
+
+.billing-input-with-icon textarea {
+  min-height: 62px;
+  resize: vertical;
+  font-size: 13.5px;
+}
+
+.billing-field input:disabled,
+.billing-currency-input input:disabled,
+.billing-input-with-icon input:disabled,
+.billing-input-with-icon textarea:disabled { background: var(--billing-surface-2); color: var(--billing-muted); }
+
+/* ---------------------------------------------------------- ledger picker */
+
+.billing-ledger-select { position: relative; }
+
+.billing-ledger-select__trigger {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--billing-border-strong);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--billing-text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.billing-ledger-select__trigger:hover:not(:disabled) { border-color: #b3c4b8; }
+.billing-ledger-select__trigger[aria-expanded='true'] {
+  border-color: var(--billing-action);
+  box-shadow: 0 0 0 3px rgb(24 122 18 / 12%);
+}
+.billing-ledger-select__trigger[aria-invalid='true'] { border-color: var(--billing-danger); }
+.billing-ledger-select__trigger:disabled { background: var(--billing-surface-2); cursor: not-allowed; }
+
+.billing-ledger-select__icon { display: inline-flex; color: var(--billing-muted); flex: 0 0 auto; }
+.billing-ledger-select__value { flex: 1 1 auto; min-width: 0; }
+.billing-ledger-select__chevron { flex: 0 0 auto; color: var(--billing-muted); }
+.billing-ledger-select__muted { color: var(--billing-muted); }
+
+.billing-ledger-select__name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.billing-ledger-select__secondary {
+  display: block;
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--billing-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.billing-ledger-select__popup {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  padding: 8px;
+  border: 1px solid var(--billing-border);
+  border-radius: 12px;
+  background: var(--billing-surface);
+  box-shadow: var(--billing-shadow-lg);
+}
+
+.billing-ledger-select__search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border: 1px solid var(--billing-border);
+  border-radius: 8px;
+  background: var(--billing-surface-2);
+  color: var(--billing-muted);
+}
+
+.billing-ledger-select__search input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 38px;
+  border: 0;
+  background: transparent;
+  color: var(--billing-text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.billing-ledger-select__search input:focus { outline: none; }
+
+.billing-ledger-select__list {
+  max-height: 260px;
+  margin: 6px 0 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.billing-ledger-select__option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.billing-ledger-select__option[data-active='true'] { background: var(--billing-mint); }
+.billing-ledger-select__option[aria-selected='true'] .billing-ledger-select__name { color: var(--billing-action); }
+.billing-ledger-select__option-main { flex: 1 1 auto; min-width: 0; }
+.billing-ledger-select__trailing { flex: 0 0 auto; color: var(--billing-muted); font-size: 12px; }
+.billing-ledger-select__tick { flex: 0 0 auto; color: var(--billing-action); }
+
+.billing-ledger-select__none { padding: 14px 10px; color: var(--billing-muted); font-size: 13px; }
+.billing-ledger-select__none-action { display: block; margin-top: 6px; }
+
+.billing-ledger-field__failed { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+/* ----------------------------------------------------------------- dialog */
+
+.billing-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgb(16 34 24 / 42%);
+}
+
+.billing-dialog {
+  position: fixed;
+  z-index: 81;
+  top: 50%;
+  left: 50%;
+  width: min(92vw, 27rem);
+  padding: 22px;
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--billing-border);
+  border-radius: var(--billing-radius);
+  background: var(--billing-surface);
+  box-shadow: var(--billing-shadow-lg);
+}
+
+.billing-dialog__title { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -0.015em; }
+.billing-dialog__body { margin-top: 8px; color: var(--billing-muted); font-size: 13.5px; }
+.billing-dialog__actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+
+.billing-iconbutton--tiny { width: 30px; height: 30px; border-radius: 8px; }
+
+.billing-menu--row { top: calc(100% + 4px); right: 0; min-width: 12.5rem; }
+
 
 /* ---------------------------------------------------------------- states */
 
