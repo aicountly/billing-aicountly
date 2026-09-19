@@ -36,7 +36,7 @@ export type SaveTarget = 'stay' | 'another' | 'view'
 export const PAYMENT_MODES = [
   { value: 'cash', label: 'Cash' },
   { value: 'upi', label: 'UPI' },
-  { value: 'bank_transfer', label: 'Bank transfer (NEFT / RTGS / IMPS)' },
+  { value: 'bank_transfer', label: 'Bank transfer (NEFT/RTGS/IMPS)' },
   { value: 'cheque', label: 'Cheque' },
   { value: 'card', label: 'Card' },
 ] as const
