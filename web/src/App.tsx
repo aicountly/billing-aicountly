@@ -26,14 +26,17 @@ import './App.css'
  *
  * Each one pulls in the chart and panel code, and nobody opens all five: a
  * biller opens exactly one and a counter machine is usually the slowest device
- * in the building. Reports is split for the same reason.
+ * in the building. Reports is split for the same reason, and the report VIEWER
+ * is split again from the discovery screen: landing on Reports should not cost
+ * the table, the formatting and the export code of a report nobody has opened.
  */
 const Overview = lazy(() => import('./dashboards/Overview'))
 const BillerDesk = lazy(() => import('./dashboards/BillerDesk'))
 const Receivables = lazy(() => import('./dashboards/Receivables'))
 const Payables = lazy(() => import('./dashboards/Payables'))
 const CashCompliance = lazy(() => import('./dashboards/CashCompliance'))
-const Reports = lazy(() => import('./pages/Reports'))
+const Reports = lazy(() => import('./pages/reports'))
+const ReportView = lazy(() => import('./pages/reports/ReportView'))
 
 initAnalytics()
 
@@ -177,7 +180,13 @@ function Shell() {
         </Route>
 
         <Route path="items" element={<RequireScope><Items /></RequireScope>} />
-        <Route path="reports" element={<Suspense fallback={<Loading />}><RequireScope><Reports /></RequireScope></Suspense>} />
+        {/* Reports is two screens. The index is the discovery layer and reads
+            nothing but the catalogue; `:reportKey` is the report itself, read
+            live from the product that owns the figures when it is opened. */}
+        <Route path="reports">
+          <Route index element={<Suspense fallback={<Loading />}><RequireScope><Reports /></RequireScope></Suspense>} />
+          <Route path=":reportKey" element={<Suspense fallback={<Loading />}><RequireScope><ReportView /></RequireScope></Suspense>} />
+        </Route>
 
         <Route path="more">
           <Route index element={<RequireScope><More /></RequireScope>} />

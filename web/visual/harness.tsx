@@ -20,6 +20,8 @@ import { AuthProvider } from '../src/auth/AuthProvider'
 import { BillingProvider } from '../src/context/BillingContext'
 import { AppShell } from '../src/shell/AppShell'
 import Overview from '../src/dashboards/Overview'
+import Reports from '../src/pages/reports'
+import ReportView from '../src/pages/reports/ReportView'
 import BillerDesk from '../src/dashboards/BillerDesk'
 import Receivables from '../src/dashboards/Receivables'
 import Payables from '../src/dashboards/Payables'
@@ -34,12 +36,22 @@ const params = new URLSearchParams(window.location.search)
 const screen = params.get('screen') ?? 'overview'
 const asBiller = params.get('as') === 'biller'
 
-const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
+/**
+ * `path` is the route pattern, `entry` the URL to land on when they differ.
+ *
+ * They differ for the report viewer: mounting it on a literal
+ * `/reports/sales_register` would give `useParams()` nothing to return, and the
+ * screen would sit there with no report key, which is not what it does in the
+ * real router.
+ */
+const SCREENS: Record<string, { path: string; entry?: string; element: React.ReactNode }> = {
   overview: { path: '/dashboard/overview', element: <Overview /> },
   biller: { path: '/dashboard/biller', element: <BillerDesk /> },
   receivables: { path: '/dashboard/receivables', element: <Receivables /> },
   payables: { path: '/dashboard/payables', element: <Payables /> },
   'cash-compliance': { path: '/dashboard/cash-compliance', element: <CashCompliance /> },
+  reports: { path: '/reports', element: <Reports /> },
+  report: { path: '/reports/:reportKey', entry: '/reports/sales_register', element: <ReportView /> },
 }
 
 /** The fixture behind each endpoint the screens call. */
@@ -50,6 +62,11 @@ const RESPONSES: Array<[RegExp, unknown]> = [
   [/v1\/dashboards\/receivables/, fixtures.receivables],
   [/v1\/dashboards\/payables/, fixtures.payables],
   [/v1\/dashboards\/cash-compliance/, fixtures.compliance],
+  // Scoped calls always carry cmp_id/fy_id/bo_id, so both patterns have to
+  // allow a query string. The run endpoint is matched first — `/v1/reports`
+  // alone would otherwise answer `/v1/reports/sales_register` with the list.
+  [/v1\/reports\/[a-z_]+(\?|$)/, fixtures.salesRegisterReport],
+  [/v1\/reports(\?|$)/, fixtures.reportCatalogue],
   [/v1\/insights/, [
     { kind: 'overdue_receivable', tone: 'warning', message: '₹74,500.00 is overdue from customers.', action: { label: 'See who', path: '/dashboard/receivables' } },
     { kind: 'payable_due', tone: 'info', message: '₹48,000.00 is due to suppliers this week.', action: { label: 'See the list', path: '/dashboard/payables' } },
@@ -115,10 +132,17 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <AuthProvider>
       <BillingProvider>
-        <MemoryRouter initialEntries={[target.path]}>
+        <MemoryRouter initialEntries={[target.entry ?? target.path]}>
           <Routes>
             <Route element={<AppShell />}>
               <Route path={target.path} element={target.element} />
+              {/* Opening a report from the landing screen has somewhere to go,
+                  so the harness exercises the real navigation, not a dead end.
+                  The guard keeps the chosen screen from being declared twice. */}
+              {target.path !== '/reports/:reportKey' && (
+                <Route path="/reports/:reportKey" element={<ReportView />} />
+              )}
+              {target.path !== '/reports' && <Route path="/reports" element={<Reports />} />}
             </Route>
           </Routes>
         </MemoryRouter>

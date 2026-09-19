@@ -26,7 +26,8 @@ Five dashboards, all reading live from Smart Books and Inventory:
 
 Behind them: sales and purchases, credit and debit notes with their original
 document, receipts and payments with allocation, bank deposits and withdrawals,
-ten live reports with CSV export, and Billing profiles deciding who sees what.
+ten live reports with CSV export behind a searchable Reports screen, and
+Billing profiles deciding who sees what.
 
 See [docs/BILLING_IMPLEMENTATION_STATUS.md](docs/BILLING_IMPLEMENTATION_STATUS.md)
 for what each figure means, and
@@ -75,7 +76,9 @@ same-origin.
 
 `web/visual.html` is a development-only photo booth: it mounts the real
 dashboard components against fixtures so the screens can be checked at four
-widths without a portal session or a company's data. `vite build` takes
+widths without a portal session or a company's data. `?screen=` takes
+`overview`, `biller`, `receivables`, `payables`, `cash-compliance`, `reports`
+(the Reports landing screen) and `report` (one report, open). `vite build` takes
 `index.html` only, so none of it reaches the deployed bundle.
 
 The PHP API has no build step and no dependencies. To run it locally:
@@ -103,6 +106,7 @@ template. There are two of them, and they work in opposite ways:
 | `VITE_APP_ENV` | `local`, `sandbox`, or `production` |
 | `VITE_PRODUCT_KEY` | Portal product key. Derived from the hostname when unset |
 | `VITE_PORTAL_LOGIN_URL` | Login portal override. Local development only |
+| `VITE_FEATURE_REPORT_*` | Reports controls with no endpoint behind them yet. See `.env.example` |
 
 Only `VITE_`-prefixed variables reach the browser bundle, and Vite inlines them
 at build time, so **treat every one of them as public**. Never put a secret,
