@@ -26,7 +26,9 @@ Five dashboards, all reading live from Smart Books and Inventory:
 
 Behind them: sales and purchases, credit and debit notes with their original
 document, receipts and payments with allocation, bank deposits and withdrawals,
-ten live reports with CSV export, and Billing profiles deciding who sees what.
+ten live reports with CSV export, the item catalogue read live from Inventory —
+searched, filtered, sorted and paged there rather than copied here — and Billing
+profiles deciding who sees what.
 
 See [docs/BILLING_IMPLEMENTATION_STATUS.md](docs/BILLING_IMPLEMENTATION_STATUS.md)
 for what each figure means, and

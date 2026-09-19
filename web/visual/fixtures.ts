@@ -431,3 +431,408 @@ export const compliance: ComplianceDashboard = {
   },
   generated_at: '2026-09-16T09:12:00Z',
 }
+
+/**
+ * The Items workspace.
+ *
+ * Deliberately awkward rather than tidy: a name too long for its column, an
+ * item with no SKU, a service with no quantity, one below its reorder level,
+ * one out of stock, one Inventory sent no quantity for at all, an inactive
+ * item and a five-figure rate. A fixture set where every row is well behaved
+ * photographs a screen nobody has to use.
+ *
+ * These are what the API returns, not what Inventory returns: each row is an
+ * Inventory row PLUS the `catalog` view CatalogController adds to it. They were
+ * produced by running the real `ItemCatalog::describe()` over the Inventory
+ * halves, so the harness cannot drift into photographing a shape the server
+ * does not send.
+ */
+export const catalogItems = {
+  data: [
+    {
+      item_id: 1,
+      item_name: 'Ballpoint Pens',
+      item_sku: 'PEN-001',
+      hsn_sac: '960810',
+      mrp: '12',
+      item_type: 'stock',
+      item_group: {
+        id: 4,
+        name: 'Stationery'
+      },
+      unit_name: 'Nos',
+      is_active: true,
+      description: 'Smooth writing | Blue',
+      available_qty: 1250,
+      reorder_level: 100,
+      catalog: {
+        id: 1,
+        name: 'Ballpoint Pens',
+        description: 'Smooth writing | Blue',
+        sku: 'PEN-001',
+        hsn_sac: '960810',
+        barcode: null,
+        type: 'stock',
+        group: {
+          id: 4,
+          name: 'Stationery'
+        },
+        unit: 'Nos',
+        rate: 12,
+        cost: null,
+        status: 'active',
+        image_url: null,
+        stock: {
+          applicable: true,
+          available: 1250,
+          threshold: 100,
+          state: 'normal'
+        },
+        source: 'inventory'
+      }
+    },
+    {
+      item_id: 2,
+      item_name: 'A4 Notebook',
+      item_sku: 'NB-002',
+      hsn_sac: '482020',
+      mrp: '45',
+      item_type: 'stock',
+      item_group: {
+        id: 4,
+        name: 'Stationery'
+      },
+      unit_name: 'Nos',
+      is_active: true,
+      description: '200 Pages | Single Line',
+      available_qty: 320,
+      reorder_level: 50,
+      catalog: {
+        id: 2,
+        name: 'A4 Notebook',
+        description: '200 Pages | Single Line',
+        sku: 'NB-002',
+        hsn_sac: '482020',
+        barcode: null,
+        type: 'stock',
+        group: {
+          id: 4,
+          name: 'Stationery'
+        },
+        unit: 'Nos',
+        rate: 45,
+        cost: null,
+        status: 'active',
+        image_url: null,
+        stock: {
+          applicable: true,
+          available: 320,
+          threshold: 50,
+          state: 'normal'
+        },
+        source: 'inventory'
+      }
+    },
+    {
+      item_id: 3,
+      item_name: 'Laptop — Dell Inspiron 15 3000 Series, 15.6 inch Full HD Anti-Glare Display',
+      item_sku: 'LAP-001',
+      hsn_sac: '847130',
+      mrp: '52000',
+      item_type: 'stock',
+      item_group: {
+        id: 7,
+        name: 'Computers'
+      },
+      unit_name: 'Nos',
+      is_active: true,
+      description: '15.6\' | 16GB | 512GB SSD',
+      available_qty: 15,
+      reorder_level: 5,
+      catalog: {
+        id: 3,
+        name: 'Laptop — Dell Inspiron 15 3000 Series, 15.6 inch Full HD Anti-Glare Display',
+        description: '15.6\' | 16GB | 512GB SSD',
+        sku: 'LAP-001',
+        hsn_sac: '847130',
+        barcode: null,
+        type: 'stock',
+        group: {
+          id: 7,
+          name: 'Computers'
+        },
+        unit: 'Nos',
+        rate: 52000,
+        cost: null,
+        status: 'active',
+        image_url: null,
+        stock: {
+          applicable: true,
+          available: 15,
+          threshold: 5,
+          state: 'normal'
+        },
+        source: 'inventory'
+      }
+    },
+    {
+      item_id: 4,
+      item_name: 'Installation Service',
+      hsn_sac: '998719',
+      mrp: '1500',
+      item_type: 'service',
+      item_group: {
+        id: 9,
+        name: 'Services'
+      },
+      is_active: true,
+      description: 'On-site installation',
+      catalog: {
+        id: 4,
+        name: 'Installation Service',
+        description: 'On-site installation',
+        sku: null,
+        hsn_sac: '998719',
+        barcode: null,
+        type: 'service',
+        group: {
+          id: 9,
+          name: 'Services'
+        },
+        unit: null,
+        rate: 1500,
+        cost: null,
+        status: 'active',
+        image_url: null,
+        stock: {
+          applicable: false,
+          available: null,
+          threshold: null,
+          state: null
+        },
+        source: 'inventory'
+      }
+    },
+    {
+      item_id: 5,
+      item_name: 'Office Chair',
+      item_sku: 'CHR-001',
+      hsn_sac: '940130',
+      mrp: '3800',
+      item_type: 'stock',
+      item_group: {
+        id: 11,
+        name: 'Furniture'
+      },
+      unit_name: 'Nos',
+      is_active: true,
+      description: 'Ergonomic | Adjustable',
+      available_qty: 8,
+      reorder_level: 10,
+      catalog: {
+        id: 5,
+        name: 'Office Chair',
+        description: 'Ergonomic | Adjustable',
+        sku: 'CHR-001',
+        hsn_sac: '940130',
+        barcode: null,
+        type: 'stock',
+        group: {
+          id: 11,
+          name: 'Furniture'
+        },
+        unit: 'Nos',
+        rate: 3800,
+        cost: null,
+        status: 'active',
+        image_url: null,
+        stock: {
+          applicable: true,
+          available: 8,
+          threshold: 10,
+          state: 'low'
+        },
+        source: 'inventory'
+      }
+    },
+    {
+      item_id: 6,
+      item_name: 'Annual AMC',
+      item_sku: 'AMC-001',
+      hsn_sac: '998719',
+      mrp: '5000',
+      item_type: 'service',
+      item_group: {
+        id: 9,
+        name: 'Services'
+      },
+      is_active: true,
+      description: 'Comprehensive support',
+      catalog: {
+        id: 6,
+        name: 'Annual AMC',
+        description: 'Comprehensive support',
+        sku: 'AMC-001',
+        hsn_sac: '998719',
+        barcode: null,
+        type: 'service',
+        group: {
+          id: 9,
+          name: 'Services'
+        },
+        unit: null,
+        rate: 5000,
+        cost: null,
+        status: 'active',
+        image_url: null,
+        stock: {
+          applicable: false,
+          available: null,
+          threshold: null,
+          state: null
+        },
+        source: 'inventory'
+      }
+    },
+    {
+      item_id: 7,
+      item_name: 'Printer Toner 12A',
+      item_sku: 'TNR-12A',
+      hsn_sac: '844399',
+      mrp: '2450',
+      item_type: 'stock',
+      item_group: {
+        id: 7,
+        name: 'Computers'
+      },
+      is_active: true,
+      available_qty: 0,
+      reorder_level: 4,
+      catalog: {
+        id: 7,
+        name: 'Printer Toner 12A',
+        description: null,
+        sku: 'TNR-12A',
+        hsn_sac: '844399',
+        barcode: null,
+        type: 'stock',
+        group: {
+          id: 7,
+          name: 'Computers'
+        },
+        unit: null,
+        rate: 2450,
+        cost: null,
+        status: 'active',
+        image_url: null,
+        stock: {
+          applicable: true,
+          available: 0,
+          threshold: 4,
+          state: 'out'
+        },
+        source: 'inventory'
+      }
+    },
+    {
+      item_id: 8,
+      item_name: 'Whiteboard Marker',
+      item_sku: 'MRK-004',
+      hsn_sac: '960910',
+      mrp: '35',
+      item_type: 'stock',
+      item_group: {
+        id: 4,
+        name: 'Stationery'
+      },
+      is_active: false,
+      description: 'Discontinued line',
+      available_qty: 24,
+      catalog: {
+        id: 8,
+        name: 'Whiteboard Marker',
+        description: 'Discontinued line',
+        sku: 'MRK-004',
+        hsn_sac: '960910',
+        barcode: null,
+        type: 'stock',
+        group: {
+          id: 4,
+          name: 'Stationery'
+        },
+        unit: null,
+        rate: 35,
+        cost: null,
+        status: 'inactive',
+        image_url: null,
+        stock: {
+          applicable: true,
+          available: 24,
+          threshold: null,
+          state: 'normal'
+        },
+        source: 'inventory'
+      }
+    },
+    {
+      item_id: 9,
+      item_name: 'Steel Almirah',
+      item_sku: 'ALM-020',
+      hsn_sac: '940320',
+      mrp: '18750',
+      item_type: 'stock',
+      item_group: {
+        id: 11,
+        name: 'Furniture'
+      },
+      is_active: true,
+      description: 'Inventory sent no quantity for this one',
+      catalog: {
+        id: 9,
+        name: 'Steel Almirah',
+        description: 'Inventory sent no quantity for this one',
+        sku: 'ALM-020',
+        hsn_sac: '940320',
+        barcode: null,
+        type: 'stock',
+        group: {
+          id: 11,
+          name: 'Furniture'
+        },
+        unit: null,
+        rate: 18750,
+        cost: null,
+        status: 'active',
+        image_url: null,
+        stock: {
+          applicable: true,
+          available: null,
+          threshold: null,
+          state: null
+        },
+        source: 'inventory'
+      }
+    }
+  ],
+  meta: { total: 1248, limit: 25, offset: 0, stock_source: 'list', source: 'inventory', total_known: true },
+}
+
+export const catalogItemStats = {
+  data: { total: 1248, stock: 892, services: 356, low_stock: 24, inactive: 62, source: 'inventory', reason: null },
+}
+
+export const catalogItemGroups = {
+  data: [
+    { item_group_id: 4, item_group_name: 'Stationery' },
+    { item_group_id: 7, item_group_name: 'Computers' },
+    { item_group_id: 9, item_group_name: 'Services' },
+    { item_group_id: 11, item_group_name: 'Furniture' },
+  ],
+}
+
+export const catalogWarehouses = {
+  data: [
+    { warehouse_id: 1, warehouse_name: 'Main Store' },
+    { warehouse_id: 2, warehouse_name: 'Godown 2' },
+  ],
+}

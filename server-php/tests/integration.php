@@ -22,6 +22,7 @@ use Aicountly\Api\Domain\BillerDeskService;
 use Aicountly\Api\Domain\CollectionsService;
 use Aicountly\Api\Domain\ComplianceService;
 use Aicountly\Api\Domain\DuesService;
+use Aicountly\Api\Domain\ItemCatalog;
 use Aicountly\Api\Domain\Metric;
 use Aicountly\Api\Domain\OverviewService;
 use Aicountly\Api\Domain\Period;
@@ -1218,6 +1219,119 @@ check('a query for another company returns nothing', function () use ($ctx, $aut
         (int) Db::scalar('SELECT COUNT(*) FROM billing_transaction_requests WHERE cmp_id = 999'),
         'and there is nothing there to see',
     );
+});
+
+echo "\nThe item catalogue\n";
+
+check('an item is read from whatever spelling Inventory sent', function () {
+    $books = ItemCatalog::describe([
+        'item_id' => 1, 'item_name' => 'Ballpoint Pens', 'item_sku' => 'PEN-001', 'hsn_sac' => '960810',
+        'mrp' => '12', 'item_type' => 'stock', 'item_group' => ['id' => 4, 'name' => 'Stationery'],
+        'is_active' => true, 'available_qty' => 1250, 'reorder_level' => 100,
+    ])['catalog'];
+
+    // The same item, spelt the other way round by another release.
+    $other = ItemCatalog::describe([
+        'id' => 1, 'name' => 'Ballpoint Pens', 'sku' => 'PEN-001', 'hsn' => '960810',
+        'sale_rate' => 12, 'maintains_stock' => 't', 'group_name' => 'Stationery',
+        'status' => 'ACTIVE', 'closing_qty' => 1250, 'reorder_point' => 100,
+    ])['catalog'];
+
+    foreach (['id', 'name', 'sku', 'hsn_sac', 'rate', 'type', 'status'] as $field) {
+        assertSame($books[$field], $other[$field], "both spellings agree on {$field}");
+    }
+    assertSame('Stationery', $other['group']['name'], 'and on the group');
+    assertSame('normal', $other['stock']['state'], 'and on the stock state');
+});
+
+check('a service is never given a quantity', function () {
+    $view = ItemCatalog::describe([
+        'item_id' => 4, 'item_name' => 'Installation Service', 'is_service' => 1, 'available_qty' => 99,
+    ])['catalog'];
+
+    assertSame('service', $view['type'], 'it is a service');
+    assertSame(false, $view['stock']['applicable'], 'so stock does not apply');
+    assertSame(null, $view['stock']['available'], 'and no quantity is carried, whatever arrived');
+});
+
+check('a quantity Inventory did not send stays unknown, never nought', function () {
+    $missing = ItemCatalog::describe(['item_id' => 9, 'item_name' => 'Steel Almirah', 'maintains_stock' => true])['catalog'];
+    assertSame(null, $missing['stock']['available'], 'unknown is null');
+    assertSame(null, $missing['stock']['state'], 'and has no state to colour');
+
+    // Nought is a real answer and must survive as one.
+    $empty = ItemCatalog::describe(['item_id' => 7, 'item_name' => 'Toner', 'maintains_stock' => true, 'closing_qty' => 0])['catalog'];
+    assertSame(0.0, $empty['stock']['available'], 'an actual nought is kept');
+    assertSame('out', $empty['stock']['state'], 'and reads as out of stock');
+});
+
+check('below the reorder level reads as low', function () {
+    $low = ItemCatalog::describe([
+        'item_id' => 5, 'item_name' => 'Office Chair', 'maintains_stock' => true,
+        'stock_qty' => 8, 'low_stock_threshold' => 10,
+    ])['catalog'];
+    assertSame('low', $low['stock']['state'], 'eight against a level of ten');
+
+    $fine = ItemCatalog::describe([
+        'item_id' => 5, 'item_name' => 'Office Chair', 'maintains_stock' => true,
+        'stock_qty' => 80, 'low_stock_threshold' => 10,
+    ])['catalog'];
+    assertSame('normal', $fine['stock']['state'], 'eighty against the same level');
+});
+
+check('the export is as honest as the screen', function () {
+    $rows = [
+        ItemCatalog::describe(['item_id' => 1, 'item_name' => 'Known', 'maintains_stock' => true, 'available_qty' => 12, 'unit_cost' => 7.5]),
+        ItemCatalog::describe(['item_id' => 2, 'item_name' => 'Unknown', 'maintains_stock' => true]),
+        ItemCatalog::describe(['item_id' => 3, 'item_name' => 'A service', 'is_service' => true]),
+    ];
+
+    $withoutCost = ItemCatalog::toCsv($rows, false);
+    assertTrue(str_contains($withoutCost, 'unavailable'), 'an unknown quantity is written as unavailable');
+    assertTrue(!str_contains($withoutCost, '7.5'), 'and cost is absent for a profile that may not see it');
+    assertTrue(!str_contains($withoutCost, 'Cost'), 'including the column heading');
+
+    $withCost = ItemCatalog::toCsv($rows, true);
+    assertTrue(str_contains($withCost, '7.5'), 'and present for one that may');
+});
+
+check('the catalogue writes nothing to this database', function () {
+    // The rule the whole product is built on, checked rather than trusted:
+    // Inventory owns items, so the code that reads them must have no way to
+    // keep a copy. A SELECT is allowed nowhere here either -- there is no table
+    // to select an item from.
+    $sources = [
+        __DIR__ . '/../src/Domain/ItemCatalog.php',
+        __DIR__ . '/../src/Controllers/CatalogController.php',
+    ];
+
+    foreach ($sources as $file) {
+        $code = (string) file_get_contents($file);
+        foreach (['Db::insert', 'Db::update', 'Db::run', 'INSERT INTO', 'UPDATE ', 'CREATE TABLE'] as $forbidden) {
+            assertTrue(
+                !str_contains($code, $forbidden),
+                basename($file) . " contains {$forbidden}, which would be a second copy of an Inventory item",
+            );
+        }
+    }
+
+    // CatalogController reads one table and it is not an item table: the
+    // favourites list is item IDS and a counter, resolved through Inventory on
+    // every request.
+    $controller = (string) file_get_contents($sources[1]);
+    assertTrue(str_contains($controller, 'billing_favourite_items'), 'favourites are ids');
+    assertTrue(str_contains($controller, 'bulkLookupItems'), 'and the names come from Inventory');
+});
+
+check('only columns Inventory can sort by are forwarded', function () {
+    // A sort this product cannot push upstream would have to be applied to one
+    // page, which sorts the page and not the catalogue.
+    assertSame(['name', 'sku', 'hsn_sac', 'rate', 'stock', 'status'], ItemCatalog::SORTABLE, 'the whitelist');
+
+    $query = new \ReflectionMethod(ItemCatalog::class, 'query');
+    $source = (string) file_get_contents((new \ReflectionClass(ItemCatalog::class))->getFileName());
+    assertTrue($query->isPrivate(), 'the query is built in one place');
+    assertTrue(str_contains($source, 'in_array((string) ($filters[\'sort\'] ?? \'\'), self::SORTABLE, true)'), 'and checked against the whitelist');
 });
 
 echo "\n" . str_repeat('-', 60) . "\n";

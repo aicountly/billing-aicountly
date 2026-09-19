@@ -11,6 +11,10 @@
  *   * Escape closes it
  *   * focus returns to the button that opened it
  *   * the page behind it does not scroll under a finger that misses
+ *
+ * It also serves the detail panels that slide in from the right, because all
+ * of the above is exactly as true of those and a second implementation would
+ * be a second place for the focus trap to be got wrong.
  */
 
 import { useEffect, useRef, type ReactNode } from 'react'
@@ -24,11 +28,16 @@ export function Drawer({
   onClose,
   title,
   children,
+  /** Which edge it slides in from. Navigation comes from the left, detail from the right. */
+  side = 'left',
+  closeLabel = 'Close menu',
 }: {
   open: boolean
   onClose: () => void
   title: string
   children: ReactNode
+  side?: 'left' | 'right'
+  closeLabel?: string
 }) {
   const panel = useRef<HTMLDivElement | null>(null)
   const returnTo = useRef<HTMLElement | null>(null)
@@ -83,10 +92,16 @@ export function Drawer({
   return (
     <>
       <div className="billing-drawer-backdrop" onClick={onClose} aria-hidden="true" />
-      <div className="billing-drawer" role="dialog" aria-modal="true" aria-label={title} ref={panel}>
+      <div
+        className={`billing-drawer${side === 'right' ? ' billing-drawer--right' : ''}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        ref={panel}
+      >
         <div className="billing-drawer__head">
           <strong>{title}</strong>
-          <button type="button" className="billing-iconbutton" onClick={onClose} aria-label="Close menu">
+          <button type="button" className="billing-iconbutton" onClick={onClose} aria-label={closeLabel}>
             <X size={18} aria-hidden />
           </button>
         </div>

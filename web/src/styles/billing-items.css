@@ -1,0 +1,741 @@
+/* ---------------------------------------------------------------------------
+   Items — the catalogue workspace.
+
+   Built on the tokens in index.css, not on a second palette: the green, the
+   mint, the borders and the radii here are the ones the dashboards and the
+   transaction screens already use, so a person moving between them does not
+   feel they have changed application.
+
+   Density is the point of this screen. A shop with 1,200 items wants as many
+   of them on a 1366-wide laptop as can still be read, which is why the rows
+   are 12px and tight rather than 14px and roomy — and why nothing on it is a
+   gradient, a glass panel or an animation longer than a blink.
+   --------------------------------------------------------------------------- */
+
+.items-page {
+  display: grid;
+  gap: 18px;
+  padding-bottom: 8px;
+}
+
+/* ----------------------------------------------------------- breadcrumb */
+
+.items-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 22px;
+  font-size: 13px;
+  color: var(--billing-muted);
+}
+
+.items-breadcrumb a { color: var(--billing-muted); }
+.items-breadcrumb a:hover { color: var(--billing-text); }
+.items-breadcrumb strong { color: var(--billing-text); font-weight: 650; }
+
+/* --------------------------------------------------------------- header */
+
+.items-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 22px;
+  flex-wrap: wrap;
+}
+
+.items-header__title { display: flex; align-items: flex-start; gap: 14px; min-width: 0; }
+
+.items-header__mark {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: var(--billing-mint);
+  color: var(--billing-action);
+}
+
+.items-header__row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+.items-header h1 {
+  margin: 0;
+  font-size: clamp(24px, 2.1vw, 32px);
+  line-height: 1.2;
+  letter-spacing: -0.035em;
+  font-weight: 750;
+}
+
+.items-header p {
+  margin: 7px 0 0;
+  max-width: 68ch;
+  color: var(--billing-muted);
+  line-height: 1.55;
+}
+
+.items-header__actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+/* The one badge on the page, and it is a statement about where the data comes
+   from rather than decoration — hence a chip, not a banner. */
+.items-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 25px;
+  padding: 0 10px;
+  border: 1px solid var(--billing-mint-strong);
+  border-radius: 999px;
+  background: var(--billing-mint);
+  color: #2b7a30;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: help;
+}
+
+.items-live__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--billing-brand);
+  flex: 0 0 auto;
+}
+
+/* ----------------------------------------------------------------- KPIs */
+
+.items-kpis {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.items-kpi {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  min-height: 92px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--billing-border);
+  border-radius: var(--billing-radius);
+  background: var(--billing-surface);
+  box-shadow: var(--billing-shadow);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.items-kpi:hover { border-color: var(--billing-border-strong); }
+
+/* A card is the tab it heads, so the one you are looking at is marked. */
+.items-kpi[aria-pressed='true'] {
+  border-color: var(--billing-mint-strong);
+  box-shadow: inset 0 0 0 1px var(--billing-mint-strong), var(--billing-shadow);
+}
+
+.items-kpi__icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
+}
+
+.items-kpi__icon--green,
+.items-kpi__icon--teal { background: var(--billing-mint); color: #147a3f; }
+.items-kpi__icon--purple { background: #f1ecff; color: #5b3bc4; }
+.items-kpi__icon--amber { background: var(--billing-warning-bg); color: #9a5600; }
+.items-kpi__icon--grey { background: #eef2f0; color: #5b6b62; }
+
+.items-kpi__body { display: grid; gap: 2px; min-width: 0; }
+.items-kpi__label { color: var(--billing-muted); font-size: 12px; font-weight: 650; }
+
+/* `.num` in index.css right-aligns every tabular figure, which is right in a
+   money column and wrong under a label. Same specificity loses on source
+   order, so this one is scoped to its card. */
+.items-kpi .items-kpi__value {
+  font-size: 25px;
+  line-height: 1.15;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  text-align: left;
+}
+
+.items-kpi__unavailable { font-size: 15px; font-weight: 650; color: var(--billing-muted); cursor: help; }
+.items-kpi__helper { color: var(--billing-muted); font-size: 11px; }
+.items-kpi__skeleton { width: 4.5rem; height: 27px; }
+
+/* ------------------------------------------------------------ workspace */
+
+.items-workspace {
+  overflow: hidden;
+  border: 1px solid var(--billing-border);
+  border-radius: var(--billing-radius);
+  background: var(--billing-surface);
+  box-shadow: var(--billing-shadow);
+}
+
+.items-tabsbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 56px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--billing-border);
+}
+
+.items-tabs { display: flex; align-items: stretch; min-width: 0; overflow-x: auto; scrollbar-width: thin; }
+
+.items-tab {
+  position: relative;
+  min-height: 55px;
+  padding: 0 15px;
+  border: 0;
+  background: transparent;
+  color: var(--billing-muted);
+  font-weight: 650;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.items-tab:hover { color: var(--billing-text); }
+.items-tab[aria-current='page'] { color: var(--billing-action); }
+
+.items-tab[aria-current='page']::after {
+  content: '';
+  position: absolute;
+  inset: auto 11px 0 11px;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--billing-brand);
+}
+
+/* -------------------------------------------------------------- toolbar */
+
+.items-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 13px 14px;
+  border-bottom: 1px solid var(--billing-border);
+}
+
+.items-toolbar__spacer { flex: 1 1 1rem; }
+
+.items-search { position: relative; flex: 1 1 22rem; max-width: 30rem; min-width: 14rem; }
+
+.items-search__icon {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  transform: translateY(-50%);
+  color: var(--billing-muted);
+  pointer-events: none;
+}
+
+.items-search__input {
+  width: 100%;
+  height: 40px;
+  padding: 0 34px 0 36px;
+  border: 1px solid var(--billing-border);
+  border-radius: 10px;
+  background: var(--billing-surface-2);
+  color: var(--billing-text);
+  font-size: 13px;
+}
+
+.items-search__input:focus {
+  background: var(--billing-surface);
+  border-color: var(--billing-mint-strong);
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(37 176 3 / 12%);
+}
+
+/* The browser's own clear button sits where ours does and does not match it. */
+.items-search__input::-webkit-search-cancel-button { display: none; }
+
+.items-search__clear {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--billing-muted);
+  cursor: pointer;
+}
+
+.items-search__clear:hover { background: var(--billing-mint); color: var(--billing-action); }
+
+.items-select {
+  height: 40px;
+  min-width: 8.5rem;
+  padding: 0 10px;
+  border: 1px solid var(--billing-border);
+  border-radius: 10px;
+  background: var(--billing-surface);
+  color: var(--billing-text);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.items-select--block { width: 100%; min-width: 0; }
+.items-select--small { height: 32px; min-width: 4.5rem; padding: 0 6px; }
+
+.items-morefilters { gap: 7px; }
+
+.items-morefilters__count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--billing-action);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* A form, not a list of destinations: the labels and the selects need more
+   width than a menu's 15rem before everything wraps to three lines. */
+.items-filterpanel { min-width: 18rem; }
+.items-filterfield { display: grid; gap: 5px; padding: 9px 10px; }
+.items-filterfield label { font-size: 12px; font-weight: 650; color: var(--billing-muted); }
+.items-filterfield__hint { font-size: 11px; color: var(--billing-muted); }
+
+.items-view { display: flex; align-items: center; gap: 4px; }
+.items-view__label { color: var(--billing-muted); font-size: 12px; margin-right: 2px; }
+
+.items-view__button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--billing-muted);
+  cursor: pointer;
+}
+
+.items-view__button:hover { background: var(--billing-surface-2); color: var(--billing-text); }
+
+.items-view__button[aria-pressed='true'] {
+  border-color: var(--billing-mint-strong);
+  background: var(--billing-mint);
+  color: var(--billing-action);
+}
+
+/* ------------------------------------------------------- bulk + notices */
+
+.items-bulkbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--billing-border);
+  background: var(--billing-mint);
+  font-size: 13px;
+}
+
+.items-strip {
+  margin: 0;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--billing-border);
+  background: var(--billing-warning-bg);
+  color: #7a4a05;
+  font-size: 12px;
+}
+
+/* ---------------------------------------------------------------- table */
+
+.items-table { font-size: 12px; }
+.items-table th { font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase; }
+.items-table td { padding: 9px 10px; }
+.items-table th { padding: 10px 10px; }
+.items-table tbody tr { cursor: pointer; transition: background-color 120ms ease; }
+
+/* An item nobody sells any more should read as switched off without becoming
+   unreadable — 0.62 opacity hides the text from the person who needs it most. */
+.items-row--inactive td { color: var(--billing-muted); }
+
+.items-table__tick { width: 36px; }
+.items-table__tick input { width: 15px; height: 15px; cursor: pointer; accent-color: var(--billing-action); }
+.items-table__actions { width: 104px; }
+
+.items-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+
+.items-sort:hover { color: var(--billing-text); }
+.items-sort__idle { opacity: 0.35; }
+
+/* The item column takes whatever the fixed columns leave. Everything else is
+   `nowrap`, so this is the one that has to shrink — and it shrinks by
+   ellipsis, not by pushing the actions off the right edge of a 1366 laptop. */
+.items-cell { display: flex; align-items: center; gap: 10px; min-width: 10rem; }
+
+/* A real length, not `100%`.
+   `max-width: 100%` inside an auto-layout table resolves against a column the
+   table is sizing FROM this content, so the ellipsis never engages and one
+   70-character product name pushes the actions off a 1366 laptop. A viewport
+   -relative cap breaks the circle and still lets a wide screen show more. */
+.items-cell__text { min-width: 0; flex: 1 1 auto; max-width: clamp(9rem, 20vw, 26rem); }
+
+.items-cell__name {
+  display: block;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--billing-text);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 650;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.items-cell__name:hover { color: var(--billing-action); }
+
+.items-cell__detail {
+  display: block;
+  max-width: 100%;
+  margin-top: 1px;
+  color: var(--billing-muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.items-mono { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Nothing but the item name wraps, so the row stays one line tall and the
+   column widths stay where the eye left them on the previous page. */
+.items-table td:not(:nth-child(2)),
+.items-table th:not(:nth-child(2)) { white-space: nowrap; }
+
+.items-thumb {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border: 1px solid var(--billing-border);
+  border-radius: 9px;
+  background: var(--billing-surface-2);
+  color: var(--billing-muted);
+}
+
+.items-thumb--sm { width: 34px; height: 34px; }
+.items-thumb--lg { width: 56px; height: 56px; border-radius: 12px; }
+.items-thumb img { width: 100%; height: 100%; object-fit: cover; }
+
+.items-actions { display: flex; align-items: center; gap: 2px; }
+
+.items-actions__button {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--billing-muted);
+  cursor: pointer;
+}
+
+.items-actions__button:hover { background: var(--billing-mint); color: var(--billing-action); text-decoration: none; }
+.items-actions__button:disabled { opacity: 0.4; cursor: not-allowed; }
+.items-actions__button:disabled:hover { background: transparent; color: var(--billing-muted); }
+
+/* --------------------------------------------------------------- badges */
+
+.items-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.items-badge--stock { background: #e7f2ff; color: #0a5fa8; }
+.items-badge--service { background: #f1ecff; color: #5b3bc4; }
+.items-badge--unknown { background: #eef2f0; color: #5b6b62; cursor: help; }
+
+/* Every pill carries its word. The dot is a second cue, never the only one. */
+.items-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.items-status__dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 auto; }
+
+.items-status--active { background: #eaf7e7; color: #1f7a2e; }
+.items-status--active .items-status__dot { background: #2f9e28; }
+.items-status--low { background: var(--billing-warning-bg); color: #8a4b08; }
+.items-status--low .items-status__dot { background: #d98c12; }
+.items-status--out { background: var(--billing-danger-bg); color: var(--billing-danger); }
+.items-status--out .items-status__dot { background: var(--billing-danger); }
+.items-status--inactive { background: #eef2f0; color: #55655c; }
+.items-status--inactive .items-status__dot { background: #8a988f; }
+.items-status--unknown { background: #eef2f0; color: #55655c; cursor: help; }
+.items-status--unknown .items-status__dot { background: #b3bfb7; }
+
+.items-stock { display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+.items-stock .num { text-align: left; }
+.items-stock__dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; }
+.items-stock--normal .items-stock__dot { background: #2f9e28; }
+.items-stock--low { color: #8a4b08; font-weight: 650; }
+.items-stock--low .items-stock__dot { background: #d98c12; }
+.items-stock--out { color: var(--billing-danger); font-weight: 650; }
+.items-stock--out .items-stock__dot { background: var(--billing-danger); }
+.items-stock--none { color: var(--billing-muted); }
+.items-stock--unknown { color: var(--billing-muted); font-size: 11px; cursor: help; }
+
+/* ----------------------------------------------------------------- grid */
+
+.items-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(255px, 1fr));
+  gap: 14px;
+  margin: 0;
+  padding: 16px;
+  list-style: none;
+}
+
+.items-card {
+  display: grid;
+  gap: 11px;
+  align-content: start;
+  padding: 14px;
+  border: 1px solid var(--billing-border);
+  border-radius: 13px;
+  background: var(--billing-surface);
+  transition: border-color 140ms ease;
+}
+
+.items-card:hover { border-color: var(--billing-border-strong); }
+.items-card--inactive { background: var(--billing-surface-2); }
+
+.items-card__open {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.items-card__head { display: grid; gap: 2px; min-width: 0; }
+.items-card__head strong { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.items-card__detail { color: var(--billing-muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.items-card__facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; margin: 0; }
+.items-card__facts dt { color: var(--billing-muted); font-size: 11px; }
+.items-card__facts dd { margin: 2px 0 0; font-size: 12px; }
+
+.items-card__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 10px;
+  border-top: 1px solid var(--billing-border);
+}
+
+.items-card .items-card__rate { font-size: 14px; font-weight: 700; text-align: left; }
+.items-card__marks { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.items-card__link { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 650; }
+
+/* ----------------------------------------------------------- pagination */
+
+.items-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 11px 14px;
+  border-top: 1px solid var(--billing-border);
+  color: var(--billing-muted);
+  font-size: 12px;
+}
+
+.items-pagination__size { display: flex; align-items: center; gap: 7px; }
+.items-pages { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+
+.items-pages__button {
+  min-width: 31px;
+  height: 31px;
+  padding: 0 8px;
+  border: 1px solid var(--billing-border);
+  border-radius: 8px;
+  background: var(--billing-surface);
+  color: var(--billing-muted);
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.items-pages__button:hover:not(:disabled) { border-color: var(--billing-border-strong); color: var(--billing-text); }
+.items-pages__button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.items-pages__button[aria-current='page'] {
+  background: var(--billing-action);
+  border-color: var(--billing-action);
+  color: #fff;
+}
+
+.items-pages__gap { padding: 0 2px; }
+.items-pages__current { padding: 0 8px; font-weight: 650; color: var(--billing-text); }
+
+/* --------------------------------------------------------------- states */
+
+.items-skeleton { display: grid; gap: 10px; padding: 16px; }
+.items-skeleton__row { display: flex; align-items: center; gap: 12px; }
+.items-skeleton__thumb { width: 34px; height: 34px; border-radius: 9px; flex: 0 0 auto; }
+.items-skeleton__line { flex: 1 1 auto; height: 13px; }
+.items-skeleton__pill { width: 74px; height: 13px; flex: 0 0 auto; }
+
+.items-empty,
+.items-error {
+  display: grid;
+  justify-items: center;
+  gap: 9px;
+  padding: 44px 20px;
+  text-align: center;
+}
+
+.items-empty__mark,
+.items-error__mark {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: var(--billing-mint);
+  color: var(--billing-action);
+}
+
+.items-error__mark { background: var(--billing-danger-bg); color: var(--billing-danger); }
+
+.items-empty h2,
+.items-error h2 { margin: 4px 0 0; font-size: 16px; }
+
+.items-empty p,
+.items-error p { margin: 0; max-width: 46ch; color: var(--billing-muted); font-size: 13px; }
+
+.items-empty .billing-button,
+.items-error__actions { margin-top: 6px; }
+.items-error__actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+
+/* --------------------------------------------------------------- detail */
+
+.items-detail { display: grid; gap: 16px; align-content: start; }
+.items-detail__head { display: flex; align-items: flex-start; gap: 13px; }
+.items-detail__head h2 { margin: 0; font-size: 17px; line-height: 1.3; }
+.items-detail__head p { margin: 4px 0 0; color: var(--billing-muted); font-size: 12px; }
+.items-detail__marks { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+
+.items-detail__facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px;
+  margin: 0;
+  padding: 15px;
+  border: 1px solid var(--billing-border);
+  border-radius: 12px;
+  background: var(--billing-surface-2);
+}
+
+.items-detail__facts dt { color: var(--billing-muted); font-size: 11px; font-weight: 650; }
+.items-detail__facts dd { margin: 3px 0 0; font-size: 13px; }
+
+.items-detail__note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  color: var(--billing-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.items-detail__note .items-live__dot { margin-top: 5px; }
+.items-detail__note--warn { color: var(--billing-warning); }
+.items-detail__actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+/* ----------------------------------------------------------- responsive */
+
+/* Five across is the point of the row — the breakdown reads as one sentence.
+   1366 and 1440 are the two commonest laptops in this market and both hold it;
+   below that the cards are narrower than their own labels. */
+/* Below this the fixed columns alone fill the row, so the name gives up more
+   of itself rather than the row giving up its actions. */
+@media (max-width: 1400px) {
+  .items-table td,
+  .items-table th { padding-inline: 8px; }
+  .items-cell__text { max-width: 11rem; }
+  .items-table__actions { width: 96px; }
+}
+
+@media (max-width: 1280px) {
+  .items-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 1100px) {
+  .items-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .items-header { flex-direction: column; align-items: stretch; }
+  .items-search { max-width: none; flex-basis: 100%; }
+  .items-toolbar__spacer { display: none; }
+}
+
+@media (max-width: 700px) {
+  .items-kpis { grid-template-columns: minmax(0, 1fr); }
+  .items-tabsbar { flex-direction: column; align-items: stretch; gap: 8px; padding-bottom: 10px; }
+  .items-select { flex: 1 1 8rem; }
+  .items-detail__facts { grid-template-columns: minmax(0, 1fr); }
+  .items-pagination { justify-content: flex-start; }
+}
+
+/* A menu that hangs off the right edge of a left-hand control runs off screen. */
+.billing-menu--start { right: auto; left: 0; }

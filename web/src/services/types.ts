@@ -224,6 +224,75 @@ export interface CatalogItem {
   hsn_sac: string | null
   mrp: string | null
   use_count?: number
+  /** Present on the Items workspace endpoints. See CatalogItemView. */
+  catalog?: CatalogItemView
+}
+
+export type ItemType = 'stock' | 'service'
+export type ItemStatus = 'active' | 'inactive'
+/** normal | low | out, or null when Inventory did not say. Never inferred here. */
+export type StockState = 'normal' | 'low' | 'out'
+
+export interface ItemStock {
+  /** False for a service: a service has no quantity, and a nought would be a lie. */
+  applicable: boolean
+  /** null means Inventory did not answer — drawn as Unavailable, never as 0. */
+  available: number | null
+  threshold: number | null
+  state: StockState | null
+}
+
+/**
+ * The facts the Items workspace draws, resolved by the API from whatever
+ * spelling Inventory sent. Everything in here is Inventory's answer to this
+ * request; Billing keeps none of it.
+ *
+ * `cost` is absent entirely for a profile without `cost.view` — the API strips
+ * it before the response leaves the server, so hiding a column is not what
+ * keeps it secret.
+ */
+export interface CatalogItemView {
+  id: number | null
+  name: string | null
+  description: string | null
+  sku: string | null
+  hsn_sac: string | null
+  barcode: string | null
+  type: ItemType | null
+  group: { id: number | null; name: string | null }
+  unit: string | null
+  rate: number | null
+  cost?: number | null
+  status: ItemStatus | null
+  image_url: string | null
+  stock: ItemStock
+  source: 'inventory'
+}
+
+/** An item group, as Inventory holds it. Billing stores no group of its own. */
+export interface ItemGroup {
+  item_group_id?: number
+  group_id?: number
+  id?: number
+  item_group_name?: string
+  group_name?: string
+  name?: string
+}
+
+/**
+ * The five figures above the table.
+ *
+ * Any of them may be null: that is Inventory declining to count, and the card
+ * says Unavailable rather than showing a nought that reads like an empty shelf.
+ */
+export interface ItemStats {
+  total: number | null
+  stock: number | null
+  services: number | null
+  low_stock: number | null
+  inactive: number | null
+  source: string
+  reason: string | null
 }
 
 /** A party as Books describes it (its account ledger). Rendered, never stored. */

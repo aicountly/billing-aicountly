@@ -11,6 +11,8 @@
  * none of this reaches the deployed bundle.
  *
  *   /visual.html?screen=overview&as=owner
+ *   /visual.html?screen=items
+ *   /visual.html?screen=items&data=empty|error|nostats
  */
 
 import { StrictMode } from 'react'
@@ -24,6 +26,7 @@ import BillerDesk from '../src/dashboards/BillerDesk'
 import Receivables from '../src/dashboards/Receivables'
 import Payables from '../src/dashboards/Payables'
 import CashCompliance from '../src/dashboards/CashCompliance'
+import { Items } from '../src/pages/items'
 import { saveSession, setAuthToken } from '../src/auth/tokens'
 import { setScope } from '../src/services/api'
 import * as fixtures from './fixtures'
@@ -34,12 +37,24 @@ const params = new URLSearchParams(window.location.search)
 const screen = params.get('screen') ?? 'overview'
 const asBiller = params.get('as') === 'biller'
 
+/**
+ * Which answer the catalogue gives, so the states that are not "it worked" can
+ * be photographed too:
+ *
+ *   ok      the fixture list
+ *   empty   a company with nothing in its catalogue
+ *   error   Inventory unreachable
+ *   nostats Inventory serves the list but will not count it
+ */
+const data = params.get('data') ?? 'ok'
+
 const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
   overview: { path: '/dashboard/overview', element: <Overview /> },
   biller: { path: '/dashboard/biller', element: <BillerDesk /> },
   receivables: { path: '/dashboard/receivables', element: <Receivables /> },
   payables: { path: '/dashboard/payables', element: <Payables /> },
   'cash-compliance': { path: '/dashboard/cash-compliance', element: <CashCompliance /> },
+  items: { path: '/items', element: <Items /> },
 }
 
 /** The fixture behind each endpoint the screens call. */
@@ -54,11 +69,21 @@ const RESPONSES: Array<[RegExp, unknown]> = [
     { kind: 'overdue_receivable', tone: 'warning', message: '₹74,500.00 is overdue from customers.', action: { label: 'See who', path: '/dashboard/receivables' } },
     { kind: 'payable_due', tone: 'info', message: '₹48,000.00 is due to suppliers this week.', action: { label: 'See the list', path: '/dashboard/payables' } },
   ]],
+  // Order matters: the first pattern that matches wins, so the specific item
+  // routes have to be declared before the plain list.
+  [/v1\/catalog\/items\/stats/, data === 'nostats' || data === 'error'
+    ? { data: { total: null, stock: null, services: null, low_stock: null, inactive: null, source: 'inventory', reason: 'Aicountly Inventory did not answer.' } }
+    : fixtures.catalogItemStats],
+  [/v1\/catalog\/item-groups/, fixtures.catalogItemGroups],
+  [/v1\/catalog\/warehouses/, fixtures.catalogWarehouses],
   [/v1\/catalog\/items\/favourites/, [
     { item_id: 1, item_name: 'A4 Copy Paper', item_sku: 'A4-500', unit_id: 1, hsn_sac: '4802', mrp: '320' },
     { item_id: 2, item_name: 'Blue Ball Pen', item_sku: 'PEN-BL', unit_id: 1, hsn_sac: '9608', mrp: '12' },
     { item_id: 3, item_name: 'Stapler', item_sku: 'STP-01', unit_id: 1, hsn_sac: '8472', mrp: '450' },
   ]],
+  [/v1\/catalog\/items(\?|$)/, data === 'empty'
+    ? { data: [], meta: { total: 0, limit: 25, offset: 0, total_known: true, source: 'inventory' } }
+    : fixtures.catalogItems],
   [/v1\/manage\/companies/, { data: [{ cmp_id: 1, cmp_name: 'Sharma Enterprises' }], meta: { total: 1 } }],
   [/v1\/manage\/companyinfo/, {
     cmp_id: 1,
@@ -72,6 +97,18 @@ const originalFetch = window.fetch.bind(window)
 
 window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+
+  // The one case a fixture cannot express: the product that owns the data did
+  // not answer at all.
+  if (data === 'error' && /v1\/catalog\/items(\?|$)/.test(url)) {
+    return new Response(
+      JSON.stringify({
+        error: { code: 'upstream_unavailable', message: 'Could not reach Aicountly Inventory. Please try again in a moment.', details: { retryable: true } },
+        message: 'Could not reach Aicountly Inventory. Please try again in a moment.',
+      }),
+      { status: 503, headers: { 'Content-Type': 'application/json' } },
+    )
+  }
 
   for (const [pattern, payload] of RESPONSES) {
     if (pattern.test(url)) {

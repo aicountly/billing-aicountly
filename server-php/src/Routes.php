@@ -42,7 +42,13 @@ final class Routes
         $router->get('v1/catalog/items', [CatalogController::class, 'items']);
         $router->get('v1/catalog/items/search', [CatalogController::class, 'searchItems']);
         $router->get('v1/catalog/items/favourites', [CatalogController::class, 'favourites']);
+        $router->get('v1/catalog/items/stats', [CatalogController::class, 'itemStats']);
+        $router->get('v1/catalog/items/export', [CatalogController::class, 'exportItems']);
         $router->get('v1/catalog/items/barcode/{code}', [CatalogController::class, 'itemByBarcode']);
+        $router->get('v1/catalog/item-groups', [CatalogController::class, 'itemGroups']);
+        // Last of the four-segment item routes: `{id}` matches any single
+        // segment, so every literal one above must be declared before it.
+        $router->get('v1/catalog/items/{id}', [CatalogController::class, 'item']);
         $router->get('v1/catalog/stock', [CatalogController::class, 'stock']);
         $router->get('v1/catalog/low-stock', [CatalogController::class, 'lowStock']);
         $router->get('v1/catalog/warehouses', [CatalogController::class, 'warehouses']);

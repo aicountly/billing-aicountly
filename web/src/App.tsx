@@ -8,7 +8,8 @@ import Onboarding from './pages/Onboarding'
 import SaleEditor from './pages/SaleEditor'
 import { DuesScreen, PartyStatement } from './pages/Dues'
 import { BankCash, MoneyScreen } from './pages/MoneyMovement'
-import { Items, Parties } from './pages/Directory'
+import { Parties } from './pages/Directory'
+import { Items } from './pages/items'
 import {
   BankCashOverview,
   Expense,

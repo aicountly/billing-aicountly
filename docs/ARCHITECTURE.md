@@ -21,7 +21,17 @@ No synchronisation job, no reconciliation cron, no mirror table, no cache table.
 | Who owes me, whom do I owe? | **Smart Books** | `reports/bill-by-bill`, live, aged here |
 | How much cash and bank? | **Smart Books** | `reports/account-summary`, live |
 | Is this item in stock? | **Inventory** | `InventoryClient`, live |
+| What is in the catalogue at all? | **Inventory** | `InventoryClient`, live — see below |
 | Who may see and do what *here*? | **Billing** | its own tables |
+
+The Items screen is the rule at its most visible. It searches, filters, sorts
+and pages **against Inventory**, one page per request, and keeps nothing: there
+is no item table here to page through, which is also why the list cannot be
+stale. Creating, importing, editing and deactivating an item all open Inventory,
+because a second place to create the same item is a second name for the same
+product. `ItemCatalog` shapes what comes back and adds nothing to it; a test
+greps it for `INSERT`, `UPDATE` and `Db::run` so the rule is checked rather than
+remembered.
 
 ## What Billing owns
 

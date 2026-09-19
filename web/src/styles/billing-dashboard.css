@@ -893,6 +893,15 @@
 
 .billing-drawer__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
 
+/* The detail panel. Wider than the navigation drawer, because it holds a
+   record rather than a list of destinations. */
+.billing-drawer--right {
+  inset: 0 0 0 auto;
+  width: min(94vw, 420px);
+  border-right: 0;
+  border-left: 1px solid var(--billing-border);
+}
+
 /* ------------------------------------------------------------ responsive */
 
 @media (max-width: 1200px) {

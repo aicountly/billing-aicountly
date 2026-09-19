@@ -46,9 +46,29 @@ the absence as a zero.
 
 | Endpoint | Used by |
 |---|---|
-| `GET items`, `GET items/search`, `GET items/barcode/{code}` | item pickers, biller desk |
+| `GET items`, `GET items/search`, `GET items/barcode/{code}` | item pickers, biller desk, the Items workspace |
+| `GET items/{id}` | the item detail panel |
+| `POST items/bulk-lookup` | favourites, and exporting a chosen selection |
+| `GET item-groups` | the group filter on Items |
+| `GET warehouses` | the warehouse filter on Items |
+| `GET stock-balances` | quantities for a page of items, in one call |
 | `GET availability` | stock check |
-| `GET replenishment` | "running low" |
+| `GET replenishment` | "running low", and the Low stock tab and count |
+
+#### Counting the catalogue
+
+Billing has no count of its own to give, so the five figures above the Items
+table are **Inventory's** counts: `GET items?limit=1` per tab filter, read from
+`meta.total`, plus `GET replenishment` for the low-stock figure. Two
+consequences are deliberate:
+
+* a card and the tab it heads ask the same question, so they cannot disagree;
+* a count Inventory will not give comes back `null` and the card reads
+  **Unavailable**, with the reason, rather than nought.
+
+If a release of Inventory ignores `type`, both type counts come back equal to
+the catalogue total. Billing detects exactly that case and withdraws both cards
+rather than reporting a breakdown it has not been given.
 
 ### Manage
 
