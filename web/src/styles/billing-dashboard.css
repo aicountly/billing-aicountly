@@ -948,3 +948,127 @@
   .billing-app { grid-template-columns: minmax(0, 1fr); }
   .billing-panel { break-inside: avoid; box-shadow: none; }
 }
+
+/* ------------------------------------------------------------- combobox */
+
+/* The shared type-ahead (components/Combobox.tsx). Styled here rather than in
+   the purchase feature's sheet because the counter's pickers use it too, and a
+   search box that looks different on two screens reads as two products. */
+
+.billing-combobox { position: relative; min-width: 0; }
+
+.billing-combobox__label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.8rem;
+  color: var(--billing-muted);
+}
+
+.billing-combobox__control { position: relative; }
+
+.billing-combobox__leading {
+  position: absolute;
+  left: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  color: var(--billing-muted);
+  pointer-events: none;
+}
+
+.billing-combobox__input {
+  width: 100%;
+  padding: 0.5rem 0.55rem;
+  border: 1px solid var(--billing-border-strong);
+  border-radius: var(--billing-radius-sm);
+  background: var(--billing-surface);
+  color: var(--billing-text);
+  font-size: 1rem;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.billing-combobox__input.has-leading { padding-left: 1.7rem; }
+
+.billing-combobox__input:hover:not(:disabled) { border-color: #acbdb1; }
+
+.billing-combobox__input:focus {
+  border-color: var(--billing-action);
+  box-shadow: 0 0 0 3px rgb(24 122 18 / 10%);
+  outline: none;
+}
+
+.billing-combobox__input.is-invalid { border-color: var(--billing-danger); }
+
+.billing-combobox__input:disabled {
+  background: var(--billing-surface-2);
+  color: var(--billing-muted);
+  cursor: not-allowed;
+}
+
+/* The dense variant sits in the purchase grid, where a 44px control per cell
+   would push a ten-line bill past the fold. */
+.billing-combobox--dense .billing-combobox__input {
+  min-height: 36px;
+  padding: 0.35rem 0.5rem;
+  font-size: 13px;
+}
+
+.billing-combobox--dense .billing-combobox__input.has-leading { padding-left: 1.65rem; }
+
+.billing-combobox__list {
+  position: absolute;
+  z-index: 20;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 0.2rem;
+  max-height: 16rem;
+  overflow-y: auto;
+  background: var(--billing-surface);
+  border: 1px solid var(--billing-border-strong);
+  border-radius: var(--billing-radius-sm);
+  box-shadow: var(--billing-shadow-lg);
+}
+
+/* Portalled: measured against the viewport so a table's own scrolling cannot
+   clip it. `right` is released because the width is set from the anchor. */
+.billing-combobox__list--floating {
+  position: fixed;
+  top: auto;
+  right: auto;
+  margin-top: 0;
+  z-index: 60;
+}
+
+.billing-combobox__state {
+  margin: 0;
+  padding: 0.6rem;
+  color: var(--billing-muted);
+  font-size: 13px;
+}
+
+.billing-combobox__state--error { color: var(--billing-danger); }
+
+.billing-combobox__option {
+  display: block;
+  width: 100%;
+  padding: 0.55rem 0.6rem;
+  border: 0;
+  background: transparent;
+  color: var(--billing-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.billing-combobox__option.is-active { background: var(--billing-surface-2); }
+
+/* ------------------------------------------------------- drawer, on the right */
+
+/* Same dialog, anchored to the other edge — used by panels that belong beside
+   the content rather than in place of the navigation. */
+.billing-drawer--right {
+  inset: 0 0 0 auto;
+  width: min(92vw, 420px);
+  border-right: 0;
+  border-left: 1px solid var(--billing-border);
+}

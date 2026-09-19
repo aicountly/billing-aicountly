@@ -60,7 +60,16 @@ export const ownerSession: BillingSession = {
         { label: 'Credit note', path: '/more/credit-note' },
       ],
     },
-    { key: 'purchases', label: 'Purchases', path: '/purchases', children: [] },
+    {
+      key: 'purchases',
+      label: 'Purchases',
+      path: '/purchases',
+      children: [
+        { label: 'New purchase', path: '/purchases/new' },
+        { label: 'Debit note', path: '/more/debit-note' },
+        { label: 'Expense', path: '/more/expense' },
+      ],
+    },
     { key: 'money', label: 'Money', path: '/money-in', children: [] },
     { key: 'receivables', label: 'Money to Collect', path: '/receivables', children: [] },
     { key: 'payables', label: 'Money to Pay', path: '/payables', children: [] },
@@ -431,3 +440,79 @@ export const compliance: ComplianceDashboard = {
   },
   generated_at: '2026-09-16T09:12:00Z',
 }
+
+/* ---------------------------------------------------------------------------
+   New purchase
+
+   The masters the purchase screen reads, in the shapes the real endpoints
+   relay them in. Same rule as everything else in this file: development only,
+   never shipped, never written anywhere.
+   --------------------------------------------------------------------------- */
+
+export const warehouses = [
+  { mc_id: 1, mc_name: 'Main Warehouse', is_default: true },
+  { mc_id: 2, mc_name: 'Shop Floor', is_default: false },
+  { mc_id: 3, mc_name: 'Godown 2 (Bhiwandi)', is_default: false },
+]
+
+export const uoms = [
+  { unit_id: 1, unit_symbol: 'Nos' },
+  { unit_id: 2, unit_symbol: 'Box' },
+  { unit_id: 3, unit_symbol: 'Kg' },
+  { unit_id: 4, unit_symbol: 'Ream' },
+]
+
+export const taxCategories = [
+  { tax_cat_id: 1, tax_cat_name: 'Exempt', rate: 0 },
+  { tax_cat_id: 2, tax_cat_name: 'GST 5%', rate: 5 },
+  { tax_cat_id: 3, tax_cat_name: 'GST 12%', rate: 12 },
+  { tax_cat_id: 4, tax_cat_name: 'GST 18%', rate: 18 },
+  { tax_cat_id: 5, tax_cat_name: 'GST 28%', rate: 28 },
+]
+
+export const cashBankAccounts = [
+  { acc_id: 41, acc_name: 'Cash in hand' },
+  { acc_id: 42, acc_name: 'HDFC Bank · 4412' },
+]
+
+export const supplierParties = [
+  { acc_id: 501, acc_name: 'Sharma Paper Mart', gstin: '27AAECS1234F1Z2' },
+  { acc_id: 502, acc_name: 'Delhi Stationers Pvt Ltd', gstin: '07AABCD5678G1Z9' },
+  { acc_id: 503, acc_name: 'Local Packaging Works', gstin: null },
+]
+
+export const catalogItems = [
+  { item_id: 1, item_name: 'A4 Copy Paper 75 GSM', item_sku: 'A4-75-500', unit_id: 4, hsn_sac: '4802', mrp: '248' },
+  { item_id: 2, item_name: 'Blue Ball Pen', item_sku: 'PEN-BL', unit_id: 1, hsn_sac: '9608', mrp: '7.50' },
+  { item_id: 3, item_name: 'Stapler No. 10', item_sku: 'STP-10', unit_id: 1, hsn_sac: '8472', mrp: '96' },
+]
+
+export const supplierPayables = {
+  title: 'Money to pay',
+  as_on: '2026-09-19',
+  source: 'books',
+  total: 24500,
+  overdue: 8200,
+  due_today: 0,
+  due_this_week: 16300,
+  ageing: { current: 16300, '1_30': 8200, '31_60': 0, '61_90': 0, '90_plus': 0, no_due_date: 0 },
+  ageing_reconciles: true,
+  parties: [{ account_id: 501, account_name: 'Sharma Paper Mart', total: 24500, overdue: 8200, bill_count: 3, oldest_overdue_days: 12 }],
+  bills: [],
+  note: 'Read from Smart Books just now.',
+}
+
+export const supplierPurchaseRegister = {
+  party_account_id: 501,
+  from: '2025-09-19',
+  to: '2026-09-19',
+  documents: [
+    { voucher_id: 9001, voucher_uuid: null, document_no: 'PUR-0112', date: '2026-08-28', party: 'Sharma Paper Mart', party_id: 501, amount: 18644, status: 'PARTIAL' },
+    { voucher_id: 9002, voucher_uuid: null, document_no: 'PUR-0098', date: '2026-07-14', party: 'Sharma Paper Mart', party_id: 501, amount: 12200, status: 'PAID' },
+  ],
+  complete: true,
+  source: 'books',
+  note: 'Read from Smart Books just now.',
+}
+
+export const itemAvailability = { item_id: 1, warehouse_id: 1, available: 42, unit_symbol: 'Ream' }

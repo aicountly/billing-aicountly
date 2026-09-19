@@ -46,6 +46,7 @@ final class Routes
         $router->get('v1/catalog/stock', [CatalogController::class, 'stock']);
         $router->get('v1/catalog/low-stock', [CatalogController::class, 'lowStock']);
         $router->get('v1/catalog/warehouses', [CatalogController::class, 'warehouses']);
+        $router->get('v1/catalog/uoms', [CatalogController::class, 'uoms']);
         $router->get('v1/catalog/parties', [CatalogController::class, 'parties']);
         $router->get('v1/catalog/cash-bank', [CatalogController::class, 'cashBankAccounts']);
         $router->get('v1/catalog/expense-accounts', [CatalogController::class, 'expenseAccounts']);

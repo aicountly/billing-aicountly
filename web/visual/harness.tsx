@@ -24,6 +24,8 @@ import BillerDesk from '../src/dashboards/BillerDesk'
 import Receivables from '../src/dashboards/Receivables'
 import Payables from '../src/dashboards/Payables'
 import CashCompliance from '../src/dashboards/CashCompliance'
+import NewPurchasePage from '../src/pages/purchase/NewPurchasePage'
+import SaleEditor from '../src/pages/SaleEditor'
 import { saveSession, setAuthToken } from '../src/auth/tokens'
 import { setScope } from '../src/services/api'
 import * as fixtures from './fixtures'
@@ -40,6 +42,10 @@ const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
   receivables: { path: '/dashboard/receivables', element: <Receivables /> },
   payables: { path: '/dashboard/payables', element: <Payables /> },
   'cash-compliance': { path: '/dashboard/cash-compliance', element: <CashCompliance /> },
+  purchase: { path: '/purchases/new', element: <NewPurchasePage /> },
+  // The counter screen shares the type-ahead with the purchase grid, so it is
+  // worth being able to look at both after a change to either.
+  sale: { path: '/sales/new', element: <SaleEditor /> },
 }
 
 /** The fixture behind each endpoint the screens call. */
@@ -63,9 +69,28 @@ const RESPONSES: Array<[RegExp, unknown]> = [
   [/v1\/manage\/companyinfo/, {
     cmp_id: 1,
     cmp_name: 'Sharma Enterprises',
-    fy_list: [{ fy_id: 4, fy_name: 'FY 2026–27' }],
+    gstin: '27ABCDE1234F1Z5',
+    fy_list: [{ fy_id: 4, fy_name: 'FY 2026–27', fy_start: '2026-04-01', fy_end: '2027-03-31' }],
     branch_list: [{ bo_id: 1, bo_name: 'Main Branch', is_head_office: true }],
   }],
+
+  // The masters and readings behind Purchases → New purchase. The dashboards
+  // above share the session and companyinfo entries with it.
+  [/v1\/catalog\/warehouses/, fixtures.warehouses],
+  [/v1\/catalog\/uoms/, fixtures.uoms],
+  [/v1\/catalog\/tax-categories/, fixtures.taxCategories],
+  [/v1\/catalog\/cash-bank/, fixtures.cashBankAccounts],
+  [/v1\/catalog\/parties/, fixtures.supplierParties],
+  [/v1\/catalog\/items\/search/, fixtures.catalogItems],
+  [/v1\/catalog\/items\/barcode\//, fixtures.catalogItems[1]],
+  [/v1\/catalog\/stock/, fixtures.itemAvailability],
+  [/v1\/original-documents/, fixtures.supplierPurchaseRegister],
+  // After /v1/dashboards/payables above, which would otherwise match first.
+  [/v1\/payables/, fixtures.supplierPayables],
+  // A save, answered. Without this the catch-all below swallows the POST and
+  // the screen's success path — the reset, the toast, the navigation — can
+  // never be looked at in the booth.
+  [/v1\/transactions\//, { data: { request_id: 77, request_uuid: 'visual-harness', kind: 'purchase', status: 'POSTED' } }],
 ]
 
 const originalFetch = window.fetch.bind(window)

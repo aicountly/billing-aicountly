@@ -35,6 +35,15 @@ const Payables = lazy(() => import('./dashboards/Payables'))
 const CashCompliance = lazy(() => import('./dashboards/CashCompliance'))
 const Reports = lazy(() => import('./pages/Reports'))
 
+/**
+ * New purchase is split out for the same reason.
+ *
+ * It carries the item grid, the GST preview and the supplier readings, and the
+ * person it is heaviest for — a counter biller on the slowest machine in the
+ * building — never opens it. Their bundle should not pay for it.
+ */
+const NewPurchase = lazy(() => import('./pages/purchase/NewPurchasePage'))
+
 initAnalytics()
 
 function PageViews() {
@@ -143,8 +152,8 @@ function Shell() {
         </Route>
 
         <Route path="purchases">
-          <Route index element={<RequireScope><SaleEditor kind="purchase" /></RequireScope>} />
-          <Route path="new" element={<RequireScope><SaleEditor kind="purchase" /></RequireScope>} />
+          <Route index element={<Suspense fallback={<Loading />}><RequireScope><NewPurchase /></RequireScope></Suspense>} />
+          <Route path="new" element={<Suspense fallback={<Loading />}><RequireScope><NewPurchase /></RequireScope></Suspense>} />
           <Route path=":id" element={<RequireScope><TransactionDetail /></RequireScope>} />
         </Route>
 
