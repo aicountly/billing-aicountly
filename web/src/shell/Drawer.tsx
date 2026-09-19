@@ -1,10 +1,12 @@
 /**
- * The navigation drawer for phones.
+ * A drawer that behaves like a dialog.
  *
- * Below 900px the sidebar is not merely hidden — hiding navigation and leaving
- * nothing in its place is how a phone user ends up with a product that has one
- * screen. This is the real thing: same destinations, opened from a button in
- * the header, and behaving the way a dialog is supposed to.
+ * It began as the navigation drawer for phones — below 900px the sidebar is not
+ * merely hidden, because hiding navigation and leaving nothing in its place is
+ * how a phone user ends up with a product that has one screen. The party
+ * directory opens its detail and filter panels from the right with the same
+ * component rather than a second one: a focus trap that is written twice is a
+ * focus trap that is correct once.
  *
  *   * focus moves in when it opens and is trapped while it is open
  *   * Tab wraps at both ends, so it cannot be tabbed out of behind the backdrop
@@ -24,11 +26,19 @@ export function Drawer({
   onClose,
   title,
   children,
+  /** Which edge it comes in from. Navigation opens left; a record opens right. */
+  side = 'left',
+  /** A wider panel for a record, where the default 300px would wrap every figure. */
+  wide = false,
+  footer,
 }: {
   open: boolean
   onClose: () => void
-  title: string
+  title: ReactNode
   children: ReactNode
+  side?: 'left' | 'right'
+  wide?: boolean
+  footer?: ReactNode
 }) {
   const panel = useRef<HTMLDivElement | null>(null)
   const returnTo = useRef<HTMLElement | null>(null)
@@ -83,14 +93,21 @@ export function Drawer({
   return (
     <>
       <div className="billing-drawer-backdrop" onClick={onClose} aria-hidden="true" />
-      <div className="billing-drawer" role="dialog" aria-modal="true" aria-label={title} ref={panel}>
+      <div
+        className={`billing-drawer billing-drawer--${side}${wide ? ' billing-drawer--wide' : ''}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label={typeof title === 'string' ? title : undefined}
+        ref={panel}
+      >
         <div className="billing-drawer__head">
           <strong>{title}</strong>
-          <button type="button" className="billing-iconbutton" onClick={onClose} aria-label="Close menu">
+          <button type="button" className="billing-iconbutton" onClick={onClose} aria-label="Close">
             <X size={18} aria-hidden />
           </button>
         </div>
-        {children}
+        <div className="billing-drawer__body">{children}</div>
+        {footer && <div className="billing-drawer__foot">{footer}</div>}
       </div>
     </>
   )

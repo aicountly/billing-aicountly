@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api, ApiError } from '../services/api'
 import type { CashBankAccount, CatalogParty, TransactionRequest } from '../services/types'
 import { useApi } from '../hooks/useApi'
@@ -26,10 +26,18 @@ interface OpenBill {
  */
 export function MoneyScreen({ direction }: { direction: 'in' | 'out' }) {
   const navigate = useNavigate()
+  const [params] = useSearchParams()
   const { scope } = useBilling()
   const isIn = direction === 'in'
 
-  const [party, setParty] = useState<{ id: number; name: string } | null>(null)
+  // The party directory hands over whichever party the receipt is for, on the
+  // same two parameters the bill editor already reads. Making somebody search
+  // again for the customer they just clicked is how a screen gets skipped.
+  const [party, setParty] = useState<{ id: number; name: string } | null>(() => {
+    const id = Number(params.get('party_account_id') ?? '')
+    const name = params.get('party_name')
+    return id > 0 ? { id, name: name ?? `Account ${id}` } : null
+  })
   const [amount, setAmount] = useState('')
   const [entryDate, setEntryDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [account, setAccount] = useState('')

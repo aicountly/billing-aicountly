@@ -1,0 +1,1 @@
+export { Parties } from './PartiesPage'

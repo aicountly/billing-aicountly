@@ -422,6 +422,25 @@ export function money(value: number | string | null | undefined, currency = 'INR
   }).format(amount)
 }
 
+/**
+ * The same figure without the paise, for a headline card.
+ *
+ * ₹28,75,200 and ₹28,75,200.00 say the same thing, and the second one costs
+ * four characters that decide whether six cards fit across a laptop. The paise
+ * stay everywhere a figure is reconciled against — the table, the statement,
+ * the export.
+ */
+export function moneyRounded(value: number | string | null | undefined, currency = 'INR'): string {
+  const amount = typeof value === 'string' ? Number.parseFloat(value) : (value ?? 0)
+  if (!Number.isFinite(amount)) return '—'
+
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency,
+    maximumFractionDigits: 0,
+  }).format(amount)
+}
+
 export function qty(value: number | string | null | undefined): string {
   const amount = typeof value === 'string' ? Number.parseFloat(value) : (value ?? 0)
   if (!Number.isFinite(amount)) return '—'

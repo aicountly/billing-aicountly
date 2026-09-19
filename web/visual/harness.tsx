@@ -1,9 +1,10 @@
 /**
- * A photo booth for the five dashboards. Development only.
+ * A photo booth for the five dashboards and the party directory.
+ * Development only.
  *
  * It mounts the REAL page components inside the REAL shell, with the real
  * hooks, the real loading states and the real router. The only thing replaced
- * is the network: `window.fetch` answers the dashboard endpoints from the
+ * is the network: `window.fetch` answers the endpoints they call from the
  * fixtures next door, so the screens can be photographed at four widths
  * without inventing records in anybody's company.
  *
@@ -11,6 +12,8 @@
  * none of this reaches the deployed bundle.
  *
  *   /visual.html?screen=overview&as=owner
+ *   /visual.html?screen=parties
+ *   /visual.html?screen=parties&state=error
  */
 
 import { StrictMode } from 'react'
@@ -24,6 +27,7 @@ import BillerDesk from '../src/dashboards/BillerDesk'
 import Receivables from '../src/dashboards/Receivables'
 import Payables from '../src/dashboards/Payables'
 import CashCompliance from '../src/dashboards/CashCompliance'
+import { Parties } from '../src/pages/parties'
 import { saveSession, setAuthToken } from '../src/auth/tokens'
 import { setScope } from '../src/services/api'
 import * as fixtures from './fixtures'
@@ -34,12 +38,25 @@ const params = new URLSearchParams(window.location.search)
 const screen = params.get('screen') ?? 'overview'
 const asBiller = params.get('as') === 'biller'
 
+/**
+ * Force a screen into a state that is otherwise hard to photograph.
+ *
+ *   ?state=error   the owning product answers 503
+ *   ?state=empty   it answers, with nothing in it
+ *
+ * These two are as much a part of a screen's design as the happy path — more,
+ * arguably, since they are what the user sees on the worst day — and a design
+ * nobody can look at is a design nobody reviews.
+ */
+const forcedState = params.get('state')
+
 const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
   overview: { path: '/dashboard/overview', element: <Overview /> },
   biller: { path: '/dashboard/biller', element: <BillerDesk /> },
   receivables: { path: '/dashboard/receivables', element: <Receivables /> },
   payables: { path: '/dashboard/payables', element: <Payables /> },
   'cash-compliance': { path: '/dashboard/cash-compliance', element: <CashCompliance /> },
+  parties: { path: '/parties', element: <Parties /> },
 }
 
 /** The fixture behind each endpoint the screens call. */
@@ -50,6 +67,9 @@ const RESPONSES: Array<[RegExp, unknown]> = [
   [/v1\/dashboards\/receivables/, fixtures.receivables],
   [/v1\/dashboards\/payables/, fixtures.payables],
   [/v1\/dashboards\/cash-compliance/, fixtures.compliance],
+  [/v1\/parties\/overview/, fixtures.partyOverview],
+  [/v1\/parties\/duplicates/, fixtures.partyDuplicates],
+  [/v1\/parties(\?|$)/, fixtures.partyDirectory],
   [/v1\/insights/, [
     { kind: 'overdue_receivable', tone: 'warning', message: '₹74,500.00 is overdue from customers.', action: { label: 'See who', path: '/dashboard/receivables' } },
     { kind: 'payable_due', tone: 'info', message: '₹48,000.00 is due to suppliers this week.', action: { label: 'See the list', path: '/dashboard/payables' } },
@@ -72,6 +92,34 @@ const originalFetch = window.fetch.bind(window)
 
 window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+
+  if (forcedState === 'error' && /v1\/parties/.test(url)) {
+    return new Response(
+      JSON.stringify({
+        error: {
+          code: 'books_unavailable',
+          message: 'Could not reach Smart Books for the party list. Please try again in a moment.',
+          details: {},
+        },
+        message: 'Could not reach Smart Books for the party list. Please try again in a moment.',
+      }),
+      { status: 503, headers: { 'Content-Type': 'application/json' } },
+    )
+  }
+
+  if (forcedState === 'empty' && /v1\/parties(\?|$)/.test(url)) {
+    return new Response(
+      JSON.stringify({
+        data: [],
+        meta: {
+          total: 0, limit: 20, offset: 0, total_known: true, complete: true,
+          sides: ['customer', 'supplier'], source: 'books',
+          note: 'Read from Smart Books on this request. Billing keeps no copy of a party.',
+        },
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    )
+  }
 
   for (const [pattern, payload] of RESPONSES) {
     if (pattern.test(url)) {

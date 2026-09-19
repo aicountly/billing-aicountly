@@ -305,7 +305,15 @@ final class ReportService
      * tabs and carriage returns are stripped first, because they are how the
      * prefix gets skipped past.
      */
-    private static function cell(mixed $value): string
+    /**
+     * One CSV cell, with the spreadsheet-formula guard on it.
+     *
+     * Public because the party directory exports through the same rule. A
+     * leading `=`, `+`, `-` or `@` makes Excel treat a customer's name as a
+     * formula, and two copies of that defence is one copy that will be
+     * forgotten.
+     */
+    public static function cell(mixed $value): string
     {
         if ($value === null || is_bool($value)) {
             return $value === true ? 'yes' : ($value === false ? 'no' : '');

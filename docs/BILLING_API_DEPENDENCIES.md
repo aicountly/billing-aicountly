@@ -34,7 +34,7 @@ the absence as a zero.
 | `GET reports/bill-by-bill` | receivables, payables, ageing, reminder candidates |
 | `GET reports/account-summary` | cash and bank cards, cash & compliance |
 | `GET reports/account-ledger` | party statement |
-| `GET masters/accounts` | party and cash/bank pickers |
+| `GET masters/accounts` | the party directory, party and cash/bank pickers |
 | `GET masters/tax-categories` | line tax category picker |
 | `POST vouchers/drafts`, `POST vouchers/drafts/{id}/post` | every transaction |
 | `POST receipt-vouchers/{id}/settlement` | receipt allocation |
@@ -54,6 +54,79 @@ the absence as a zero.
 
 `GET companies`, `GET companyinfo` — the company, branch and financial-year
 switcher. Read on the request that draws it; the three ids are all Billing keeps.
+
+---
+
+## Partly available: the optional fields on a party
+
+**The party directory renders what Books carries and says so where it carries
+nothing.** Nothing on that screen is stored in Billing; the list, the counts and
+every balance beside a name are composed from two live reads per request:
+
+| What the screen shows | Where it comes from |
+|---|---|
+| name, GSTIN, PAN, phone, email, city, state, group | `GET masters/accounts` |
+| credit limit, credit days, active/inactive, last transaction date | `GET masters/accounts`, **when that deployment carries them** |
+| outstanding, overdue, open bill count, days overdue | `GET reports/bill-by-bill`, indexed by account |
+| customers / suppliers / total counts | `meta.total` on `GET masters/accounts`, per side |
+
+`PartyDirectory` reads each field from whichever of several key spellings the
+deployment uses, and a field no spelling matched is **null, never zero and never
+an empty string**. On screen that is "—" with the reason on it, not "₹ 0.00" and
+not a blank that reads like a value. The consequences are visible and deliberate:
+
+* Books carries no `credit_limit` → the **Credit limit set** card reads "Not
+  available — Smart Books carries no credit limit for these parties", the column
+  shows "—", and the "over their limit" reading is withheld rather than computed
+  against a limit nobody set.
+* Books carries no active flag → the **Active parties** ring reads "Not stated",
+  and the Inactive tab returns nothing because nothing was marked inactive —
+  rather than treating silence as "active", which would make the tab look as
+  though it worked.
+* A profile without `receivable.view` → the Outstanding column is "—" for every
+  customer, because the balance was never read. A zero there would read as
+  "this customer is square with us".
+
+### Counting is capped, and says when it stopped
+
+Totals, the filter pickers, the duplicate check and the insights are all
+computed from a complete reading of the account list, in chunks, up to
+**1,000 parties per side**. Past that the service returns `complete: false`, and
+every figure derived from the whole list comes back null: the cards read "Not
+available", the State and Group pickers offer nothing rather than half the
+states, no insight is drawn, and the CSV export refuses outright rather than
+producing a short file. A larger company needs either a narrower filter or, as
+the proper fix, an aggregate endpoint:
+
+```
+GET masters/accounts/summary
+  ?cmp_id&fy_id&bo_id&party_type
+
+  → { data: { total, active, inactive, gst_registered,
+              credit_limit_total, groups: [ { name, count } ],
+              states: [ { name, count } ] } }
+```
+
+Owner: **Smart Books**. Until it exists, the cap above is the honest limit.
+
+### Not available: writing a party from Billing
+
+There is no contract for changing a party master from this product, and Billing
+does not want one. A customer is a ledger account in Books; a second place to
+create or edit one is a second place for the same customer to exist under two
+names, with two balances. So the directory offers no Add, no Edit, no
+Mark inactive and no Assign group — **Add party** and **Import** open Smart
+Books, and the duplicate check names the pair to look at without offering to
+merge them, because merging two ledger accounts moves every voucher posted
+against one of them and that is Books' decision to take.
+
+### Not available: how many parties there were last month
+
+No product in this deployment keeps a history of party counts, so the directory
+draws **no trend arrows**. "+12% this month" on that screen could only be
+invented, and an invented arrow on a real dashboard is worse than none because
+it gets acted on. Each card carries arithmetic on the same reading the figure
+above it came from instead.
 
 ---
 

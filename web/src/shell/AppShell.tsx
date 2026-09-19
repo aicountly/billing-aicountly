@@ -13,11 +13,12 @@
  * and a phone user with no navigation has a one-screen application.
  */
 
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { Bell, ChevronDown, LogOut, Menu, Plus, Settings, User } from 'lucide-react'
+import { Bell, LogOut, Menu, Plus, Settings, User } from 'lucide-react'
 import { useAuth } from '../auth/AuthProvider'
 import { AppLauncher } from '../components/AppLauncher'
+import { Popover } from '../components/Popover'
 import { useBilling } from '../context/BillingContext'
 import { useApi } from '../hooks/useApi'
 import { api } from '../services/api'
@@ -314,70 +315,5 @@ function UserMenu() {
         </>
       )}
     </Popover>
-  )
-}
-
-/**
- * A small dropdown that closes on Escape, on a click outside, and on choosing
- * something — and returns focus to its trigger, so keyboard users are not
- * dropped at the top of the document.
- */
-function Popover({
-  label,
-  ariaLabel,
-  children,
-  asChild = false,
-}: {
-  label: ReactNode
-  ariaLabel: string
-  children: (close: () => void) => ReactNode
-  asChild?: boolean
-}) {
-  const [open, setOpen] = useState(false)
-  const box = useRef<HTMLDivElement | null>(null)
-  const trigger = useRef<HTMLButtonElement | null>(null)
-
-  useEffect(() => {
-    if (!open) return undefined
-
-    function onPointerDown(event: MouseEvent) {
-      if (box.current && !box.current.contains(event.target as Node)) setOpen(false)
-    }
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        setOpen(false)
-        trigger.current?.focus()
-      }
-    }
-
-    document.addEventListener('mousedown', onPointerDown)
-    document.addEventListener('keydown', onKeyDown)
-    return () => {
-      document.removeEventListener('mousedown', onPointerDown)
-      document.removeEventListener('keydown', onKeyDown)
-    }
-  }, [open])
-
-  return (
-    <div style={{ position: 'relative' }} ref={box}>
-      <button
-        type="button"
-        ref={trigger}
-        className={asChild ? 'billing-iconbutton' : 'billing-iconbutton'}
-        style={asChild ? { width: 'auto', height: 'auto', padding: 0, border: 0 } : undefined}
-        aria-label={ariaLabel}
-        aria-expanded={open}
-        aria-haspopup="menu"
-        onClick={() => setOpen((value) => !value)}
-      >
-        {label}
-        {asChild && <ChevronDown size={14} aria-hidden style={{ marginLeft: 2, color: 'var(--billing-muted)' }} />}
-      </button>
-      {open && (
-        <div className="billing-menu" role="menu">
-          {children(() => setOpen(false))}
-        </div>
-      )}
-    </div>
   )
 }
