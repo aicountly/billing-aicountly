@@ -24,6 +24,7 @@ import BillerDesk from '../src/dashboards/BillerDesk'
 import Receivables from '../src/dashboards/Receivables'
 import Payables from '../src/dashboards/Payables'
 import CashCompliance from '../src/dashboards/CashCompliance'
+import { MoneyScreen } from '../src/pages/money/MoneyScreen'
 import { saveSession, setAuthToken } from '../src/auth/tokens'
 import { setScope } from '../src/services/api'
 import * as fixtures from './fixtures'
@@ -40,6 +41,8 @@ const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
   receivables: { path: '/dashboard/receivables', element: <Receivables /> },
   payables: { path: '/dashboard/payables', element: <Payables /> },
   'cash-compliance': { path: '/dashboard/cash-compliance', element: <CashCompliance /> },
+  'money-out': { path: '/money-out/new', element: <MoneyScreen direction="out" /> },
+  'money-in': { path: '/money-in/new', element: <MoneyScreen direction="in" /> },
 }
 
 /** The fixture behind each endpoint the screens call. */
@@ -59,6 +62,12 @@ const RESPONSES: Array<[RegExp, unknown]> = [
     { item_id: 2, item_name: 'Blue Ball Pen', item_sku: 'PEN-BL', unit_id: 1, hsn_sac: '9608', mrp: '12' },
     { item_id: 3, item_name: 'Stapler', item_sku: 'STP-01', unit_id: 1, hsn_sac: '8472', mrp: '450' },
   ]],
+  [/v1\/transactions\/(payment|receipt)/, fixtures.savedPayment],
+  [/v1\/money\/party-context/, fixtures.moneyPartyContext],
+  [/v1\/money\/recent/, fixtures.moneyRecent],
+  [/v1\/open-bills/, fixtures.openBills],
+  [/v1\/catalog\/cash-bank/, fixtures.cashBank],
+  [/v1\/catalog\/parties/, fixtures.parties],
   [/v1\/manage\/companies/, { data: [{ cmp_id: 1, cmp_name: 'Sharma Enterprises' }], meta: { total: 1 } }],
   [/v1\/manage\/companyinfo/, {
     cmp_id: 1,

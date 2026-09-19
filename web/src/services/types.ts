@@ -7,6 +7,11 @@
  * what Billing owns: a request, a profile, a rule.
  */
 
+// The comparison shape is the server's `Metric::compare` output, already typed
+// for the dashboards. Imported rather than restated: two declarations of one
+// server shape drift, and this one decides whether a trend is drawn at all.
+import type { MetricComparison } from '../dashboards/types'
+
 export interface MenuEntry {
   key: string
   label: string
@@ -236,4 +241,108 @@ export interface CatalogParty {
 export interface CashBankAccount {
   acc_id: number
   acc_name: string
+  /**
+   * Whatever Books calls the group this account sits in — "Bank Accounts",
+   * "Cash-in-hand". Optional because the catalog relays Books' own response and
+   * not every deployment spells it. Rendered only when present; never guessed
+   * from the name, because "Cash Credit A/c" is a bank.
+   */
+  group_name?: string | null
+  nature?: string | null
+}
+
+// ---------------------------------------------------------------------------
+// The money screens' context
+// ---------------------------------------------------------------------------
+
+/**
+ * One entry on the money screens' recent list.
+ *
+ * The first half — voucher, date, party, amount, status — is Books' register
+ * row, read live. The second half is what Billing itself recorded when the user
+ * pressed Save, and is null on an entry made in Books rather than here.
+ * `recorded_here` says which is which so the table can explain an empty cell
+ * instead of looking broken.
+ */
+export interface MoneyActivityRow {
+  voucher_id: number | null
+  voucher_uuid: string | null
+  document_no: string | null
+  date: string | null
+  party: string | null
+  party_id: number | null
+  amount: number | null
+  status: string | null
+  request_id: number | null
+  kind: string | null
+  account_id: number | null
+  account_name: string | null
+  payment_mode: string | null
+  reference_no: string | null
+  narration: string | null
+  created_by: string | null
+  recorded_here: boolean
+}
+
+/**
+ * What the period came to.
+ *
+ * Every figure is nullable and `available` may be false, because a register
+ * page that cannot be proved complete must not be totalled. A null here is
+ * rendered as "—", never as ₹0.
+ */
+export interface MoneySummary {
+  available: boolean
+  reason: string | null
+  total: number | null
+  count: number | null
+  average: number | null
+  largest: {
+    amount: number | null
+    party: string | null
+    party_id: number | null
+    date: string | null
+    voucher_id: number | null
+  } | null
+  comparison: MetricComparison | null
+}
+
+export interface MoneyActivity {
+  direction: 'in' | 'out'
+  period: {
+    key: string
+    label: string
+    from: string
+    to: string
+    previous_from: string
+    previous_to: string
+    previous_label: string
+  }
+  available: boolean
+  reason: string | null
+  summary: MoneySummary
+  rows: MoneyActivityRow[]
+  complete: boolean
+  source: string
+  note: string
+}
+
+/** When this party was last paid, or last paid us. Withheld when unprovable. */
+export interface MoneyPartyContext {
+  party_account_id: number
+  direction: 'in' | 'out'
+  looked_back_days: number
+  from: string
+  to: string
+  available: boolean
+  complete: boolean
+  last: {
+    date: string | null
+    amount: number | null
+    document_no: string | null
+    voucher_id: number | null
+    days_ago: number | null
+  } | null
+  entries_in_window: number | null
+  source: string
 }
