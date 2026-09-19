@@ -422,6 +422,45 @@ export function money(value: number | string | null | undefined, currency = 'INR
   }).format(amount)
 }
 
+/**
+ * The same amount without its symbol.
+ *
+ * For a column already headed "Amount (₹)": repeating the symbol on every one
+ * of twenty-five rows costs width that the supplier name needs and tells the
+ * reader nothing the header did not.
+ */
+export function moneyPlain(value: number | string | null | undefined): string {
+  const amount = typeof value === 'string' ? Number.parseFloat(value) : (value ?? 0)
+  if (!Number.isFinite(amount)) return '—'
+
+  return new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount)
+}
+
+/**
+ * Indian digit grouping, shortened for a label where space is the constraint.
+ *
+ * Lakhs and crores, not thousands and millions — ₹12.5L is what the figure is
+ * called out loud here, and ₹1.2M is a figure nobody would repeat. Only ever
+ * for a chart label or a bar; a transaction row shows the whole number, because
+ * "₹1.2L" is not an amount anybody can reconcile against a bill.
+ */
+export function compactMoney(value: number): string {
+  if (!Number.isFinite(value)) return '—'
+  if (Math.abs(value) >= 10000000) return `₹${(value / 10000000).toFixed(1)}Cr`
+  if (Math.abs(value) >= 100000) return `₹${(value / 100000).toFixed(1)}L`
+  if (Math.abs(value) >= 1000) return `₹${Math.round(value / 1000)}K`
+  return `₹${Math.round(value)}`
+}
+
+/** Day and month, for a list where the year is the same on every row. */
+export function dayMonth(value: string | null | undefined): string {
+  if (!value) return '—'
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return value
+
+  return new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short' }).format(parsed)
+}
+
 export function qty(value: number | string | null | undefined): string {
   const amount = typeof value === 'string' ? Number.parseFloat(value) : (value ?? 0)
   if (!Number.isFinite(amount)) return '—'

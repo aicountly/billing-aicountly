@@ -23,6 +23,7 @@ import Overview from '../src/dashboards/Overview'
 import BillerDesk from '../src/dashboards/BillerDesk'
 import Receivables from '../src/dashboards/Receivables'
 import Payables from '../src/dashboards/Payables'
+import MoneyToPay from '../src/pages/payables/MoneyToPay'
 import CashCompliance from '../src/dashboards/CashCompliance'
 import { saveSession, setAuthToken } from '../src/auth/tokens'
 import { setScope } from '../src/services/api'
@@ -33,6 +34,13 @@ import '../src/App.css'
 const params = new URLSearchParams(window.location.search)
 const screen = params.get('screen') ?? 'overview'
 const asBiller = params.get('as') === 'biller'
+/**
+ * Which answer the fixtures give: the normal one, nothing at all, a failure, or
+ * a slow one so the skeletons can be photographed.
+ *
+ *   /visual.html?screen=money-to-pay&state=empty
+ */
+const state = params.get('state') ?? 'ready'
 
 const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
   overview: { path: '/dashboard/overview', element: <Overview /> },
@@ -40,6 +48,7 @@ const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
   receivables: { path: '/dashboard/receivables', element: <Receivables /> },
   payables: { path: '/dashboard/payables', element: <Payables /> },
   'cash-compliance': { path: '/dashboard/cash-compliance', element: <CashCompliance /> },
+  'money-to-pay': { path: '/payables', element: <MoneyToPay /> },
 }
 
 /** The fixture behind each endpoint the screens call. */
@@ -49,6 +58,9 @@ const RESPONSES: Array<[RegExp, unknown]> = [
   [/v1\/dashboards\/biller/, fixtures.biller],
   [/v1\/dashboards\/receivables/, fixtures.receivables],
   [/v1\/dashboards\/payables/, fixtures.payables],
+  // Before the workspace pattern: /v1\/payables/ matches this URL too.
+  [/v1\/payables\/comparison/, fixtures.payablesComparison],
+  [/v1\/payables/, state === 'empty' ? fixtures.payablesNothingOwed : fixtures.payablesWorkspace],
   [/v1\/dashboards\/cash-compliance/, fixtures.compliance],
   [/v1\/insights/, [
     { kind: 'overdue_receivable', tone: 'warning', message: '₹74,500.00 is overdue from customers.', action: { label: 'See who', path: '/dashboard/receivables' } },
@@ -70,8 +82,36 @@ const RESPONSES: Array<[RegExp, unknown]> = [
 
 const originalFetch = window.fetch.bind(window)
 
+/**
+ * Every URL the screen asked for, in order.
+ *
+ * The harness answers fetch itself, so nothing reaches the network and a
+ * browser automating this page cannot see what the screen asked for. Checking
+ * that a filter, a sort or a debounced search actually reaches the API — rather
+ * than only changing a chip's colour — needs somewhere to look, and this is it.
+ */
+const calls: string[] = []
+;(window as unknown as { harnessCalls: string[] }).harnessCalls = calls
+
 window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+  calls.push(url)
+
+  if (state === 'slow' && url.includes('v1/payables')) {
+    await new Promise((resolve) => setTimeout(resolve, 60_000))
+  }
+
+  if (state === 'error' && url.includes('v1/payables') && !url.includes('comparison')) {
+    return new Response(
+      JSON.stringify({
+        error: {
+          code: 'books_unavailable',
+          message: 'Could not reach Smart Books to work out money to pay. Please retry.',
+        },
+      }),
+      { status: 503, headers: { 'Content-Type': 'application/json' } },
+    )
+  }
 
   for (const [pattern, payload] of RESPONSES) {
     if (pattern.test(url)) {

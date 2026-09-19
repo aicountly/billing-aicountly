@@ -28,10 +28,16 @@ Behind them: sales and purchases, credit and debit notes with their original
 document, receipts and payments with allocation, bank deposits and withdrawals,
 ten live reports with CSV export, and Billing profiles deciding who sees what.
 
+**Money to Pay** (`/payables`) is the payables workspace the fourth dashboard
+links into: the headline figures, the ageing, what falls due next and the
+category split, over a searchable, filterable, sortable, paged list of every
+outstanding supplier bill — all from one reading of Smart Books per request.
+
 See [docs/BILLING_IMPLEMENTATION_STATUS.md](docs/BILLING_IMPLEMENTATION_STATUS.md)
 for what each figure means, and
-[docs/BILLING_API_DEPENDENCIES.md](docs/BILLING_API_DEPENDENCIES.md) for the two
-capabilities no product in this deployment serves yet.
+[docs/BILLING_API_DEPENDENCIES.md](docs/BILLING_API_DEPENDENCIES.md) for what
+Billing asks of other products — including the capabilities no product in this
+deployment serves yet, and what each screen says instead of guessing.
 
 Signing in is the AICOUNTLY portal's job, the same as every other AICOUNTLY
 SaaS: the app redirects to the portal, the portal returns an `auth_token`, and
@@ -74,9 +80,18 @@ same-origin.
 | `npm run preview` | Serve the production build locally |
 
 `web/visual.html` is a development-only photo booth: it mounts the real
-dashboard components against fixtures so the screens can be checked at four
-widths without a portal session or a company's data. `vite build` takes
-`index.html` only, so none of it reaches the deployed bundle.
+components against fixtures so the screens can be checked at four widths without
+a portal session or a company's data.
+
+```
+/visual.html?screen=money-to-pay           # or overview | biller | receivables
+/visual.html?screen=money-to-pay&state=empty   # also: error, slow
+```
+
+`state` reaches the empty, failed and loading states, which are the three
+hardest to arrange in a real company and the three most often shipped broken.
+`vite build` takes `index.html` only, so none of it reaches the deployed
+bundle.
 
 The PHP API has no build step and no dependencies. To run it locally:
 

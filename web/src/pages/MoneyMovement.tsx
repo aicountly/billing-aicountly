@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api, ApiError } from '../services/api'
 import type { CashBankAccount, CatalogParty, TransactionRequest } from '../services/types'
 import { useApi } from '../hooks/useApi'
@@ -26,10 +26,19 @@ interface OpenBill {
  */
 export function MoneyScreen({ direction }: { direction: 'in' | 'out' }) {
   const navigate = useNavigate()
+  const [params] = useSearchParams()
   const { scope } = useBilling()
   const isIn = direction === 'in'
 
-  const [party, setParty] = useState<{ id: number; name: string } | null>(null)
+  // Money to Pay and the dashboards hand the party over the way SaleEditor
+  // already takes it. Arriving from "record a payment" against a supplier and
+  // then having to search for that supplier again is the search you do twice.
+  const [party, setParty] = useState<{ id: number; name: string } | null>(() => {
+    const id = Number(params.get('party_account_id') ?? '')
+    const name = params.get('party_name')
+
+    return id > 0 ? { id, name: name ?? `Account ${id}` } : null
+  })
   const [amount, setAmount] = useState('')
   const [entryDate, setEntryDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [account, setAccount] = useState('')

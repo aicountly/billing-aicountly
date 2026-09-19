@@ -35,6 +35,13 @@ const Payables = lazy(() => import('./dashboards/Payables'))
 const CashCompliance = lazy(() => import('./dashboards/CashCompliance'))
 const Reports = lazy(() => import('./pages/Reports'))
 
+/**
+ * Money to Pay is split out for the same reason: it carries its own stylesheet,
+ * its charts and its filter panel, and a biller who may not see payables at all
+ * should never download any of it.
+ */
+const MoneyToPay = lazy(() => import('./pages/payables/MoneyToPay'))
+
 initAnalytics()
 
 function PageViews() {
@@ -169,7 +176,14 @@ function Shell() {
 
         {/* The bill-by-bill lists. The dashboards summarise them and link here. */}
         <Route path="receivables" element={<RequireScope><DuesScreen side="receivable" /></RequireScope>} />
-        <Route path="payables" element={<RequireScope><DuesScreen side="payable" /></RequireScope>} />
+        <Route
+          path="payables"
+          element={
+            <Suspense fallback={<Loading />}>
+              <RequireScope><MoneyToPay /></RequireScope>
+            </Suspense>
+          }
+        />
 
         <Route path="parties">
           <Route index element={<RequireScope><Parties /></RequireScope>} />

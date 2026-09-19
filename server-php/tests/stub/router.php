@@ -177,8 +177,67 @@ if (str_contains($path, '/masters/accounts/')) {
     exit;
 }
 if (str_contains($path, '/reports/bill-by-bill')) {
+    // Debtors are left exactly as they were: the receivables and overview tests
+    // are written against this one bill and must keep meaning what they meant.
+    if (($_GET['party_type'] ?? 'debtor') !== 'creditor') {
+        echo json_encode(['data' => [
+            ['bill_no' => 'INV/0001', 'bill_date' => '2026-08-01', 'due_date' => '2026-08-31', 'balance' => 120000.0],
+        ]]);
+        exit;
+    }
+
+    /**
+     * Creditors — enough of a spread to exercise the Money to Pay workspace.
+     *
+     * Every ageing bucket, a bill with no due date, a part-paid bill, two
+     * suppliers, a reference that is not the bill number, and one row that
+     * spells its fields the OTHER way Books deployments spell them, so the
+     * reader is proved to be reading and not assuming.
+     *
+     * The dates are relative to the stub's own today, because "overdue" is the
+     * whole point of these rows and a fixed date stops being overdue.
+     */
+    // Relative to the as_on the caller asked for, so a test that names a date
+    // gets the same bills whatever hour the suite is run at. Billing resolves
+    // as_on in the company's timezone; the stub must not re-decide it in the
+    // server's.
+    $asOn = (string) ($_GET['as_on'] ?? '');
+    $origin = new DateTimeImmutable($asOn !== '' ? $asOn : 'today');
+    $day = static fn (int $offset) => $origin->modify($offset . ' days')->format('Y-m-d');
+
     echo json_encode(['data' => [
-        ['bill_no' => 'INV/0001', 'bill_date' => '2026-08-01', 'due_date' => '2026-08-31', 'balance' => 120000.0],
+        ['account_id' => 601, 'account_name' => 'Northern Distributors', 'bill_no' => 'BILL/2001', 'reference_no' => 'PO-4587',
+         'bill_date' => $day(-120), 'due_date' => $day(-95), 'balance' => 40000.0, 'invoice_value' => 60000.0,
+         'group_name' => 'Raw Materials', 'voucher_id' => 7001],
+        ['account_id' => 601, 'account_name' => 'Northern Distributors', 'bill_no' => 'BILL/2002',
+         'bill_date' => $day(-80), 'due_date' => $day(-70), 'balance' => 25000.0,
+         'group_name' => 'Raw Materials', 'voucher_id' => 7002],
+        // The supplier's number filed under reference_no and nowhere else.
+        ['account_id' => 602, 'account_name' => 'Metro Stationery', 'reference_no' => 'BILL/2003',
+         'bill_date' => $day(-60), 'due_date' => $day(-45), 'balance' => 12500.0,
+         'group_name' => 'Office Supplies', 'voucher_id' => 7003],
+        // The same number twice, punctuated two ways.
+        ['account_id' => 602, 'account_name' => 'Metro Stationery', 'bill_no' => 'BILL/2004',
+         'reference_no' => 'bill-2004',
+         'bill_date' => $day(-30), 'due_date' => $day(-10), 'balance' => 8000.0,
+         'group_name' => 'Office Supplies', 'voucher_id' => 7004],
+        // Spelled the other way: acc_id / acc_name / pending_amount.
+        ['acc_id' => 603, 'acc_name' => 'Airtel Business', 'bill_no' => 'BILL/2005',
+         'bill_date' => $day(-5), 'due_date' => $day(0), 'pending_amount' => 25000.0,
+         'group_name' => 'Services', 'voucher_id' => 7005],
+        ['account_id' => 603, 'account_name' => 'Airtel Business', 'bill_no' => 'BILL/2006',
+         'bill_date' => $day(-2), 'due_date' => $day(4), 'balance' => 15000.0,
+         'group_name' => 'Services', 'voucher_id' => 7006],
+        ['account_id' => 601, 'account_name' => 'Northern Distributors', 'bill_no' => 'BILL/2007',
+         'bill_date' => $day(-1), 'due_date' => $day(21), 'balance' => 110000.0,
+         'group_name' => 'Raw Materials', 'voucher_id' => 7007],
+        // No due date of its own: its own bucket, never quietly filed as "not due".
+        ['account_id' => 602, 'account_name' => 'Metro Stationery', 'bill_no' => 'BILL/2008',
+         'bill_date' => $day(-15), 'due_date' => null, 'balance' => 3000.0,
+         'group_name' => 'Office Supplies', 'voucher_id' => 7008],
+        // Settled: Books still lists it, and a zero balance is not a payable.
+        ['account_id' => 602, 'account_name' => 'Metro Stationery', 'bill_no' => 'BILL/2009',
+         'bill_date' => $day(-40), 'due_date' => $day(-20), 'balance' => 0.0, 'voucher_id' => 7009],
     ]]);
     exit;
 }

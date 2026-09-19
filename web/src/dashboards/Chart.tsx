@@ -17,7 +17,7 @@
  */
 
 import { useId, useMemo, useState } from 'react'
-import { money } from '../ui'
+import { compactMoney, money } from '../ui'
 import { EmptyState, Unavailable } from './kit'
 
 interface Series {
@@ -27,13 +27,13 @@ interface Series {
   points: Array<{ label: string; value: number }>
 }
 
-/** Indian digit grouping, shortened for an axis where space is the constraint. */
-function axisMoney(value: number): string {
-  if (Math.abs(value) >= 10000000) return `₹${(value / 10000000).toFixed(1)}Cr`
-  if (Math.abs(value) >= 100000) return `₹${(value / 100000).toFixed(1)}L`
-  if (Math.abs(value) >= 1000) return `₹${Math.round(value / 1000)}K`
-  return `₹${Math.round(value)}`
-}
+/**
+ * Indian digit grouping, shortened for an axis where space is the constraint.
+ *
+ * Shared with the payables charts through `ui`, so an axis here and a bar label
+ * there cannot round the same figure two different ways.
+ */
+const axisMoney = compactMoney
 
 function shortDate(iso: string): string {
   const parsed = new Date(iso)

@@ -95,6 +95,52 @@ New in this change, and why each is not a second source of truth:
 Both are covered by the release-blocking ownership tests, whose numeric-column
 allow-list now names two columns explicitly rather than one.
 
+## Money to Pay — the payables workspace
+
+`/payables`, permission `payable.view`. Not a dashboard: the bill-by-bill list
+the payables dashboard summarises and links to, rebuilt as somewhere a person
+actually settles suppliers from.
+
+**One reading of Books draws all of it.** `GET v1/payables` reads
+`reports/bill-by-bill` once and, over that one answer, works out the four
+headline figures, the ageing, what falls due in the next thirty days, the
+category split and the due-date calendar — then searches, filters, sorts and
+pages the rows. Filtering does not ask Books again per view, and the browser is
+never handed every bill in order to slice twenty-five out of it.
+
+| Part | What it shows |
+|---|---|
+| Total payables | Everything still owed, with the change against the same day last month |
+| Overdue / Due today / Due this week | The three windows, each a click onto the matching filter |
+| Payables ageing | Not yet due · 1–30 · 31–60 · 61–90 · over 90 · no due date, each a filter |
+| Upcoming payments | The next thirty days, soonest first; "View all" narrows the table to the same window |
+| Payable by category | Books' own classification, or a plain statement that it has none |
+| The table | Bill no. · Date · Supplier · Reference · Due date · Days · Amount · Status, sorted and paged on the server |
+
+**The cards describe the position; the table describes a query.** Narrowing to
+one supplier changes the rows and leaves "Total payables" alone — a headline
+that moved with the filter would be a different number every time somebody
+searched, and nobody could quote it.
+
+**Two things this screen says rather than guesses.** A bill is "part paid" only
+where Books states the bill's value as well as its balance; where it does not,
+no part payment is claimed either way. And the change on the headline card is
+two readings of Books, today's and last month's, on a separate endpoint — so a
+keystroke in the search box does not re-read a month of history, and a failure
+leaves the card without a trend rather than without a total.
+
+**Days** reads "30 overdue", "Today" or "6 days" rather than a bare number:
+a column where 6 might mean six days late or six days away is a column somebody
+acts on backwards.
+
+`GET v1/payables/export` is the same filtered set as CSV — the whole of it, not
+the page on screen — and needs `export.data` on top of `payable.view`, exactly
+as the reports do.
+
+"Import bills" has no extraction service in this deployment and says so, with
+the manual path beside it. "View calendar" is a month view of the due dates this
+screen already read; it schedules nothing and saves nothing.
+
 ## Reports
 
 Ten, at `/reports`, all read live: sales, purchase, credit-note and debit-note
@@ -136,10 +182,12 @@ approximated.
 
 ## Verification
 
-* `server-php/tests/run.sh` — 56 passing, 0 failing, against a real PostgreSQL
+* `server-php/tests/run.sh` — 72 passing, 0 failing, against a real PostgreSQL
   and a stub standing in for Books and Inventory.
-* `npm run build` in `web/` — `tsc -b` clean, six lazy chunks.
-* Visual pass at 1440, 1024, 768 and 390 px across all five dashboards, via
-  `web/visual.html` — a development-only entry point that mounts the real
-  components against fixtures. `vite build` does not include it, and no fake
-  record is written anywhere.
+* `npm run build` in `web/` — `tsc -b` clean, seven lazy chunks.
+* Visual pass at 1440, 1180, 860 and 414 px across all five dashboards and Money
+  to Pay, via `web/visual.html` — a development-only entry point that mounts the
+  real components against fixtures. `?state=empty|error|slow` reaches the empty,
+  failed and loading states, which are hard to arrange in a real company.
+  `vite build` does not include any of it, and no fake record is written
+  anywhere.
