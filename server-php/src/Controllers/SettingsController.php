@@ -7,6 +7,7 @@ namespace Aicountly\Api\Controllers;
 use Aicountly\Api\Audit;
 use Aicountly\Api\Dashboards;
 use Aicountly\Api\Db;
+use Aicountly\Api\Env;
 use Aicountly\Api\Http;
 use Aicountly\Api\Permissions;
 
@@ -47,6 +48,11 @@ final class SettingsController extends Controller
             // offer a screen the API will refuse.
             'dashboards'   => Dashboards::permitted($granted, $isOwner),
             'landing'      => Dashboards::landing($granted, $isOwner),
+            // What this DEPLOYMENT can actually do, as opposed to what this user
+            // is allowed to do. A screen asks so it can say plainly that a
+            // capability is missing instead of drawing a button that does
+            // nothing. See docs/BILLING_API_DEPENDENCIES.md.
+            'capabilities' => self::capabilities(),
         ]);
     }
 
@@ -54,6 +60,51 @@ final class SettingsController extends Controller
     {
         [$auth, $ctx] = self::enter();
         Http::data(self::settingsRow($ctx->cmpId));
+    }
+
+    /**
+     * Capabilities this deployment has, decided here rather than in the browser.
+     *
+     * Each one is false because the contract behind it does not exist yet, not
+     * because it is switched off — the reason travels with the flag so a screen
+     * can print it instead of inventing its own wording. The contracts Billing
+     * would need are written down in docs/BILLING_API_DEPENDENCIES.md.
+     *
+     * @return array<string, array{available:bool, reason:?string}>
+     */
+    private static function capabilities(): array
+    {
+        $extraction = Env::get('DOCUMENT_EXTRACTION_BASE') !== '';
+
+        return [
+            // Reading a bill or a return document out of a PDF or a photo.
+            'document_extraction' => [
+                'available' => $extraction,
+                'reason'    => $extraction
+                    ? null
+                    : 'Reading a document automatically needs a document-extraction service, and none is configured '
+                        . 'for this deployment. Typing the lines in records exactly the same thing.',
+            ],
+            // Keeping an unfinished document on the server. Billing posts to
+            // Smart Books as soon as it saves, so there is nowhere to park one.
+            'transaction_drafts' => [
+                'available' => false,
+                'reason'    => 'Saving an unfinished document on the server needs a draft state Smart Books does not '
+                    . 'expose to Billing yet. A draft is kept in this browser instead.',
+            ],
+            // Files attached to a transaction.
+            'transaction_attachments' => [
+                'available' => false,
+                'reason'    => 'Attaching a file to a document needs a storage service, and none is configured for '
+                    . 'this deployment.',
+            ],
+            // The ledger and tax effect, before posting.
+            'accounting_preview' => [
+                'available' => false,
+                'reason'    => 'Smart Books works out the ledgers and the tax when the document is posted, and does '
+                    . 'not offer a preview of them beforehand.',
+            ],
+        ];
     }
 
     public static function update(): void

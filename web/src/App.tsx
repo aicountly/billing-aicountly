@@ -35,6 +35,12 @@ const Payables = lazy(() => import('./dashboards/Payables'))
 const CashCompliance = lazy(() => import('./dashboards/CashCompliance'))
 const Reports = lazy(() => import('./pages/Reports'))
 
+/**
+ * The debit note editor is split out for the same reason: it is a screen most
+ * users open occasionally, and it pulls in the panel kit and its own stylesheet.
+ */
+const DebitNote = lazy(() => import('./pages/DebitNote'))
+
 initAnalytics()
 
 function PageViews() {
@@ -183,7 +189,10 @@ function Shell() {
           <Route index element={<RequireScope><More /></RequireScope>} />
           <Route path="expense" element={<RequireScope><Expense /></RequireScope>} />
           <Route path="credit-note" element={<RequireScope><SaleEditor kind="credit_note" /></RequireScope>} />
-          <Route path="debit-note" element={<RequireScope><SaleEditor kind="debit_note" /></RequireScope>} />
+          <Route
+            path="debit-note"
+            element={<Suspense fallback={<Loading />}><RequireScope><DebitNote /></RequireScope></Suspense>}
+          />
           <Route path="recurring" element={<RequireScope><Recurring /></RequireScope>} />
           <Route path="unfinished" element={<RequireScope><Unfinished /></RequireScope>} />
           <Route path="profiles" element={<RequireScope><Profiles /></RequireScope>} />

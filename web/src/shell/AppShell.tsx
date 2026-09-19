@@ -14,7 +14,7 @@
  */
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { Bell, ChevronDown, LogOut, Menu, Plus, Settings, User } from 'lucide-react'
 import { useAuth } from '../auth/AuthProvider'
 import { AppLauncher } from '../components/AppLauncher'
@@ -36,6 +36,7 @@ const QUICK_ACTIONS = [
   { label: 'Bank deposit', path: '/bank-cash/deposit', permission: 'contra.create' },
   { label: 'Bank withdrawal', path: '/bank-cash/withdrawal', permission: 'contra.create' },
   { label: 'Credit note', path: '/more/credit-note', permission: 'credit_note.create' },
+  { label: 'Debit note', path: '/more/debit-note', permission: 'debit_note.create' },
 ] as const
 
 export function AppShell() {
@@ -126,38 +127,55 @@ function Brand() {
 function Navigation({ menu }: { menu: MenuEntry[] }) {
   const location = useLocation()
 
+  /*
+   * These are Links, not NavLinks, on purpose.
+   *
+   * NavLink decides `aria-current` from its own prefix match, which is the
+   * wrong answer here twice over: /more/debit-note lights up Settings because
+   * the path starts with /more, and leaves Purchases dark even though that is
+   * the section the screen belongs to. The section is worked out below and the
+   * attribute is set from that.
+   */
+
+  /** The section that actually owns this path, when one of them claims it. */
+  const owner = menu.find((entry) =>
+    (entry.children ?? []).some(
+      (child) => location.pathname === child.path || location.pathname.startsWith(`${child.path}/`),
+    ),
+  )
+
   return (
     <nav aria-label="Sections" style={{ display: 'grid', gap: 2 }}>
       {menu.map((entry) => {
         const children = entry.children ?? []
         // A section expands when you are inside it. Expanding on click as well
         // would mean a section whose own page is one tap away needs two.
-        const inside =
-          location.pathname === entry.path ||
-          children.some((child) => location.pathname.startsWith(child.path)) ||
-          (entry.path !== '/' && location.pathname.startsWith(entry.path))
+        //
+        // The owning section wins outright. Several of these screens live under
+        // /more but are filed under the section they belong to — a debit note is
+        // at /more/debit-note and belongs to Purchases — and without this both
+        // Purchases and Settings would light up for the same page.
+        const inside = owner
+          ? owner.key === entry.key
+          : location.pathname === entry.path ||
+            (entry.path !== '/' && location.pathname.startsWith(`${entry.path}/`))
 
         return (
           <div key={entry.key}>
-            <NavLink
-              to={entry.path}
-              end={entry.path === '/'}
-              className="billing-nav__link"
-              aria-current={inside ? 'page' : undefined}
-            >
+            <Link to={entry.path} className="billing-nav__link" aria-current={inside ? 'page' : undefined}>
               {entry.label}
-            </NavLink>
+            </Link>
             {inside && children.length > 0 && (
               <div className="billing-nav__children">
                 {children.map((child) => (
-                  <NavLink
+                  <Link
                     key={child.path}
                     to={child.path}
                     className="billing-nav__child"
                     aria-current={location.pathname === child.path ? 'page' : undefined}
                   >
                     {child.label}
-                  </NavLink>
+                  </Link>
                 ))}
               </div>
             )}

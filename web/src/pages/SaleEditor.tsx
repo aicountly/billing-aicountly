@@ -2,25 +2,28 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Trash2 } from 'lucide-react'
 import { api, ApiError } from '../services/api'
-import type { CashBankAccount, CatalogItem, CatalogParty, TransactionRequest } from '../services/types'
+import type {
+  CashBankAccount,
+  CatalogItem,
+  CatalogParty,
+  OriginalDocument,
+  TransactionRequest,
+} from '../services/types'
 import { useApi } from '../hooks/useApi'
 import { useBilling } from '../context/BillingContext'
 import { ItemPicker, PartyPicker } from '../components/LivePicker'
 import { Button, Card, date as formatDate, DataTable, Field, Input, money, Notice, Select, Textarea } from '../ui'
 
-type EditorKind = 'sale' | 'purchase' | 'credit_note' | 'debit_note'
-
-/** A document a note can be raised against, as Books' register describes it. */
-interface OriginalDocument {
-  voucher_id: number | null
-  voucher_uuid: string | null
-  document_no: string | null
-  date: string | null
-  party: string | null
-  party_id: number | null
-  amount: number | null
-  status: string | null
-}
+/**
+ * Debit notes are NOT here.
+ *
+ * They were, while a note was a note and the only difference was which way the
+ * money went. They have their own screen now (`pages/DebitNote`), because a
+ * supplier return needs an HSN, a tax category, a warehouse and a plain
+ * statement of whether stock moves — and bending this editor around all four
+ * would have made the customer-facing screens worse to keep the code shorter.
+ */
+type EditorKind = 'sale' | 'purchase' | 'credit_note'
 
 /**
  * Why a note is being raised.
@@ -35,14 +38,6 @@ const CREDIT_REASONS = [
   { value: 'discount_agreed', label: 'Discount agreed afterwards' },
   { value: 'damaged', label: 'Goods were damaged or short' },
   { value: 'cancelled', label: 'Order cancelled' },
-  { value: 'other', label: 'Something else' },
-] as const
-
-const DEBIT_REASONS = [
-  { value: 'goods_returned', label: 'Goods sent back to the supplier' },
-  { value: 'price_adjustment', label: 'Supplier billed the wrong price' },
-  { value: 'shortage', label: 'Short delivery' },
-  { value: 'damaged', label: 'Damaged on arrival' },
   { value: 'other', label: 'Something else' },
 ] as const
 
@@ -92,16 +87,13 @@ export default function SaleEditor({ kind = 'sale' }: { kind?: EditorKind }) {
   const [params] = useSearchParams()
   const { can, scope } = useBilling()
 
-  const isNote = kind === 'credit_note' || kind === 'debit_note'
-  // Debit notes and purchases both face a supplier; credit notes and sales both
-  // face a customer. One flag rather than four branches per field.
-  const isPurchase = kind === 'purchase' || kind === 'debit_note'
+  const isNote = kind === 'credit_note'
+  const isPurchase = kind === 'purchase'
 
   const title = {
     sale: 'New bill',
     purchase: 'Record a purchase',
     credit_note: 'Credit note',
-    debit_note: 'Debit note',
   }[kind]
 
   // The biller desk hands over whatever it had. A search box that forgets the
@@ -137,7 +129,7 @@ export default function SaleEditor({ kind = 'sale' }: { kind?: EditorKind }) {
     (signal) =>
       api.one<{ documents: OriginalDocument[]; complete: boolean; note: string }>(
         'v1/original-documents',
-        { party_account_id: party?.id, kind: isPurchase ? 'purchase' : 'sale' },
+        { party_account_id: party?.id, kind: 'sale' },
         signal,
       ),
     [party?.id, kind, scope?.cmp_id, scope?.fy_id],
@@ -351,10 +343,8 @@ export default function SaleEditor({ kind = 'sale' }: { kind?: EditorKind }) {
       <h1 style={{ margin: 0, fontSize: '1.3rem' }}>{title}</h1>
       {isNote && (
         <p style={{ margin: 0, color: 'var(--muted)' }}>
-          {kind === 'credit_note'
-            ? 'Credits a customer — because goods came back, or because the bill was wrong.'
-            : 'Charges a supplier back — because goods went back, or because the bill was wrong.'}{' '}
-          Smart Books works out the accounting and the tax.
+          Credits a customer — because goods came back, or because the bill was wrong. Smart Books works out the
+          accounting and the tax.
         </p>
       )}
 
@@ -377,7 +367,7 @@ export default function SaleEditor({ kind = 'sale' }: { kind?: EditorKind }) {
             onPick={(picked: CatalogParty) => setParty({ id: picked.acc_id, name: picked.acc_name })}
           />
           <Field label="Date"><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
-          {isPurchase && !isNote && (
+          {isPurchase && (
             <Field label="Supplier invoice number">
               <Input value={supplierInvoiceNo} onChange={(e) => setSupplierInvoiceNo(e.target.value)} />
             </Field>
@@ -452,7 +442,7 @@ export default function SaleEditor({ kind = 'sale' }: { kind?: EditorKind }) {
             <Field label="Reason" hint="Shown on the note and kept with it.">
               <Select value={reason} onChange={(e) => setReason(e.target.value)}>
                 <option value="">Choose a reason…</option>
-                {(kind === 'credit_note' ? CREDIT_REASONS : DEBIT_REASONS).map((option) => (
+                {CREDIT_REASONS.map((option) => (
                   <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
               </Select>

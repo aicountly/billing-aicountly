@@ -1,5 +1,6 @@
 /**
- * A photo booth for the five dashboards. Development only.
+ * A photo booth for the five dashboards and the debit note editor.
+ * Development only.
  *
  * It mounts the REAL page components inside the REAL shell, with the real
  * hooks, the real loading states and the real router. The only thing replaced
@@ -11,6 +12,7 @@
  * none of this reaches the deployed bundle.
  *
  *   /visual.html?screen=overview&as=owner
+ *   /visual.html?screen=debit-note
  */
 
 import { StrictMode } from 'react'
@@ -24,6 +26,7 @@ import BillerDesk from '../src/dashboards/BillerDesk'
 import Receivables from '../src/dashboards/Receivables'
 import Payables from '../src/dashboards/Payables'
 import CashCompliance from '../src/dashboards/CashCompliance'
+import DebitNote from '../src/pages/DebitNote'
 import { saveSession, setAuthToken } from '../src/auth/tokens'
 import { setScope } from '../src/services/api'
 import * as fixtures from './fixtures'
@@ -40,6 +43,7 @@ const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
   receivables: { path: '/dashboard/receivables', element: <Receivables /> },
   payables: { path: '/dashboard/payables', element: <Payables /> },
   'cash-compliance': { path: '/dashboard/cash-compliance', element: <CashCompliance /> },
+  'debit-note': { path: '/more/debit-note', element: <DebitNote /> },
 }
 
 /** The fixture behind each endpoint the screens call. */
@@ -63,9 +67,20 @@ const RESPONSES: Array<[RegExp, unknown]> = [
   [/v1\/manage\/companyinfo/, {
     cmp_id: 1,
     cmp_name: 'Sharma Enterprises',
-    fy_list: [{ fy_id: 4, fy_name: 'FY 2026–27' }],
+    // Real dates, because the debit note editor bounds its date field with them
+    // and refuses a date outside the year it is scoped to.
+    fy_list: [{ fy_id: 4, fy_name: 'FY 2026-27', fy_start: '2026-04-01', fy_end: '2027-03-31' }],
     branch_list: [{ bo_id: 1, bo_name: 'Main Branch', is_head_office: true }],
   }],
+
+  // Purchases → debit note. Ordered before the generic catalog patterns so the
+  // narrower paths win.
+  [/v1\/catalog\/items\/search/, fixtures.debitNoteItems],
+  [/v1\/catalog\/tax-categories/, fixtures.taxCategories],
+  [/v1\/catalog\/warehouses/, fixtures.warehouses],
+  [/v1\/catalog\/parties/, fixtures.debitNoteSuppliers],
+  [/v1\/original-documents/, fixtures.debitNoteDocuments],
+  [/v1\/open-bills/, fixtures.debitNoteOpenBills],
 ]
 
 const originalFetch = window.fetch.bind(window)
