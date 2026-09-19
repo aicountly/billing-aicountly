@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api, ApiError } from '../services/api'
 import type { CashBankAccount, CatalogParty, TransactionRequest } from '../services/types'
 import { useApi } from '../hooks/useApi'
@@ -26,11 +26,27 @@ interface OpenBill {
  */
 export function MoneyScreen({ direction }: { direction: 'in' | 'out' }) {
   const navigate = useNavigate()
+  const [search] = useSearchParams()
   const { scope } = useBilling()
   const isIn = direction === 'in'
 
-  const [party, setParty] = useState<{ id: number; name: string } | null>(null)
-  const [amount, setAmount] = useState('')
+  /**
+   * Money to Collect links here with the party and the amount already known.
+   *
+   * Only the FORM is filled in. The open bills are still read from Books when
+   * the party lands, and the allocation is still worked out from those — a
+   * bill somebody settled this morning must not be allocated against because a
+   * link made twenty minutes ago said it was open.
+   */
+  const [party, setParty] = useState<{ id: number; name: string } | null>(() => {
+    const id = Number(search.get('account_id'))
+    const name = search.get('account_name')
+    return Number.isFinite(id) && id > 0 && name ? { id, name } : null
+  })
+  const [amount, setAmount] = useState(() => {
+    const raw = Number(search.get('amount'))
+    return Number.isFinite(raw) && raw > 0 ? raw.toFixed(2) : ''
+  })
   const [entryDate, setEntryDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [account, setAccount] = useState('')
   const [mode, setMode] = useState('cash')

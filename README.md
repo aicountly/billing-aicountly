@@ -24,14 +24,20 @@ Five dashboards, all reading live from Smart Books and Inventory:
 | **Payables** | what falls due, and bills worth a second look |
 | **Cash & compliance** | the day's money, the day-close checklist, document status |
 
+And the two bill-by-bill screens the dashboards link into — **Money to Collect**
+and **Money to Pay** — where the ageing, the follow-up list and the collection
+actions are: aged buckets you can click into, who owes what, filters that live in
+the address bar, and a reminder, a receipt or a statement one step away.
+
 Behind them: sales and purchases, credit and debit notes with their original
 document, receipts and payments with allocation, bank deposits and withdrawals,
 ten live reports with CSV export, and Billing profiles deciding who sees what.
 
 See [docs/BILLING_IMPLEMENTATION_STATUS.md](docs/BILLING_IMPLEMENTATION_STATUS.md)
 for what each figure means, and
-[docs/BILLING_API_DEPENDENCIES.md](docs/BILLING_API_DEPENDENCIES.md) for the two
-capabilities no product in this deployment serves yet.
+[docs/BILLING_API_DEPENDENCIES.md](docs/BILLING_API_DEPENDENCIES.md) for the
+capabilities no product in this deployment serves yet — each one a place where a
+screen says so rather than showing a zero.
 
 Signing in is the AICOUNTLY portal's job, the same as every other AICOUNTLY
 SaaS: the app redirects to the portal, the portal returns an `auth_token`, and
@@ -71,12 +77,27 @@ same-origin.
 | `npm run dev` | Vite dev server on http://localhost:5173 |
 | `npm run build` | Type-check, then build to `web/dist/` |
 | `npm run typecheck` | Type-check only |
+| `npm test` | The receivables ageing, status and filter rules, under node's own test runner |
 | `npm run preview` | Serve the production build locally |
 
 `web/visual.html` is a development-only photo booth: it mounts the real
 dashboard components against fixtures so the screens can be checked at four
 widths without a portal session or a company's data. `vite build` takes
 `index.html` only, so none of it reaches the deployed bundle.
+
+```
+/visual.html?screen=overview                 the five dashboards: overview, biller,
+                                             receivables, payables, cash-compliance
+/visual.html?screen=dues                     Money to Collect
+/visual.html?screen=dues-payable             Money to Pay
+          &state=empty|error|slow            the three states a screen must survive
+          &as=biller                         a profile without receipt or reminder rights
+          &router=browser                    the real router, for the filter-in-the-URL round trip
+```
+
+`npm test` needs no browser and no database: `web/src/receivables/model.ts` —
+the ageing, status, filter and export rules — imports nothing, so node runs it
+with `--experimental-strip-types` and the repository adds no test framework.
 
 The PHP API has no build step and no dependencies. To run it locally:
 

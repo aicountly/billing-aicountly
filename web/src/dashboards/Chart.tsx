@@ -17,7 +17,7 @@
  */
 
 import { useId, useMemo, useState } from 'react'
-import { money } from '../ui'
+import { compactMoney, money } from '../ui'
 import { EmptyState, Unavailable } from './kit'
 
 interface Series {
@@ -25,14 +25,6 @@ interface Series {
   label: string
   colour: string
   points: Array<{ label: string; value: number }>
-}
-
-/** Indian digit grouping, shortened for an axis where space is the constraint. */
-function axisMoney(value: number): string {
-  if (Math.abs(value) >= 10000000) return `₹${(value / 10000000).toFixed(1)}Cr`
-  if (Math.abs(value) >= 100000) return `₹${(value / 100000).toFixed(1)}L`
-  if (Math.abs(value) >= 1000) return `₹${Math.round(value / 1000)}K`
-  return `₹${Math.round(value)}`
 }
 
 function shortDate(iso: string): string {
@@ -162,7 +154,7 @@ export function TrendChart({
               strokeWidth={1}
             />
             <text x={padding.left - 8} y={y(max * fraction) + 4} textAnchor="end" fontSize={11} fill="#5b6b62">
-              {axisMoney(max * fraction)}
+              {compactMoney(max * fraction)}
             </text>
           </g>
         ))}
@@ -334,7 +326,7 @@ export function FlowChart({
               strokeWidth={1}
             />
             <text x={padding.left - 8} y={y(max * fraction) + 4} textAnchor="end" fontSize={11} fill="#5b6b62">
-              {axisMoney(max * fraction)}
+              {compactMoney(max * fraction)}
             </text>
           </g>
         ))}

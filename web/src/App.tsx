@@ -6,7 +6,7 @@ import { AppShell } from './shell/AppShell'
 import SignIn from './pages/SignIn'
 import Onboarding from './pages/Onboarding'
 import SaleEditor from './pages/SaleEditor'
-import { DuesScreen, PartyStatement } from './pages/Dues'
+import { PartyStatement } from './pages/Dues'
 import { BankCash, MoneyScreen } from './pages/MoneyMovement'
 import { Items, Parties } from './pages/Directory'
 import {
@@ -34,6 +34,13 @@ const Receivables = lazy(() => import('./dashboards/Receivables'))
 const Payables = lazy(() => import('./dashboards/Payables'))
 const CashCompliance = lazy(() => import('./dashboards/CashCompliance'))
 const Reports = lazy(() => import('./pages/Reports'))
+
+/**
+ * Money to Collect and Money to Pay, split out for the same reason: the screen
+ * carries its own charts and filter machinery, and a counter biller who only
+ * ever makes bills should not pay for them on first load.
+ */
+const Dues = lazy(() => import('./receivables/DuesScreen').then((module) => ({ default: module.DuesScreen })))
 
 initAnalytics()
 
@@ -168,8 +175,8 @@ function Shell() {
         </Route>
 
         {/* The bill-by-bill lists. The dashboards summarise them and link here. */}
-        <Route path="receivables" element={<RequireScope><DuesScreen side="receivable" /></RequireScope>} />
-        <Route path="payables" element={<RequireScope><DuesScreen side="payable" /></RequireScope>} />
+        <Route path="receivables" element={<Suspense fallback={<Loading />}><RequireScope><Dues side="receivable" /></RequireScope></Suspense>} />
+        <Route path="payables" element={<Suspense fallback={<Loading />}><RequireScope><Dues side="payable" /></RequireScope></Suspense>} />
 
         <Route path="parties">
           <Route index element={<RequireScope><Parties /></RequireScope>} />
