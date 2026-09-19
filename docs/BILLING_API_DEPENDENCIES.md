@@ -2,7 +2,7 @@
 
 Billing owns no accounting data. Every figure on every screen is read live from
 the product that owns it, on the request that draws it — so this file is the
-complete list of what Billing asks for, and of the two things it asks for that
+complete list of what Billing asks for, and of the three things it asks for that
 nobody serves yet.
 
 The rule this file exists to keep honest: **when a capability is missing, the
@@ -118,9 +118,10 @@ Reading a bill out of a PDF or a photo needs a document-extraction service, and
 this deployment has none. Billing does not add an OCR stack, and it does not ask
 a model to guess at a supplier's totals.
 
-Enabled by setting `DOCUMENT_EXTRACTION_BASE` in `server-php/.env` once a service
-exists. The expected shape, following the house "deterministic first, AI only for
-what is left" rule:
+Enabled by setting `DOCUMENT_EXTRACTION_BASE` in `server-php/.env` once a
+service exists. Money received offers the same capability as **Scan receipt**,
+disabled for the same reason and behind the same flag. The expected shape,
+following the house "deterministic first, AI only for what is left" rule:
 
 ```
 POST <DOCUMENT_EXTRACTION_BASE>/v1/extract
@@ -137,6 +138,38 @@ POST <DOCUMENT_EXTRACTION_BASE>/v1/extract
 Every extracted field must arrive reviewable, and nothing is posted until a
 person has approved it. **Until this exists**, the panel offers the manual path,
 which records exactly the same purchase bill.
+
+## Not available: payment-proof attachments
+
+**Money received shows an unavailable state for this, on the screen itself.**
+
+A receipt is often backed by something — a UPI screenshot, a photographed
+counterfoil, a bank advice — and the person entering it would like to keep the
+proof beside the entry. Billing cannot: there is no document store in this
+deployment, and the receipt payload Books accepts carries no attachment
+reference, so a file chosen on that screen would have nowhere to be filed. The
+screen therefore draws the section and says so, rather than accepting a file and
+losing it.
+
+### The contract Billing would need
+
+Owner: **Vault**, or whichever product holds documents in the deployment.
+
+```
+POST <DOCUMENT_STORE_BASE>/v1/documents
+  multipart: file=<pdf|jpg|png>, cmp_id, kind=payment_proof
+  → { data: { document_id, document_uuid, filename, bytes, content_type, url } }
+
+DELETE <DOCUMENT_STORE_BASE>/v1/documents/{id}
+```
+
+And, from **Smart Books**, one field on the receipt voucher — an array of
+document uuids — so the proof travels with the entry rather than being findable
+only from this product.
+
+Until both exist, the entry screen records the receipt without a proof, which is
+what the previous screen did too. `web/src/pages/money-received/features.ts` is
+where it is turned on.
 
 ## Not depended on: Aicountly Pay
 

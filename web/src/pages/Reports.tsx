@@ -13,6 +13,7 @@
  */
 
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Download, FileText } from 'lucide-react'
 import { api, ApiError } from '../services/api'
 import { useApi } from '../hooks/useApi'
@@ -39,7 +40,10 @@ interface ReportResult {
 
 export default function Reports() {
   const { scope, can } = useBilling()
-  const [selected, setSelected] = useState<string | null>(null)
+  // `?report=receipts` lets another screen link straight at one of these —
+  // Money received's "View all" is the same register, unfiltered.
+  const [params, setParams] = useSearchParams()
+  const [selected, setSelected] = useState<string | null>(params.get('report'))
   const [period, setPeriod] = useState<PeriodKey>('month')
   const [downloading, setDownloading] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
@@ -110,6 +114,7 @@ export default function Reports() {
                   style={{ border: 0, cursor: 'pointer', width: '100%', background: 'transparent' }}
                   onClick={() => {
                     setSelected(entry.key)
+                    setParams({ report: entry.key }, { replace: true })
                     setExportError(null)
                   }}
                 >

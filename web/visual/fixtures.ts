@@ -431,3 +431,84 @@ export const compliance: ComplianceDashboard = {
   },
   generated_at: '2026-09-16T09:12:00Z',
 }
+
+/* -------------------------------------------------------------------------
+   Money received.
+
+   The shapes the receipt workspace reads: Books' cash and bank ledgers, a
+   party search, one customer's open bills, that customer's dues, and the
+   receipt register. Invented names and round figures — nothing here is a real
+   company's data, and none of it reaches the built app.
+   ------------------------------------------------------------------------- */
+
+export const cashBankAccounts = [
+  { acc_id: 9001, acc_name: 'Cash in hand' },
+  { acc_id: 9002, acc_name: 'HDFC Current ••••1234' },
+  { acc_id: 9003, acc_name: 'ICICI Current ••••8890' },
+]
+
+export const customerMatches = [
+  { acc_id: 501, acc_name: 'Vaibhav Traders', gstin: '27AABCU9603R1ZX' },
+  { acc_id: 502, acc_name: 'Greenfield Supplies Pvt Ltd', gstin: '29AAGCG1234M1Z8' },
+  { acc_id: 503, acc_name: 'Metro Distributors', gstin: null },
+]
+
+export const openBills = {
+  account_id: 501,
+  source: 'books',
+  bills: [
+    { bill_no: 'INV-0214', bill_date: '2026-07-18', due_date: '2026-08-02', balance: 48000, voucher_id: 214, voucher_uuid: 'b-214' },
+    { bill_no: 'INV-0241', bill_date: '2026-08-21', due_date: '2026-09-05', balance: 36500, voucher_id: 241, voucher_uuid: 'b-241' },
+    { bill_no: 'INV-0266', bill_date: '2026-09-09', due_date: '2026-09-24', balance: 40000, voucher_id: 266, voucher_uuid: 'b-266' },
+  ],
+}
+
+export const customerDues = {
+  title: 'Money to collect',
+  as_on: '2026-09-19',
+  source: 'books',
+  total: 124500,
+  overdue: 84500,
+  due_today: 0,
+  due_this_week: 40000,
+  ageing: { current: 40000, '1_30': 36500, '31_60': 48000, '61_90': 0, '90_plus': 0, no_due_date: 0 },
+  ageing_reconciles: true,
+  parties: [
+    { account_id: 501, account_name: 'Vaibhav Traders', total: 124500, overdue: 84500, bill_count: 3, oldest_overdue_days: 48 },
+  ],
+  bills: [],
+  note: 'Read from Smart Books just now.',
+}
+
+export const receiptRegister = {
+  key: 'receipts',
+  label: 'Receipt register',
+  columns: [],
+  total: 342500,
+  complete: true,
+  period: { from: '2026-06-21', to: '2026-09-19' },
+  note: 'Read from Smart Books just now.',
+  rows: [
+    { voucher_id: 812, voucher_uuid: 'r-812', document_no: 'RCP-2026-0012', date: '2026-09-19', party: 'Vaibhav Traders', party_id: 501, amount: 50000, status: null, payment_mode: 'upi', reference_no: 'UTR987654321', received_in: 'HDFC Current ••••1234' },
+    { voucher_id: 811, voucher_uuid: 'r-811', document_no: 'RCP-2026-0011', date: '2026-09-18', party: 'Shree Traders', party_id: 504, amount: 120000, status: null, payment_mode: 'cheque', reference_no: 'CHQ789123', received_in: 'ICICI Current ••••8890' },
+    { voucher_id: 810, voucher_uuid: 'r-810', document_no: 'RCP-2026-0010', date: '2026-09-17', party: 'Greenfield Supplies Pvt Ltd', party_id: 502, amount: 75000, status: null, payment_mode: 'cash', reference_no: null, received_in: 'Cash in hand' },
+    { voucher_id: 809, voucher_uuid: 'r-809', document_no: 'RCP-2026-0009', date: '2026-09-16', party: 'Metro Distributors', party_id: 503, amount: 32500, status: null, payment_mode: 'bank_transfer', reference_no: 'NEFT334455', received_in: 'HDFC Current ••••1234' },
+    { voucher_id: 806, voucher_uuid: 'r-806', document_no: 'RCP-2026-0006', date: '2026-09-12', party: 'Vaibhav Traders', party_id: 501, amount: 25000, status: null, payment_mode: 'bank_transfer', reference_no: 'UTR123456789', received_in: 'HDFC Current ••••1234' },
+    { voucher_id: 801, voucher_uuid: 'r-801', document_no: 'RCP-2026-0001', date: '2026-08-28', party: 'Vaibhav Traders', party_id: 501, amount: 50000, status: null, payment_mode: 'cheque', reference_no: 'CHQ123456', received_in: 'ICICI Current ••••8890' },
+  ],
+}
+
+export const savedReceipt = {
+  request_id: 4242,
+  request_uuid: 'demo-receipt-uuid',
+  kind: 'receipt',
+  status: 'POSTED',
+  party_account_id: 501,
+  transaction_date: '2026-09-19',
+  payload: {},
+  books_voucher_id: 9100,
+  books_voucher_uuid: 'v-9100',
+  books_voucher_no: 'RCP-2026-0013',
+  last_error: null,
+  created_at: '2026-09-19T10:00:00Z',
+}

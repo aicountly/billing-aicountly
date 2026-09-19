@@ -30,8 +30,8 @@ ten live reports with CSV export, and Billing profiles deciding who sees what.
 
 See [docs/BILLING_IMPLEMENTATION_STATUS.md](docs/BILLING_IMPLEMENTATION_STATUS.md)
 for what each figure means, and
-[docs/BILLING_API_DEPENDENCIES.md](docs/BILLING_API_DEPENDENCIES.md) for the two
-capabilities no product in this deployment serves yet.
+[docs/BILLING_API_DEPENDENCIES.md](docs/BILLING_API_DEPENDENCIES.md) for the
+three capabilities no product in this deployment serves yet.
 
 Signing in is the AICOUNTLY portal's job, the same as every other AICOUNTLY
 SaaS: the app redirects to the portal, the portal returns an `auth_token`, and
@@ -74,8 +74,9 @@ same-origin.
 | `npm run preview` | Serve the production build locally |
 
 `web/visual.html` is a development-only photo booth: it mounts the real
-dashboard components against fixtures so the screens can be checked at four
-widths without a portal session or a company's data. `vite build` takes
+dashboard components — and the Money received workspace,
+`?screen=money-received` — against fixtures so the screens can be checked at
+four widths without a portal session or a company's data. `vite build` takes
 `index.html` only, so none of it reaches the deployed bundle.
 
 The PHP API has no build step and no dependencies. To run it locally:

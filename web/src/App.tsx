@@ -8,6 +8,7 @@ import Onboarding from './pages/Onboarding'
 import SaleEditor from './pages/SaleEditor'
 import { DuesScreen, PartyStatement } from './pages/Dues'
 import { BankCash, MoneyScreen } from './pages/MoneyMovement'
+import MoneyReceived from './pages/money-received'
 import { Items, Parties } from './pages/Directory'
 import {
   BankCashOverview,
@@ -148,9 +149,11 @@ function Shell() {
           <Route path=":id" element={<RequireScope><TransactionDetail /></RequireScope>} />
         </Route>
 
+        {/* Money received has its own screen: the receipt workspace. Money paid
+            is still the shared two-column form — the same API, the same payload. */}
         <Route path="money-in">
-          <Route index element={<RequireScope><MoneyScreen direction="in" /></RequireScope>} />
-          <Route path="new" element={<RequireScope><MoneyScreen direction="in" /></RequireScope>} />
+          <Route index element={<RequireScope><MoneyReceived /></RequireScope>} />
+          <Route path="new" element={<RequireScope><MoneyReceived /></RequireScope>} />
           <Route path=":id" element={<RequireScope><TransactionDetail /></RequireScope>} />
         </Route>
 
