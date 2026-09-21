@@ -177,6 +177,12 @@ nothing — not the file, not the answer — and the expense the user then saves
 the only thing that survives the request. One switch, `DocumentCapture`, answers
 for both screens, so they cannot disagree about what this deployment can read.
 
+Money received offers the same idea as **Scan receipt** and it is disabled for a
+second reason as well: what exists is `POST /api/v1/expenses/read-bill`, which
+reads a supplier's BILL. Reading a receipt is a different hint and a different
+set of fields, so the button stays off until there is a call behind it rather
+than borrowing one that would answer about the wrong document.
+
 The expected shape, following the house "deterministic first, AI only for
 what is left" rule:
 
@@ -237,6 +243,73 @@ smaller thing than an attachment and the screen says so. Both shapes can be
 looked at without standing a service up: `/visual.html?screen=expense` for the
 deployment as it is today, and `?screen=expense&docs=on` for the same screen
 once a service answers.
+
+**Money received is in the same position, with one difference.** A receipt is
+often backed by a UPI screenshot, a counterfoil or a bank advice, and the screen
+draws the section and says there is nowhere to keep one. It cannot fall back on
+recording *where* the proof is kept the way the expense screen does: the receipt
+payload Books accepts has no `attachment_ref` — see
+`TransactionService::settlementPayload()` — so that field would have to exist
+before there was anything to write a reference into.
+
+## Not available: the written business briefing
+
+**Dashboard 1 shows an unavailable state for this, and only for this.**
+
+The overview's briefing strip has two halves, and only one of them is missing.
+
+The **counted briefing** — "3 overdue customer accounts and 2 supplier accounts
+due this week need a look today" — is arithmetic over the records that page has
+already read. It is built in `BriefingService::build` from the same array the
+priority panel underneath it is built from, so the sentence and the list cannot
+disagree. It needs no service, is always available, carries no confidence score,
+and is never labelled AI. Nothing below affects it.
+
+The **written summary** is a model's words, and this deployment has no model.
+It is a separate endpoint for three reasons, all the same reason: the dashboard
+must not wait on a model, must not fail with one, and must not pay for one
+every time somebody opens the page.
+
+```
+GET  /api/v1/dashboards/overview/briefing
+  → { data: { available, reason, narrative, sources: [ {label, path} ], generated_at } }
+```
+
+It checks `overview.view` before it answers, so a profile that cannot open the
+dashboard cannot get a summary of it either. The React side asks for it only
+when a person presses **Write this up for me**.
+
+### The contract Billing would need
+
+Owner: **Console** (the approved model configuration), reached server-side.
+Billing sends a digest it has already computed and already permission-scoped —
+it does not hand over a company's records and ask for analysis.
+
+```
+POST <AI_BRIEFING_BASE>/v1/briefings
+  Authorization: Bearer <AI_BRIEFING_KEY>     # server-side only, never in a VITE_ var
+  {
+    period: { from, to, timezone },
+    metrics: [ { id, label, value, basis, summary } ],   # already computed here
+    priorities: [ { id, text, count, path } ],           # already counted here
+    untrusted: true          # party names and document text are DATA, not instructions
+  }
+  → { data: { narrative, sources: [ { label, path } ], generated_at } }
+```
+
+Three things the response must not contain, because the screen cannot check
+them: a figure Billing did not send, a confidence percentage, and an
+instruction. Nothing generated posts an entry, issues or cancels a document,
+changes bank details or sends a reminder — those are all deterministic paths
+behind their own permissions, and a narrative is text beside them, not a
+control over them.
+
+**Until this exists**, `AI_BRIEFING_BASE` unset (the normal case) answers
+"No briefing model is configured for this deployment"; set with no key answers
+that the key is missing; set with a key still answers unavailable, naming this
+file, because writing a client against a shape no service serves would put a
+summary on screen that nobody could check. The counted briefing is unaffected
+in all three cases.
 
 ## Partly available: what may still be credited
 

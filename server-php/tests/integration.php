@@ -20,6 +20,7 @@ Env::load(__DIR__ . '/../.env');
 
 use Aicountly\Api\Domain\BankWithdrawalHistory;
 use Aicountly\Api\Domain\BillerDeskService;
+use Aicountly\Api\Domain\BriefingService;
 use Aicountly\Api\Domain\CollectionsService;
 use Aicountly\Api\Domain\ComplianceService;
 use Aicountly\Api\Clients\DocumentStorageClient;
@@ -845,6 +846,128 @@ check('an unreachable Books makes a card unavailable, never zero', function () u
     // The other three were perfectly readable and must survive it.
     $ready = array_filter($overview['metrics'], static fn (array $m) => $m['status'] === 'ready');
     assertTrue(count($ready) >= 2, 'one dead service does not blank the whole screen');
+});
+
+check('every overview card carries a one-line summary that states its time basis', function () use ($ctx, $auth) {
+    // The compact card shows this line instead of a three-line definition, so
+    // if it stopped saying "as at" the reader would lose the one thing that
+    // tells a balance apart from a movement.
+    resetDatabase();
+    $overview = (new OverviewService($ctx, $auth))->build(Period::resolve(['key' => 'month']));
+
+    foreach ($overview['metrics'] as $metric) {
+        if ($metric['status'] !== 'ready') {
+            continue;
+        }
+        assertTrue(isset($metric['summary']) && $metric['summary'] !== '', $metric['id'] . ' has a summary line');
+
+        $expected = $metric['basis'] === Metric::BASIS_AS_OF ? 'As at ' : '';
+        if ($expected !== '') {
+            assertTrue(
+                str_starts_with($metric['summary'], $expected),
+                $metric['id'] . ' says it is a balance: ' . $metric['summary'],
+            );
+        }
+    }
+});
+
+check('the briefing is counted from the same list the panel below it shows', function () use ($ctx, $auth) {
+    // The sentence at the top and the rows underneath are built from one array.
+    // Built from two reads they could disagree, and the one somebody acts on is
+    // whichever they read first.
+    resetDatabase();
+    $overview = (new OverviewService($ctx, $auth))->build(Period::resolve(['key' => 'month']));
+    $briefing = $overview['panels']['briefing'];
+
+    assertTrue($briefing['available'], 'the counted briefing is always available');
+    assertSame(
+        count($overview['panels']['actions']),
+        count($briefing['points']),
+        'one point per priority, no more and no fewer',
+    );
+
+    foreach ($briefing['points'] as $index => $point) {
+        assertSame($overview['panels']['actions'][$index]['id'], $point['id'], 'same record, same order');
+        assertSame($overview['panels']['actions'][$index]['action']['path'], $point['path'], 'and it goes where the row goes');
+        assertTrue($point['text'] !== '', 'each point says something');
+    }
+
+    assertTrue(str_contains($briefing['basis'], 'Not generated text'), 'the strip says it was counted');
+});
+
+check('a quiet day gets a quiet briefing rather than an invented one', function () use ($ctx, $auth) {
+    resetDatabase();
+    $period = Period::resolve(['key' => 'month']);
+
+    $empty = BriefingService::build($period, [], []);
+    assertSame('Nothing needs a decision right now.', $empty['headline'], 'no drama where there is none');
+    assertSame([], $empty['points'], 'and nothing to review');
+    assertSame(null, $empty['movement'], 'no movement sentence without a comparison');
+    assertTrue($empty['available'], 'which is not the same as unavailable');
+});
+
+check('the briefing draws no movement sentence when there is nothing to compare with', function () use ($ctx) {
+    // Metric::compare refuses a comparison against a zero base. The briefing
+    // must refuse the sentence for the same reason, rather than writing
+    // "up 100%" about a month that had no previous month.
+    $period = Period::resolve(['key' => 'month']);
+
+    $noBase = Metric::ready(
+        'sales',
+        'Sales this month',
+        1000.0,
+        Metric::BASIS_PERIOD,
+        'Invoices at full value.',
+        Metric::compare(1000.0, 0.0, 'last month', riseIsGood: true),
+    );
+
+    $briefing = BriefingService::build($period, [], [$noBase]);
+    assertSame(null, $briefing['movement'], 'no sentence about a change nobody can compute');
+
+    $withBase = Metric::ready(
+        'sales',
+        'Sales this month',
+        1100.0,
+        Metric::BASIS_PERIOD,
+        'Invoices at full value.',
+        Metric::compare(1100.0, 1000.0, 'last month', riseIsGood: true),
+    );
+
+    $second = BriefingService::build($period, [], [$withBase]);
+    assertTrue($second['movement'] !== null, 'and one when there is');
+    assertTrue(str_starts_with($second['movement']['text'], 'Sales '), 'naming what moved');
+});
+
+check('a biller gets no briefing clause about money they may not see', function () use ($ctx) {
+    // The briefing is built from the actions, and the actions are already
+    // permission-scoped — so this is really a check that nothing was added
+    // between the two that reads a wider list.
+    resetDatabase();
+    $biller = userWithProfile($ctx, 'user-biller', 'biller');
+
+    $overview = (new OverviewService($ctx, $biller))->build(Period::resolve(['key' => 'month']));
+    $briefing = $overview['panels']['briefing'];
+
+    $text = strtolower($briefing['headline'] . ' ' . implode(' ', array_column($briefing['points'], 'text')));
+    foreach (['supplier', 'to pay', 'payable'] as $forbidden) {
+        assertTrue(!str_contains($text, $forbidden), 'the briefing does not mention ' . $forbidden);
+    }
+    foreach ($briefing['points'] as $point) {
+        assertTrue(
+            !str_contains($point['path'], 'payables'),
+            'and never points at a dashboard this profile cannot open',
+        );
+    }
+});
+
+check('with no model configured the written summary is unavailable and says why', function () {
+    // The counted briefing must not depend on it. This is the third capability
+    // in docs/BILLING_API_DEPENDENCIES.md and behaves like the other two.
+    $status = BriefingService::assistantStatus();
+
+    assertSame(false, $status['available'], 'nothing is configured in a test run');
+    assertTrue($status['reason'] !== null && $status['reason'] !== '', 'and the screen is told why');
+    assertTrue(str_contains((string) $status['reason'], 'configured'), 'in words about configuration');
 });
 
 check('a receipt in the period is collections, and is not called revenue', function () use ($ctx, $auth) {
