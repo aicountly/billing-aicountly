@@ -13,8 +13,9 @@
 
 import type { ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
-import { RefreshCw } from 'lucide-react'
+import { CalendarDays, RefreshCw } from 'lucide-react'
 import { useBilling } from '../context/BillingContext'
+import { readableRange } from './trend'
 import type { Metric, PeriodDescription } from './types'
 import { MetricRow } from './kit'
 
@@ -104,6 +105,7 @@ export function BillingDashboardLayout({
   metricFormat,
   metricIcons,
   onMetricOpen,
+  metricOpenable,
   children,
 }: {
   activeDashboard: string
@@ -119,6 +121,14 @@ export function BillingDashboardLayout({
   metricIcons?: Record<string, ReactNode>
   /** Opens the records behind a card. A figure you cannot open is a figure you cannot check. */
   onMetricOpen?: (metric: Metric) => void
+  /**
+   * Whether THIS card has somewhere to go.
+   *
+   * Without it every ready card becomes a button, including the ones whose
+   * destination this profile may not open — which is a button that looks
+   * pressable, is pressable, and lands on a refusal.
+   */
+  metricOpenable?: (metric: Metric) => boolean
   children: ReactNode
 }) {
   const { session } = useBilling()
@@ -155,8 +165,12 @@ export function BillingDashboardLayout({
         <div className="billing-filters">
           {filters}
           {period && (
-            <span className="billing-basis" title={`Dates resolved in ${period.timezone}`}>
-              {period.from === period.to ? period.from : `${period.from} → ${period.to}`}
+            <span
+              className="billing-daterange"
+              title={`${period.from} to ${period.to}, resolved in ${period.timezone}`}
+            >
+              <CalendarDays size={15} aria-hidden />
+              {readableRange(period.from, period.to)}
             </span>
           )}
         </div>
@@ -169,6 +183,7 @@ export function BillingDashboardLayout({
         format={metricFormat}
         icons={metricIcons}
         onOpen={onMetricOpen}
+        openable={metricOpenable}
       />
 
       <div className="billing-dashboard-content">{children}</div>

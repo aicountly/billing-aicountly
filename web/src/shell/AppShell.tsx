@@ -15,7 +15,25 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { Bell, ChevronDown, LogOut, Menu, Plus, Settings, User } from 'lucide-react'
+import {
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  Bell,
+  ChartColumn,
+  ChevronDown,
+  Coins,
+  FileChartColumn,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  Package,
+  Plus,
+  Settings,
+  ShoppingCart,
+  Sprout,
+  User,
+  Users,
+} from 'lucide-react'
 import { useAuth } from '../auth/AuthProvider'
 import { AppLauncher } from '../components/AppLauncher'
 import { useBilling } from '../context/BillingContext'
@@ -39,6 +57,27 @@ const QUICK_ACTIONS = [
   { label: 'Debit note', path: '/more/debit-note', permission: 'debit_note.create' },
 ] as const
 
+/**
+ * A mark for each section, by the key the SERVER gave the entry.
+ *
+ * Presentation only. Nothing here decides whether a section is drawn — the
+ * menu arrives already filtered, and an entry whose key is not in this map
+ * simply gets no icon rather than being hidden, so adding a section on the
+ * server never quietly removes it from the sidebar here.
+ */
+const SECTION_ICONS: Record<string, ReactNode> = {
+  dashboard: <LayoutDashboard size={17} aria-hidden />,
+  sales: <ChartColumn size={17} aria-hidden />,
+  purchases: <ShoppingCart size={17} aria-hidden />,
+  money: <Coins size={17} aria-hidden />,
+  receivables: <ArrowDownToLine size={17} aria-hidden />,
+  payables: <ArrowUpFromLine size={17} aria-hidden />,
+  parties: <Users size={17} aria-hidden />,
+  items: <Package size={17} aria-hidden />,
+  reports: <FileChartColumn size={17} aria-hidden />,
+  more: <Settings size={17} aria-hidden />,
+}
+
 export function AppShell() {
   const { session, scope } = useBilling()
   const location = useLocation()
@@ -59,6 +98,9 @@ export function AppShell() {
         <Navigation menu={menu} />
         {session && (
           <div className="billing-sidebar__footer">
+            <span className="billing-sidebar__footer-mark" aria-hidden="true">
+              <Sprout size={16} />
+            </span>
             <div style={{ fontWeight: 650, color: 'var(--billing-text)' }}>Simple billing</div>
             <div>for a stronger tomorrow.</div>
             {scope && <div style={{ marginTop: 8 }}>Made for India · Built for your business</div>}
@@ -162,6 +204,7 @@ function Navigation({ menu }: { menu: MenuEntry[] }) {
                 swallows the aria-current prop, which is how one screen ends up
                 marked in two sections. What is current is worked out above. */}
             <Link to={entry.path} className="billing-nav__link" aria-current={inside ? 'page' : undefined}>
+              <span className="billing-nav__icon">{SECTION_ICONS[entry.key] ?? null}</span>
               {entry.label}
             </Link>
             {inside && children.length > 0 && (

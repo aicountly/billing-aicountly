@@ -361,6 +361,80 @@ export interface CatalogItem {
   use_count?: number
 }
 
+export type ItemType = 'stock' | 'service'
+
+/**
+ * What the stock column may say.
+ *
+ * `unknown` is the one that matters: Inventory did not answer with a quantity,
+ * which is NOT the same as none in stock. The screen prints "Unavailable" for
+ * it, never 0.
+ */
+export type ItemStockState = 'in' | 'low' | 'out' | 'none' | 'unknown'
+
+export interface ItemStock {
+  available: number | null
+  threshold: number | null
+  state: ItemStockState
+}
+
+/**
+ * An item on the Items screen — `CatalogItem` with the fields the API resolved.
+ *
+ * A separate type rather than more optional fields on CatalogItem, because
+ * these arrive from `v1/catalog/items` only: the search and favourites
+ * endpoints relay Inventory unshaped, and a type promising a `stock` object
+ * there would be promising something nobody sent.
+ */
+export interface CatalogItemRow extends CatalogItem {
+  description: string | null
+  barcode: string | null
+  /** Null when Inventory did not say. The badge is left off rather than guessed. */
+  type: ItemType | null
+  group: { id: number | null; name: string } | null
+  unit_name: string | null
+  rate: number | null
+  currency: string | null
+  is_active: boolean | null
+  image_url: string | null
+  stock: ItemStock
+  source: string
+}
+
+/** One of the five counts above the list, with its own availability. */
+export interface ItemFigure {
+  value: number | null
+  available: boolean
+  reason: string | null
+}
+
+export interface ItemStats {
+  total: ItemFigure
+  stock: ItemFigure
+  services: ItemFigure
+  low_stock: ItemFigure
+  inactive: ItemFigure
+}
+
+/** An item group as Inventory holds it, shaped by this product's API. */
+export interface ItemGroup {
+  group_id: number
+  group_name: string
+}
+
+/**
+ * What the API says about the answer Inventory gave.
+ *
+ * `filters_ignored` names narrowing that was asked for and plainly not applied,
+ * and `sort_applied` is false when the page came back in some other order. Both
+ * exist so the screen can say so instead of showing a Low Stock tab that
+ * quietly lists everything.
+ */
+export interface ItemsUpstreamNote {
+  filters_ignored: string[]
+  sort_applied: boolean | null
+}
+
 /** A party as Books describes it (its account ledger). Rendered, never stored. */
 export interface CatalogParty {
   acc_id: number

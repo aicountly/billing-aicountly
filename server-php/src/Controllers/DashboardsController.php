@@ -7,6 +7,7 @@ namespace Aicountly\Api\Controllers;
 use Aicountly\Api\Dashboards;
 use Aicountly\Api\Db;
 use Aicountly\Api\Domain\BillerDeskService;
+use Aicountly\Api\Domain\BriefingService;
 use Aicountly\Api\Domain\CollectionsService;
 use Aicountly\Api\Domain\ComplianceService;
 use Aicountly\Api\Domain\OverviewService;
@@ -31,6 +32,33 @@ final class DashboardsController extends Controller
         Dashboards::assert($ctx, $auth, 'overview');
 
         Http::data((new OverviewService($ctx, $auth))->build(self::period($ctx->cmpId)));
+    }
+
+    /**
+     * The GENERATED half of the business briefing, asked for on its own.
+     *
+     * Separate from the dashboard for three reasons, all of them the same
+     * reason: the counted briefing must not wait on a model, must not fail
+     * with one, and must not cost a call every time somebody opens the page.
+     * The client asks for this only when a person asks for it.
+     *
+     * It checks the overview permission first, so a profile that cannot open
+     * the dashboard cannot get a summary of it either.
+     */
+    public static function overviewBriefing(): void
+    {
+        [$auth, $ctx] = self::enter();
+        Dashboards::assert($ctx, $auth, 'overview');
+
+        $status = BriefingService::assistantStatus();
+
+        Http::data([
+            'available'    => $status['available'],
+            'reason'       => $status['reason'],
+            'narrative'    => null,
+            'sources'      => [],
+            'generated_at' => null,
+        ]);
     }
 
     public static function biller(): void
