@@ -25,6 +25,7 @@ import Receivables from '../src/dashboards/Receivables'
 import Payables from '../src/dashboards/Payables'
 import CashCompliance from '../src/dashboards/CashCompliance'
 import ExpensePage from '../src/pages/expense/ExpensePage'
+import SalesBillPage from '../src/pages/sale/SalesBillPage'
 import { saveSession, setAuthToken } from '../src/auth/tokens'
 import { setScope } from '../src/services/api'
 import * as fixtures from './fixtures'
@@ -51,6 +52,9 @@ const FAILABLE: Array<[string, RegExp]> = [
   ['paid-from', /v1\/catalog\/cash-bank/],
   ['parties', /v1\/catalog\/parties/],
   ['capabilities', /v1\/expenses\/capabilities/],
+  ['tax', /v1\/catalog\/tax-categories/],
+  ['stock', /v1\/catalog\/stock/],
+  ['open-bills', /v1\/open-bills/],
 ]
 
 const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
@@ -60,6 +64,7 @@ const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
   payables: { path: '/dashboard/payables', element: <Payables /> },
   'cash-compliance': { path: '/dashboard/cash-compliance', element: <CashCompliance /> },
   expense: { path: '/more/expense', element: <ExpensePage /> },
+  sale: { path: '/sales/new', element: <SalesBillPage /> },
 }
 
 /** The fixture behind each endpoint the screens call. */
@@ -81,6 +86,8 @@ const RESPONSES: Array<[RegExp, unknown]> = [
   ]],
   [/v1\/catalog\/expense-accounts/, fixtures.expenseAccounts],
   [/v1\/catalog\/cash-bank/, fixtures.cashBankAccounts],
+  [/v1\/open-bills/, fixtures.openBills],
+  [/v1\/transactions\/sale/, fixtures.savedSale],
   [/v1\/catalog\/tax-categories/, fixtures.taxCategories],
   [/v1\/expenses\/recent/, fixtures.recentExpenses],
   [/v1\/transactions\/expense/, fixtures.savedExpense],
@@ -89,6 +96,8 @@ const RESPONSES: Array<[RegExp, unknown]> = [
   [/v1\/manage\/companyinfo/, {
     cmp_id: 1,
     cmp_name: 'Sharma Enterprises',
+    gstin: '27AAACS1234F1Z5',
+    ro_address: 'Unit 4, Sai Industrial Estate\nAndheri East, Mumbai, Maharashtra\n400093',
     fy_list: [{ fy_id: 4, fy_name: 'FY 2026-27', fy_start: '2026-04-01', fy_end: '2027-03-31' }],
     branch_list: [{ bo_id: 1, bo_name: 'Main Branch', is_head_office: true }],
   }],
@@ -110,10 +119,52 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Res
 
   // Party search really searches, so the empty state is reachable here too.
   if (/v1\/catalog\/parties/.test(url)) {
-    const term = (new URL(url, window.location.origin).searchParams.get('q') ?? '').toLowerCase()
-    const rows = fixtures.suppliers.filter((row) => row.acc_name.toLowerCase().includes(term))
+    const query = new URL(url, window.location.origin).searchParams
+    const term = (query.get('q') ?? '').toLowerCase()
+    const pool = query.get('side') === 'supplier' ? fixtures.suppliers : fixtures.customers
+    const rows = pool.filter((row) => row.acc_name.toLowerCase().includes(term))
     return new Response(JSON.stringify({ data: rows, meta: { total: rows.length, limit: 20, offset: 0 } }), {
       status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  // Item search searches too, so "no matches" and the scan path are both
+  // reachable — a barcode is looked up by its own route.
+  if (/v1\/catalog\/items\/search/.test(url)) {
+    const term = (new URL(url, window.location.origin).searchParams.get('q') ?? '').toLowerCase()
+    const rows = fixtures.saleItems.filter(
+      (row) => row.item_name.toLowerCase().includes(term) || (row.item_sku ?? '').toLowerCase().includes(term),
+    )
+    return new Response(JSON.stringify({ data: rows, meta: { total: rows.length, limit: 20, offset: 0 } }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  if (/v1\/catalog\/items\/barcode\//.test(url)) {
+    const code = decodeURIComponent(url.split('/barcode/')[1]?.split('?')[0] ?? '')
+    const hit = fixtures.saleItems.find((row) => row.barcode === code)
+    return new Response(JSON.stringify(hit ? { data: hit } : { error: { code: 'not_found', message: 'No such barcode.' } }), {
+      status: hit ? 200 : 404,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  if (/v1\/catalog\/stock/.test(url)) {
+    const itemId = Number(new URL(url, window.location.origin).searchParams.get('item_id') ?? 0)
+    return new Response(JSON.stringify({ data: fixtures.availability[itemId] ?? {} }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  // One item by id, as the biller desk and the global search link into the bill.
+  const byId = /v1\/catalog\/items\/(\d+)/.exec(url)
+  if (byId) {
+    const hit = fixtures.saleItems.find((row) => row.item_id === Number(byId[1]))
+    return new Response(JSON.stringify(hit ? { data: hit } : { error: { code: 'not_found', message: 'No such item.' } }), {
+      status: hit ? 200 : 404,
       headers: { 'Content-Type': 'application/json' },
     })
   }
