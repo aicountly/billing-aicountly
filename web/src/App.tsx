@@ -6,7 +6,7 @@ import { AppShell } from './shell/AppShell'
 import SignIn from './pages/SignIn'
 import Onboarding from './pages/Onboarding'
 import SaleEditor from './pages/SaleEditor'
-import { DuesScreen, PartyStatement } from './pages/Dues'
+import { PartyStatement } from './pages/Dues'
 import { BankCash } from './pages/MoneyMovement'
 import { Parties } from './pages/parties'
 import {
@@ -47,6 +47,15 @@ const MoneyScreen = lazy(() =>
 )
 
 /**
+ * Money received has its own screen: the receipt workspace.
+ *
+ * It carries its own stylesheet, its allocation table and its insight column,
+ * and it is reached by navigation rather than on first paint — so it is split
+ * out for the same reason the rest of these are.
+ */
+const MoneyReceived = lazy(() => import('./pages/money-received'))
+
+/**
  * The expense screen carries its own stylesheet and helper panel, and most
  * sessions never open it. Split for the same reason the dashboards are.
  */
@@ -77,6 +86,13 @@ const SalesBillPage = lazy(() => import('./pages/sale/SalesBillPage'))
  * and a counter that only makes bills never opens it.
  */
 const CreditNotePage = lazy(() => import('./pages/credit-note/CreditNotePage'))
+
+/**
+ * Money to Collect and Money to Pay, split for the same reason: the screen
+ * carries its own charts and filter machinery, and a counter biller who only
+ * ever makes bills should not pay for them on first load.
+ */
+const Dues = lazy(() => import('./receivables/DuesScreen').then((module) => ({ default: module.DuesScreen })))
 
 initAnalytics()
 
@@ -193,9 +209,13 @@ function Shell() {
           <Route path=":id" element={<RequireScope><TransactionDetail /></RequireScope>} />
         </Route>
 
+        {/* Money received is the receipt workspace; money paid is the shared
+            money screen, in its "out" direction. Both post the same way they
+            always did — MoneyScreen still serves direction="in" if this route
+            is ever pointed back at it. */}
         <Route path="money-in">
-          <Route index element={<Suspense fallback={<Loading />}><RequireScope><MoneyScreen direction="in" /></RequireScope></Suspense>} />
-          <Route path="new" element={<Suspense fallback={<Loading />}><RequireScope><MoneyScreen direction="in" /></RequireScope></Suspense>} />
+          <Route index element={<Suspense fallback={<Loading />}><RequireScope><MoneyReceived /></RequireScope></Suspense>} />
+          <Route path="new" element={<Suspense fallback={<Loading />}><RequireScope><MoneyReceived /></RequireScope></Suspense>} />
           <Route path=":id" element={<RequireScope><TransactionDetail /></RequireScope>} />
         </Route>
 
@@ -223,8 +243,8 @@ function Shell() {
         </Route>
 
         {/* The bill-by-bill lists. The dashboards summarise them and link here. */}
-        <Route path="receivables" element={<RequireScope><DuesScreen side="receivable" /></RequireScope>} />
-        <Route path="payables" element={<RequireScope><DuesScreen side="payable" /></RequireScope>} />
+        <Route path="receivables" element={<Suspense fallback={<Loading />}><RequireScope><Dues side="receivable" /></RequireScope></Suspense>} />
+        <Route path="payables" element={<Suspense fallback={<Loading />}><RequireScope><Dues side="payable" /></RequireScope></Suspense>} />
 
         <Route path="parties">
           <Route index element={<RequireScope><Parties /></RequireScope>} />

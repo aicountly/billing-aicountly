@@ -51,22 +51,13 @@ export function MoneyScreen({ direction }: { direction: Direction }) {
   const permission = isOut ? 'payment.create' : 'receipt.create'
   const allowed = can(permission)
 
-  // The party directory opens this screen for a particular customer or
-  // supplier, on the same two parameters the bill editor already reads.
-  // Resolved once: after that the field is the user's to change.
-  const [searchParams] = useSearchParams()
-  const [partyFromUrl] = useState(() => {
-    const id = Number(searchParams.get('party_account_id') ?? '')
-    const name = searchParams.get('party_name')
-    return id > 0 ? { id, name: name ?? `Account ${id}` } : null
-  })
-
   const [period, setPeriod] = useState<MoneyPeriodKey>('month')
   const [allocationOpen, setAllocationOpen] = useState(false)
   const [saveAndNew, setSaveAndNew] = useState(false)
   /** Bumped after a Save & New, to put the caret back on the party field. */
   const [refocusParty, setRefocusParty] = useState(0)
   const { toasts, push, dismiss } = useToasts()
+  const [search] = useSearchParams()
 
   const pageRef = useRef<HTMLDivElement>(null)
   const partyInputRef = useRef<HTMLInputElement>(null)
@@ -100,11 +91,37 @@ export function MoneyScreen({ direction }: { direction: Direction }) {
 
   const [bills, setBills] = useState<OpenBill[]>([])
 
+  /**
+   * What the link opened this screen with.
+   *
+   * Money to Collect sends the party and the balance it was looking at, so a
+   * user who clicked "Record money received" against a bill does not retype
+   * either. Read once, into the form's opening values — the open bills and the
+   * allocation still come from Books when the party lands.
+   */
+  const opening = useMemo(() => {
+    // Two spellings, because two screens hand a party over and they were
+    // written apart: Money to Collect sends `account_id`, and the bill editor
+    // and the party directory send `party_account_id`. Reading both here is a
+    // line; renaming one of them is a migration and a broken bookmark.
+    const id = Number(search.get('account_id') ?? search.get('party_account_id'))
+    const name = search.get('account_name') ?? search.get('party_name')
+    const amount = Number(search.get('amount'))
+
+    return {
+      party: Number.isFinite(id) && id > 0 && name ? { id, name } : null,
+      amount: Number.isFinite(amount) && amount > 0 ? amount.toFixed(2) : '',
+    }
+    // The opening value only: re-reading it after the user has typed would
+    // undo their edit on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const form = useMoneyForm({
     direction,
     bills,
     today: localToday(),
-    initialParty: partyFromUrl,
+    prefill: opening,
     onSaved: ({ requestId, amount, partyName, savedAndNew }) => {
       // The period totals and the recent list both just changed.
       activity.reload()

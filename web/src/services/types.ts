@@ -189,6 +189,17 @@ export interface DueBill {
   days_overdue: number
   voucher_id: number | null
   voucher_uuid: string | null
+  /**
+   * The gross value of the bill, and what has been received against it.
+   *
+   * Both are OPTIONAL and both are null unless Books' bill-by-bill row carried
+   * a gross figure — Billing does not compute an invoice value, and a received
+   * amount inferred from the balance alone would be a guess. Null renders as
+   * "not known"; it is never shown as zero, because zero means the customer has
+   * paid nothing and that is a different statement.
+   */
+  bill_amount?: number | null
+  received?: number | null
 }
 
 export interface DueParty {
@@ -563,6 +574,23 @@ export interface ExpenseCapabilities {
 export interface CatalogAccount {
   acc_id: number
   acc_name: string
+}
+
+/**
+ * A bill file the document service has taken, as `POST v1/expenses/bill`
+ * describes it.
+ *
+ * `reference` is the part that matters: it is what travels to Books on the
+ * voucher as `attachment_ref`. The rest is for the person looking at the form —
+ * `url` is present only when the document service hands one back, and there is
+ * no link to the stored bill when it does not.
+ */
+export interface StoredBill {
+  reference: string
+  filename: string | null
+  size: number | null
+  content_type: string | null
+  url: string | null
 }
 
 /**

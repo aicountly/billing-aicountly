@@ -425,22 +425,45 @@ export function money(value: number | string | null | undefined, currency = 'INR
 }
 
 /**
- * The same figure without the paise, for a headline card.
+ * The same amount without the paise, for a headline tile or a bar label.
  *
- * ₹28,75,200 and ₹28,75,200.00 say the same thing, and the second one costs
- * four characters that decide whether six cards fit across a laptop. The paise
- * stay everywhere a figure is reconciled against — the table, the statement,
- * the export.
+ * Still fully grouped (\u20b913,48,560), so it is read as a figure rather than an
+ * approximation — only the two decimals go, because a KPI card that wraps
+ * "\u20b913,48,560.00" onto two lines is harder to read than one that rounds. The
+ * exact amount is always a hover or a table cell away.
  */
-export function moneyRounded(value: number | string | null | undefined, currency = 'INR'): string {
+export function moneyWhole(value: number | string | null | undefined, currency = 'INR'): string {
   const amount = typeof value === 'string' ? Number.parseFloat(value) : (value ?? 0)
-  if (!Number.isFinite(amount)) return '—'
+  if (!Number.isFinite(amount)) return '\u2014'
 
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency,
+    minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(amount)
+}
+
+/**
+ * The same amount, shortened for a chart axis or a chip where space is the
+ * constraint. Lakh and crore, because that is how the figure is read aloud.
+ *
+ * Only ever a LABEL. The exact figure is always within reach — in the tooltip,
+ * the table cell or the screen-reader table — because a rounded amount is not
+ * one anybody should reconcile against.
+ */
+export function compactMoney(value: number | string | null | undefined, currency = '\u20b9'): string {
+  const amount = typeof value === 'string' ? Number.parseFloat(value) : (value ?? 0)
+  if (!Number.isFinite(amount)) return '\u2014'
+
+  const sign = amount < 0 ? '-' : ''
+  const size = Math.abs(amount)
+
+  if (size >= 10000000) return `${sign}${currency}${(size / 10000000).toFixed(1)}Cr`
+  if (size >= 100000) return `${sign}${currency}${(size / 100000).toFixed(1)}L`
+  if (size >= 1000) return `${sign}${currency}${Math.round(size / 1000)}K`
+
+  return `${sign}${currency}${Math.round(size)}`
 }
 
 export function qty(value: number | string | null | undefined): string {

@@ -20,8 +20,10 @@ Env::load(__DIR__ . '/../.env');
 
 use Aicountly\Api\Domain\BankWithdrawalHistory;
 use Aicountly\Api\Domain\BillerDeskService;
+use Aicountly\Api\Domain\BriefingService;
 use Aicountly\Api\Domain\CollectionsService;
 use Aicountly\Api\Domain\ComplianceService;
+use Aicountly\Api\Clients\DocumentStorageClient;
 use Aicountly\Api\Domain\DocumentCapture;
 use Aicountly\Api\Domain\CreditNoteContext;
 use Aicountly\Api\Domain\DuesService;
@@ -519,6 +521,33 @@ check('receivables are aged from the due date and totalled', function () use ($c
     assertSame('books', $dues['source'], 'and it says where it came from');
     assertTrue(count($dues['bills']) === 1, 'the bill is listed');
     assertTrue($dues['bills'][0]['days_overdue'] > 0, 'with its age');
+});
+
+check('the gross and what came in are passed through when Books sends them', function () use ($ctx, $auth) {
+    resetDatabase();
+    $bill = (new DuesService($ctx, $auth))->receivables()['bills'][0];
+
+    // The stub bill is 150000 raised, 120000 still owed. Both figures are
+    // Books' own; `received` is the subtraction and nothing else.
+    assertSame(150000.0, $bill['bill_amount'], 'the gross');
+    assertSame(30000.0, $bill['received'], 'and what has come in against it');
+    assertSame(120000.0, $bill['balance'], 'the balance is untouched by either');
+});
+
+check('a bill Books sent no gross for reports null, never zero', function () use ($ctx, $auth) {
+    // The distinction this protects: on screen, null prints as "not known" and
+    // zero prints as \u20b90.00. One of those says the customer has paid nothing,
+    // and inferring it from the balance alone would be a guess.
+    $service = new \ReflectionClass(DuesService::class);
+    $amount = $service->getMethod('amount');
+    $amount->setAccessible(true);
+
+    assertSame(null, $amount->invoke(null, ['balance' => 100.0], ['bill_amount']), 'key absent');
+    assertSame(null, $amount->invoke(null, ['bill_amount' => null], ['bill_amount']), 'key null');
+    assertSame(null, $amount->invoke(null, ['bill_amount' => ''], ['bill_amount']), 'key empty');
+    assertSame(null, $amount->invoke(null, ['bill_amount' => 'n/a'], ['bill_amount']), 'key not a number');
+    assertSame(0.0, $amount->invoke(null, ['bill_amount' => 0], ['bill_amount']), 'but a real zero is a real zero');
+    assertSame(9.5, $amount->invoke(null, ['invoice_amount' => '9.5'], ['bill_amount', 'invoice_amount']), 'second alias');
 });
 
 check('an unreachable Books is reported, not shown as zero', function () use ($ctx, $auth) {
@@ -1097,6 +1126,128 @@ check('an unreachable Books makes a card unavailable, never zero', function () u
     assertTrue(count($ready) >= 2, 'one dead service does not blank the whole screen');
 });
 
+check('every overview card carries a one-line summary that states its time basis', function () use ($ctx, $auth) {
+    // The compact card shows this line instead of a three-line definition, so
+    // if it stopped saying "as at" the reader would lose the one thing that
+    // tells a balance apart from a movement.
+    resetDatabase();
+    $overview = (new OverviewService($ctx, $auth))->build(Period::resolve(['key' => 'month']));
+
+    foreach ($overview['metrics'] as $metric) {
+        if ($metric['status'] !== 'ready') {
+            continue;
+        }
+        assertTrue(isset($metric['summary']) && $metric['summary'] !== '', $metric['id'] . ' has a summary line');
+
+        $expected = $metric['basis'] === Metric::BASIS_AS_OF ? 'As at ' : '';
+        if ($expected !== '') {
+            assertTrue(
+                str_starts_with($metric['summary'], $expected),
+                $metric['id'] . ' says it is a balance: ' . $metric['summary'],
+            );
+        }
+    }
+});
+
+check('the briefing is counted from the same list the panel below it shows', function () use ($ctx, $auth) {
+    // The sentence at the top and the rows underneath are built from one array.
+    // Built from two reads they could disagree, and the one somebody acts on is
+    // whichever they read first.
+    resetDatabase();
+    $overview = (new OverviewService($ctx, $auth))->build(Period::resolve(['key' => 'month']));
+    $briefing = $overview['panels']['briefing'];
+
+    assertTrue($briefing['available'], 'the counted briefing is always available');
+    assertSame(
+        count($overview['panels']['actions']),
+        count($briefing['points']),
+        'one point per priority, no more and no fewer',
+    );
+
+    foreach ($briefing['points'] as $index => $point) {
+        assertSame($overview['panels']['actions'][$index]['id'], $point['id'], 'same record, same order');
+        assertSame($overview['panels']['actions'][$index]['action']['path'], $point['path'], 'and it goes where the row goes');
+        assertTrue($point['text'] !== '', 'each point says something');
+    }
+
+    assertTrue(str_contains($briefing['basis'], 'Not generated text'), 'the strip says it was counted');
+});
+
+check('a quiet day gets a quiet briefing rather than an invented one', function () use ($ctx, $auth) {
+    resetDatabase();
+    $period = Period::resolve(['key' => 'month']);
+
+    $empty = BriefingService::build($period, [], []);
+    assertSame('Nothing needs a decision right now.', $empty['headline'], 'no drama where there is none');
+    assertSame([], $empty['points'], 'and nothing to review');
+    assertSame(null, $empty['movement'], 'no movement sentence without a comparison');
+    assertTrue($empty['available'], 'which is not the same as unavailable');
+});
+
+check('the briefing draws no movement sentence when there is nothing to compare with', function () use ($ctx) {
+    // Metric::compare refuses a comparison against a zero base. The briefing
+    // must refuse the sentence for the same reason, rather than writing
+    // "up 100%" about a month that had no previous month.
+    $period = Period::resolve(['key' => 'month']);
+
+    $noBase = Metric::ready(
+        'sales',
+        'Sales this month',
+        1000.0,
+        Metric::BASIS_PERIOD,
+        'Invoices at full value.',
+        Metric::compare(1000.0, 0.0, 'last month', riseIsGood: true),
+    );
+
+    $briefing = BriefingService::build($period, [], [$noBase]);
+    assertSame(null, $briefing['movement'], 'no sentence about a change nobody can compute');
+
+    $withBase = Metric::ready(
+        'sales',
+        'Sales this month',
+        1100.0,
+        Metric::BASIS_PERIOD,
+        'Invoices at full value.',
+        Metric::compare(1100.0, 1000.0, 'last month', riseIsGood: true),
+    );
+
+    $second = BriefingService::build($period, [], [$withBase]);
+    assertTrue($second['movement'] !== null, 'and one when there is');
+    assertTrue(str_starts_with($second['movement']['text'], 'Sales '), 'naming what moved');
+});
+
+check('a biller gets no briefing clause about money they may not see', function () use ($ctx) {
+    // The briefing is built from the actions, and the actions are already
+    // permission-scoped — so this is really a check that nothing was added
+    // between the two that reads a wider list.
+    resetDatabase();
+    $biller = userWithProfile($ctx, 'user-biller', 'biller');
+
+    $overview = (new OverviewService($ctx, $biller))->build(Period::resolve(['key' => 'month']));
+    $briefing = $overview['panels']['briefing'];
+
+    $text = strtolower($briefing['headline'] . ' ' . implode(' ', array_column($briefing['points'], 'text')));
+    foreach (['supplier', 'to pay', 'payable'] as $forbidden) {
+        assertTrue(!str_contains($text, $forbidden), 'the briefing does not mention ' . $forbidden);
+    }
+    foreach ($briefing['points'] as $point) {
+        assertTrue(
+            !str_contains($point['path'], 'payables'),
+            'and never points at a dashboard this profile cannot open',
+        );
+    }
+});
+
+check('with no model configured the written summary is unavailable and says why', function () {
+    // The counted briefing must not depend on it. This is the third capability
+    // in docs/BILLING_API_DEPENDENCIES.md and behaves like the other two.
+    $status = BriefingService::assistantStatus();
+
+    assertSame(false, $status['available'], 'nothing is configured in a test run');
+    assertTrue($status['reason'] !== null && $status['reason'] !== '', 'and the screen is told why');
+    assertTrue(str_contains((string) $status['reason'], 'configured'), 'in words about configuration');
+});
+
 check('a receipt in the period is collections, and is not called revenue', function () use ($ctx, $auth) {
     resetDatabase();
     $dashboard = (new CollectionsService($ctx, $auth))->build(Period::resolve(['from' => '2026-09-01', 'to' => '2026-09-30']));
@@ -1564,17 +1715,56 @@ check('the expense carries the party, bill number and tax category it was given'
     assertSame('Drive / bills / 2026-09', $payload['attachment_ref'], 'and where the bill is kept');
 });
 
-check('a bill file cannot be kept here, and the screen is told why', function () {
+check('with no document service configured, the screen is told why', function () {
+    // Nothing is configured in the test environment, so both answers are no —
+    // and each one says so in words the screen can show.
     $storage = DocumentCapture::storage();
-    assertTrue($storage['available'] === false, 'there is nowhere to put it');
+    assertTrue($storage['available'] === false, 'there is nowhere to put a bill file');
     assertTrue(is_string($storage['reason']) && $storage['reason'] !== '', 'and the reason says so in words');
     assertSame(['application/pdf', 'image/jpeg', 'image/png'], $storage['accepts'], 'what one would be, when there is');
+    assertSame(10 * 1024 * 1024, $storage['max_bytes'], 'and how big it may get');
 
-    // No DOCUMENT_EXTRACTION_BASE in the test environment, so the reader is off
-    // — with an explanation rather than a button that does nothing.
     $extraction = DocumentCapture::extraction();
     assertTrue($extraction['available'] === false, 'and no service reads one either');
     assertTrue(str_contains((string) $extraction['reason'], 'document-extraction'), 'named, so it can be turned on');
+});
+
+check('configuring a document service is all it takes to turn the drop zone on', function () {
+    // The capability is configuration and nothing else: there is no second
+    // switch to forget, which is what made the old answer "false whatever the
+    // environment says" worth removing once the client existed.
+    putenv('DOCUMENT_STORAGE_BASE=https://documents.example.test');
+    putenv('DOCUMENT_EXTRACTION_BASE=https://extract.example.test');
+
+    try {
+        $storage = DocumentCapture::storage();
+        assertTrue($storage['available'] === true, 'the file can be kept');
+        assertTrue($storage['reason'] === null, 'and there is nothing to apologise for');
+        assertTrue(DocumentStorageClient::configured(), 'the client agrees it has somewhere to send it');
+
+        $extraction = DocumentCapture::extraction();
+        assertTrue($extraction['available'] === true, 'and a bill can be read');
+        assertTrue($extraction['reason'] === null, 'with no reason to show');
+    } finally {
+        putenv('DOCUMENT_STORAGE_BASE');
+        putenv('DOCUMENT_EXTRACTION_BASE');
+    }
+
+    assertTrue(DocumentCapture::storage()['available'] === false, 'and it goes back off when it is unset');
+});
+
+check('a document service that answers without a reference is not a success', function () {
+    // The reference is the whole point of the call. A 200 without one would
+    // otherwise put an expense on record pointing at a bill nobody can find.
+    assertTrue(DocumentStorageClient::stored([]) === null, 'an empty body stores nothing');
+    assertTrue(DocumentStorageClient::stored(['data' => ['url' => 'x']]) === null, 'nor does a url on its own');
+
+    $stored = DocumentStorageClient::stored([
+        'data' => ['reference' => ' doc_99 ', 'filename' => 'bill.pdf', 'size' => '2048', 'content_type' => 'application/pdf'],
+    ]);
+    assertSame('doc_99', $stored['reference'], 'a reference is taken, trimmed');
+    assertSame(2048, $stored['size'], 'and a size that arrived as text is still a number');
+    assertTrue($stored['url'] === null, 'a url that was not sent is absent rather than invented');
 });
 
 echo "\nThe bank withdrawal screen\n";

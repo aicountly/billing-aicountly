@@ -56,7 +56,7 @@ export function useMoneyForm({
   direction,
   bills,
   today,
-  initialParty = null,
+  prefill,
   onSaved,
   onFailed,
 }: {
@@ -65,21 +65,23 @@ export function useMoneyForm({
   /** The company's today, once the server has told us what it is. */
   today: string
   /**
-   * The party this screen was opened for, when something handed one over.
+   * A party and an amount the screen was opened with — Money to Collect links
+   * here from a bill it already knows the party and the balance of.
    *
-   * The party directory does, on the same two query parameters the bill editor
-   * already reads. Making somebody search again for the customer they just
-   * clicked is how a screen gets skipped.
+   * It fills the FORM and nothing else. The open bills are still read from
+   * Books when the party lands and the allocation is still worked out from
+   * those, so a bill settled since the link was made cannot be paid twice.
+   * Read once, as the opening value: a later edit is the user's, not the URL's.
    */
-  initialParty?: PickedParty | null
+  prefill?: { party: PickedParty | null; amount: string }
   onSaved: (result: { requestId: number; amount: number; partyName: string; savedAndNew: boolean }) => void
   onFailed: (message: string) => void
 }) {
   const isOut = direction === 'out'
 
   const [values, setValues] = useState<MoneyFormValues>(() => ({
-    party: initialParty,
-    amount: '',
+    party: prefill?.party ?? null,
+    amount: prefill?.amount ?? '',
     entryDate: today,
     accountId: '',
     mode: 'cash',

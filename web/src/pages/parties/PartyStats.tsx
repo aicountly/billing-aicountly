@@ -15,7 +15,7 @@
 
 import type { ReactNode } from 'react'
 import { AlertTriangle, CircleDollarSign, Truck, UserRound, Users } from 'lucide-react'
-import { moneyRounded } from '../../ui'
+import { moneyWhole } from '../../ui'
 import type { PartyOverview } from '../../services/parties'
 
 function count(value: number | null): string {
@@ -196,7 +196,7 @@ export function PartyStats({ overview, loading }: { overview: PartyOverview | nu
         label="Credit limit set"
         icon={<AlertTriangle size={18} />}
         tone="warning"
-        value={exposure === null ? '—' : moneyRounded(exposure)}
+        value={exposure === null ? '—' : moneyWhole(exposure)}
         absent={
           overview && exposure === null
             ? partial
@@ -219,7 +219,7 @@ export function PartyStats({ overview, loading }: { overview: PartyOverview | nu
         label="Overdue from customers"
         icon={<CircleDollarSign size={18} />}
         tone="danger"
-        value={overdue === null ? '—' : moneyRounded(overdue)}
+        value={overdue === null ? '—' : moneyWhole(overdue)}
         absent={
           overview && overdue === null
             ? overview.may_see_customers
@@ -229,7 +229,7 @@ export function PartyStats({ overview, loading }: { overview: PartyOverview | nu
         }
         note={
           overdue !== null && receivable !== null && receivable > 0
-            ? `of ${moneyRounded(receivable)} owed`
+            ? `of ${moneyWhole(receivable)} owed`
             : 'Past its due date, from Smart Books'
         }
         noteTone={overdue !== null && overdue > 0 ? 'danger' : 'plain'}

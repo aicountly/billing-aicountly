@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Aicountly\Api\Domain;
 
-use Aicountly\Api\Env;
+use Aicountly\Api\Clients\DocumentExtractionClient;
+use Aicountly\Api\Clients\DocumentStorageClient;
 
 /**
  * Whether this deployment can keep a bill file, and whether it can read one.
@@ -36,25 +37,24 @@ final class DocumentCapture
     /**
      * Somewhere to keep the file itself.
      *
-     * `available` is false in this build whichever way the environment is set,
-     * and that is the honest answer rather than an oversight: Billing has no
-     * client that puts a file into a document service, so configuring one would
-     * not make a drop zone work. The reason distinguishes the two cases, so
-     * whoever picks this up knows which half is missing — and when the client
-     * lands, this method is the one line that changes.
+     * True when a document service is configured, because the client that
+     * talks to one now exists (DocumentStorageClient). Configuration alone is
+     * the answer: a drop zone is only honest when there is somewhere for the
+     * photo to land, and when there is not, the screen records WHERE the bill
+     * is kept instead and `reason` says why.
      *
-     * @return array{available:bool, reason:string, accepts:list<string>, max_bytes:int}
+     * @return array{available:bool, reason:?string, accepts:list<string>, max_bytes:int}
      */
     public static function storage(): array
     {
-        $configured = Env::get('DOCUMENT_STORAGE_BASE') !== '';
+        $configured = DocumentStorageClient::configured();
 
         return [
-            'available'  => false,
+            'available'  => $configured,
             'reason'     => $configured
-                ? 'A document service is configured, but Billing does not send bill files to it yet — record where the '
-                    . 'bill is kept.'
-                : 'No document service here, so the file itself cannot be kept — record where the bill is.',
+                ? null
+                : 'No document service is configured for this deployment, so the file itself cannot be kept here — '
+                    . 'record where the bill is.',
             'accepts'    => self::ACCEPTS,
             'max_bytes'  => self::MAX_BYTES,
         ];
@@ -70,7 +70,7 @@ final class DocumentCapture
      */
     public static function extraction(): array
     {
-        $configured = Env::get('DOCUMENT_EXTRACTION_BASE') !== '';
+        $configured = DocumentExtractionClient::configured();
 
         return [
             'available' => $configured,

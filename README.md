@@ -18,11 +18,16 @@ Five dashboards, all reading live from Smart Books and Inventory:
 
 | | |
 |---|---|
-| **Overview** | sales, what you are owed, what you owe, what is in hand |
+| **Overview** | sales, what you are owed, what you owe, what is in hand, and one counted line about what needs a decision today |
 | **Biller desk** | the counter screen — the next bill, and this user's own work |
 | **Receivables** | ageing, who to chase, what they promised |
 | **Payables** | what falls due, and bills worth a second look |
 | **Cash & compliance** | the day's money, the day-close checklist, document status |
+
+And the two bill-by-bill screens the dashboards link into — **Money to Collect**
+and **Money to Pay** — where the ageing, the follow-up list and the collection
+actions are: aged buckets you can click into, who owes what, filters that live in
+the address bar, and a reminder, a receipt or a statement one step away.
 
 Behind them: sales and purchases, credit and debit notes with their original
 document, receipts and payments with allocation, bank deposits and withdrawals,
@@ -37,7 +42,8 @@ never as a zero.
 See [docs/BILLING_IMPLEMENTATION_STATUS.md](docs/BILLING_IMPLEMENTATION_STATUS.md)
 for what each figure means, and
 [docs/BILLING_API_DEPENDENCIES.md](docs/BILLING_API_DEPENDENCIES.md) for the
-capabilities no product in this deployment serves yet.
+capabilities no product in this deployment serves yet — each one a place where a
+screen says so rather than showing a zero.
 
 Signing in is the AICOUNTLY portal's job, the same as every other AICOUNTLY
 SaaS: the app redirects to the portal, the portal returns an `auth_token`, and
@@ -77,23 +83,33 @@ same-origin.
 | `npm run dev` | Vite dev server on http://localhost:5173 |
 | `npm run build` | Type-check, then build to `web/dist/` |
 | `npm run typecheck` | Type-check only |
+| `npm test` | Unit tests, on Node's own runner — no framework, no build step |
 | `npm run preview` | Serve the production build locally |
 
 `web/visual.html` is a development-only photo booth: it mounts the real page
 components against fixtures so the screens can be checked at any width without a
 portal session or a company's data. `?screen=` picks one — the five dashboards,
-`money-in`, `money-out`, `expense`, `credit-note`, `bank-withdrawal`, `sale` or
-`items` — `?as=biller` narrows the profile, and `?fail=recent,categories` makes
-those endpoints answer 503, which is how the "one panel is down, the form still
-works" states get checked. The credit note screen adds `bills`, `bill-lines`,
-`warehouses`, `trend` and `issue` to that list, the bank-withdrawal screen adds
-`balance`, `withdrawals` and `withdrawal-summary`, and the Items screen adds
-`items`, `stats` and `groups`, so their degraded states are reachable too.
-`?at=` sets the screen's OWN query string
+`money-in`, `money-out`, `expense`, `credit-note`, `bank-withdrawal`, `sale`,
+`items`, `dues` (Money to Collect) or `dues-payable` (Money to Pay) —
+`?as=biller` narrows the profile, and `?fail=recent,categories` makes those
+endpoints answer 503, which is how the "one panel is down, the form still
+works" states get checked. `?fail=overview` and `?fail=briefing` are the
+overview's two halves, so "the dashboard is down" and "only the written summary
+is down" can be checked apart from each other. The credit note screen adds
+`bills`, `bill-lines`, `warehouses`, `trend` and `issue` to that list, the
+bank-withdrawal screen adds `balance`, `withdrawals` and `withdrawal-summary`,
+and the Items screen adds `items`, `stats` and `groups`, so their degraded
+states are reachable too. `?at=` sets the screen's OWN query string
 (`?screen=items&at=stock_status%3Dlow`), which is the only way to photograph a
 screen that keeps its state in the address bar in its filtered, sorted or paged
 states. `vite build` takes `index.html` only, so none of it reaches the
 deployed bundle.
+
+The dues screens add two more: `?state=empty|error|slow` for the three states
+they must survive — nothing outstanding, Books unreachable, and the skeletons
+in between — and `?router=browser`, which swaps the memory router for the real
+one so the filters that live in the address bar can be exercised through the
+browser's own back and forward buttons.
 
 The PHP API has no build step and no dependencies. To run it locally:
 

@@ -13,10 +13,8 @@ import {
   AlertCircle,
   Building2,
   ChevronDown,
-  FileText,
   Info,
   Loader2,
-  Paperclip,
   RotateCcw,
   Save,
   UserRound,
@@ -25,6 +23,7 @@ import {
 import { api, type ListResponse } from '../../services/api'
 import type { AsyncState } from '../../hooks/useApi'
 import type { CatalogAccount, CatalogParty, DocumentCapability } from '../../services/types'
+import { BillReceiptUploader } from './BillReceiptUploader'
 import {
   groupAmount,
   NOTE_LIMIT,
@@ -49,6 +48,10 @@ export interface ExpenseFormCardProps {
   paidFrom: AsyncState<ListResponse<CatalogAccount>>
   taxCategories: AsyncState<ListResponse<Record<string, unknown>>>
   billStorage: DocumentCapability | null
+  billExtraction: DocumentCapability | null
+  /** True while the reader is working, so the attached bill cannot be sent twice. */
+  extractionBusy: boolean
+  onReadBill: (file: File) => void
   /** Fields the bill reader filled, highlighted until the person edits them. */
   aiFilled: ReadonlySet<ExpenseField>
   saving: boolean
@@ -134,10 +137,15 @@ export function ExpenseFormCard(props: ExpenseFormCardProps) {
         />
 
         <div className="billing-expense-grid__bill">
-          <BillReceiptField
-            value={draft.billReference}
-            capability={props.billStorage}
-            onChange={(billReference) => onChange({ billReference })}
+          <BillReceiptUploader
+            value={draft.bill}
+            onChange={(bill) => onChange({ bill })}
+            reference={draft.billReference}
+            onReferenceChange={(billReference) => onChange({ billReference })}
+            storage={props.billStorage}
+            extraction={props.billExtraction}
+            extractionBusy={props.extractionBusy}
+            onReadBill={props.onReadBill}
           />
         </div>
       </div>
@@ -680,56 +688,6 @@ function VendorField({
       </div>
 
       <p className="billing-expense-field__hint">Optional. Leave blank for a cash expense with no party.</p>
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Bill / Receipt
-// ---------------------------------------------------------------------------
-
-/**
- * Where the bill is.
- *
- * This deployment has nowhere to put the file — see DocumentCapture on the
- * server, and docs/BILLING_API_DEPENDENCIES.md for what would change that — so
- * the block records WHERE the bill is kept instead of showing a drop zone that
- * would swallow a photo and lose it. The reference goes to Books on the voucher
- * as `attachment_ref`, which is a field the expense already had.
- */
-function BillReceiptField({
-  value,
-  capability,
-  onChange,
-}: {
-  value: string
-  capability: DocumentCapability | null
-  onChange: (value: string) => void
-}) {
-  return (
-    <div className="billing-expense-bill">
-      <div className="billing-expense-bill__head">
-        <span className="billing-expense-bill__mark" aria-hidden>
-          <Paperclip size={15} />
-        </span>
-        <label htmlFor="expense-bill-reference">Bill / Receipt</label>
-      </div>
-
-      <input
-        id="expense-bill-reference"
-        className="billing-expense-control"
-        value={value}
-        placeholder="e.g. Bill file 12, drive link"
-        aria-describedby="expense-bill-why"
-        onChange={(event) => onChange(event.target.value)}
-      />
-
-      <p className="billing-expense-bill__why" id="expense-bill-why">
-        <FileText size={12} aria-hidden style={{ verticalAlign: '-1px', marginRight: 4 }} />
-        {capability && !capability.available && capability.reason
-          ? capability.reason
-          : 'Kept with the voucher in Smart Books.'}
-      </p>
     </div>
   )
 }

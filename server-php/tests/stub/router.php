@@ -254,16 +254,17 @@ if (str_contains($path, '/masters/accounts') && !str_contains($path, '/masters/a
 }
 
 if (str_contains($path, '/reports/bill-by-bill')) {
-    // Named, so the directory can join a balance to the account beside it. One
-    // bill against a customer whose credit limit is 100000 — which is what the
-    // "over the limit" reading is measured against.
+    // Named, so the party directory can join a balance to the account beside
+    // it, and carrying `bill_amount` so the dues screen can tell a part-paid
+    // bill from an untouched one. One bill against a customer whose credit
+    // limit is 100000 — which is what the "over the limit" reading measures.
     $creditor = ($_GET['party_type'] ?? 'debtor') === 'creditor';
     echo json_encode(['data' => $creditor ? [
         ['account_id' => 601, 'account_name' => 'Aarti Plastics', 'bill_no' => 'MD/7812',
-         'bill_date' => '2026-09-01', 'due_date' => '2026-10-01', 'balance' => 24000.0],
+         'bill_date' => '2026-09-01', 'due_date' => '2026-10-01', 'balance' => 24000.0, 'bill_amount' => 24000.0],
     ] : [
         ['account_id' => 501, 'account_name' => 'Northern Distributors', 'bill_no' => 'INV/0001',
-         'bill_date' => '2026-08-01', 'due_date' => '2026-08-31', 'balance' => 120000.0],
+         'bill_date' => '2026-08-01', 'due_date' => '2026-08-31', 'balance' => 120000.0, 'bill_amount' => 150000.0],
     ]]);
     exit;
 }

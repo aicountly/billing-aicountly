@@ -14,7 +14,7 @@ import type {
   PayablesDashboard,
   ReceivablesDashboard,
 } from '../src/dashboards/types'
-import type { BillingSession } from '../src/services/types'
+import type { BillingSession, Dues as DuesShape } from '../src/services/types'
 
 const PERIOD = {
   key: 'month',
@@ -134,7 +134,8 @@ export const overview: OverviewDashboard = {
       value: 842500,
       status: 'ready',
       basis: 'period',
-      definition: 'Invoices dated 2026-09-01 to 2026-09-16, at their full value including tax.',
+      definition: 'Invoices dated 2026-09-01 to 2026-09-16, at their full value including tax. Credit notes are not netted off — they are counted separately.',
+      summary: '1 Sep–16 Sep · including tax, before credit notes',
       comparison: { available: true, percent: 12, direction: 'up', label: '+12.0% vs the previous 16 days', tone: 'positive', previous: 752000 },
       tone: 'neutral',
     },
@@ -148,6 +149,7 @@ export const overview: OverviewDashboard = {
       comparison: null,
       tone: 'warning',
       detail: '₹74,500.00 of it is overdue',
+      summary: 'As at 16 Sep · ₹74,500.00 overdue',
     },
     {
       id: 'to_pay',
@@ -159,6 +161,7 @@ export const overview: OverviewDashboard = {
       comparison: null,
       tone: 'warning',
       detail: '₹18,500.00 of it is overdue',
+      summary: 'As at 16 Sep · ₹48,000.00 due within 7 days',
     },
     {
       id: 'cash_bank',
@@ -170,6 +173,7 @@ export const overview: OverviewDashboard = {
       comparison: null,
       tone: 'neutral',
       detail: '2 account(s)',
+      summary: 'As at 16 Sep · 2 accounts',
     },
   ],
   panels: {
@@ -209,6 +213,18 @@ export const overview: OverviewDashboard = {
         action: { label: 'Review', path: '/dashboard/cash-compliance' },
       },
     ],
+    briefing: {
+      available: true,
+      headline: '3 overdue customer accounts and 2 supplier accounts due this week, with 1 more below need a look today.',
+      points: [
+        { id: 'overdue_receivables', text: '3 overdue customer accounts', tone: 'danger', count: 3, path: '/dashboard/receivables' },
+        { id: 'supplier_bills_due', text: '2 supplier accounts due this week', tone: 'warning', count: 2, path: '/dashboard/payables' },
+        { id: 'statutory_failed', text: '1 statutory document to fix', tone: 'warning', count: 1, path: '/dashboard/cash-compliance' },
+      ],
+      movement: { text: 'Sales +12.0% vs the previous 16 days', tone: 'positive', path: '/sales' },
+      basis: 'Counted from your own records, in Asia/Kolkata. Not generated text.',
+      generated_at: '2026-09-16T09:12:00Z',
+    },
     recent_documents: {
       available: true,
       reason: null,
@@ -587,6 +603,155 @@ export const partyDuplicates = {
 }
 
 // ---------------------------------------------------------------------------
+// Money to Collect / Money to Pay
+// ---------------------------------------------------------------------------
+
+/**
+ * The dues payload is BUILT rather than written out.
+ *
+ * The screen refuses to draw the ageing when the buckets do not add up to the
+ * total, which is exactly the check a hand-typed fixture quietly breaks the
+ * first time somebody edits one number. Composing it the way DuesService does
+ * means the fixture cannot disagree with itself, and the reconciliation path is
+ * exercised for real.
+ */
+const DUES_AS_ON = '2026-09-19'
+
+interface FixtureBill {
+  account_id: number
+  account_name: string
+  bill_no: string
+  bill_date: string
+  due_date: string | null
+  balance: number
+  bill_amount?: number
+}
+
+function daysBetween(from: string, to: string): number {
+  const day = (iso: string) => {
+    const [y, m, d] = iso.split('-').map(Number)
+    return Date.UTC(y, m - 1, d) / 86_400_000
+  }
+  return day(to) - day(from)
+}
+
+function buildDues(title: string, asOn: string, rows: FixtureBill[]): DuesShape {
+  const ageing = { current: 0, '1_30': 0, '31_60': 0, '61_90': 0, '90_plus': 0, no_due_date: 0 }
+  const parties = new Map<number, DuesShape['parties'][number]>()
+  const bills: DuesShape['bills'] = []
+  let total = 0
+  let overdue = 0
+  let dueToday = 0
+  let dueThisWeek = 0
+
+  for (const row of rows) {
+    const days = row.due_date === null ? null : daysBetween(asOn, row.due_date)
+    total += row.balance
+
+    if (days === null) ageing.no_due_date += row.balance
+    else if (days >= 0) {
+      ageing.current += row.balance
+      if (days === 0) dueToday += row.balance
+      if (days <= 7) dueThisWeek += row.balance
+    } else {
+      const late = Math.abs(days)
+      overdue += row.balance
+      if (late <= 30) ageing['1_30'] += row.balance
+      else if (late <= 60) ageing['31_60'] += row.balance
+      else if (late <= 90) ageing['61_90'] += row.balance
+      else ageing['90_plus'] += row.balance
+    }
+
+    const party = parties.get(row.account_id) ?? {
+      account_id: row.account_id,
+      account_name: row.account_name,
+      total: 0,
+      overdue: 0,
+      bill_count: 0,
+      oldest_overdue_days: 0,
+    }
+    party.total += row.balance
+    party.bill_count += 1
+    if (days !== null && days < 0) {
+      party.overdue += row.balance
+      party.oldest_overdue_days = Math.max(party.oldest_overdue_days, Math.abs(days))
+    }
+    parties.set(row.account_id, party)
+
+    bills.push({
+      account_id: row.account_id,
+      account_name: row.account_name,
+      bill_no: row.bill_no,
+      bill_date: row.bill_date,
+      due_date: row.due_date,
+      balance: row.balance,
+      bill_amount: row.bill_amount ?? null,
+      received: row.bill_amount === undefined ? null : Math.max(0, row.bill_amount - row.balance),
+      days_overdue: days !== null && days < 0 ? Math.abs(days) : 0,
+      voucher_id: 4000 + bills.length,
+      voucher_uuid: `vch-due-${bills.length}`,
+    })
+  }
+
+  bills.sort((a, b) => b.days_overdue - a.days_overdue)
+
+  return {
+    title,
+    as_on: asOn,
+    source: 'books',
+    total: Math.round(total * 100) / 100,
+    overdue: Math.round(overdue * 100) / 100,
+    due_today: Math.round(dueToday * 100) / 100,
+    due_this_week: Math.round(dueThisWeek * 100) / 100,
+    ageing,
+    ageing_reconciles: true,
+    parties: [...parties.values()].sort((a, b) => b.total - a.total),
+    bills,
+    note: 'Read from Smart Books just now. Billing keeps no balance of its own, so this never disagrees with the accounts.',
+  }
+}
+
+const RECEIVABLE_BILLS: FixtureBill[] = [
+  // Not yet due
+  { account_id: 11, account_name: 'ABC Traders', bill_no: 'INV-2026-0012', bill_date: '2026-09-05', due_date: '2026-09-19', balance: 124800, bill_amount: 124800 },
+  { account_id: 12, account_name: 'Kumar & Sons', bill_no: 'INV-2026-0009', bill_date: '2026-09-15', due_date: '2026-09-30', balance: 75600, bill_amount: 75600 },
+  { account_id: 13, account_name: 'Sunrise Retail', bill_no: 'INV-2026-0014', bill_date: '2026-09-16', due_date: '2026-09-24', balance: 44560, bill_amount: 90000 },
+  // 1–30 days late
+  { account_id: 14, account_name: 'Sharma Enterprises', bill_no: 'INV-2026-0011', bill_date: '2026-08-28', due_date: '2026-09-12', balance: 215000, bill_amount: 215000 },
+  { account_id: 13, account_name: 'Sunrise Retail', bill_no: 'INV-2026-0008', bill_date: '2026-08-10', due_date: '2026-09-10', balance: 108300, bill_amount: 108300 },
+  // 31–60
+  { account_id: 15, account_name: 'Global Marketing Pvt Ltd', bill_no: 'INV-2026-0010', bill_date: '2026-08-21', due_date: '2026-08-25', balance: 248500, bill_amount: 348500 },
+  { account_id: 11, account_name: 'ABC Traders', bill_no: 'INV-2026-0006', bill_date: '2026-07-20', due_date: '2026-08-04', balance: 96200, bill_amount: 96200 },
+  // 61–90
+  { account_id: 16, account_name: 'Nandini Foods', bill_no: 'INV-2026-0004', bill_date: '2026-06-28', due_date: '2026-07-13', balance: 132450, bill_amount: 180000 },
+  // Over 90
+  { account_id: 11, account_name: 'ABC Traders', bill_no: 'INV-2026-0002', bill_date: '2026-05-12', due_date: '2026-06-01', balance: 186400, bill_amount: 186400 },
+  { account_id: 17, account_name: 'Verma Hardware', bill_no: 'INV-2026-0001', bill_date: '2026-04-30', due_date: '2026-05-15', balance: 86650, bill_amount: 86650 },
+  // No due date at all — the bucket that exists so nothing hides in the green
+  { account_id: 18, account_name: 'Patel Textiles', bill_no: 'INV-2026-0015', bill_date: '2026-09-02', due_date: null, balance: 30100 },
+]
+
+const PAYABLE_BILLS: FixtureBill[] = [
+  { account_id: 61, account_name: 'Mahalaxmi Distributors', bill_no: 'MD-7812', bill_date: '2026-09-09', due_date: '2026-09-24', balance: 148000, bill_amount: 148000 },
+  { account_id: 62, account_name: 'R.K. Industries', bill_no: 'RKI-4490', bill_date: '2026-08-30', due_date: '2026-09-14', balance: 62500, bill_amount: 92500 },
+  { account_id: 63, account_name: 'Aarti Plastics', bill_no: 'AP-9021', bill_date: '2026-07-18', due_date: '2026-08-02', balance: 34800, bill_amount: 34800 },
+]
+
+// Named `…Dues` because `receivables` and `payables` above are the DASHBOARD
+// payloads — a different endpoint and a different shape.
+export const receivableDues = buildDues('Money to collect', DUES_AS_ON, RECEIVABLE_BILLS)
+export const payableDues = buildDues('Money to pay', DUES_AS_ON, PAYABLE_BILLS)
+
+/** The same ledger a month earlier, so the movement on the cards has something real to compare against. */
+export const receivableDuesEarlier = buildDues(
+  'Money to collect',
+  '2026-08-20',
+  RECEIVABLE_BILLS.filter((bill) => bill.bill_date <= '2026-08-20'),
+)
+
+export const duesEmpty = buildDues('Money to collect', DUES_AS_ON, [])
+
+// ---------------------------------------------------------------------------
 // Money paid / money received
 // ---------------------------------------------------------------------------
 
@@ -814,10 +979,16 @@ export const savedSale = {
   created_at: '2026-09-21T09:15:00Z',
 }
 
+/**
+ * What a deployment with neither document service configured answers — which
+ * is every deployment today, and the shape the expense screen has to be good
+ * in: a reference field, and the bill reader off with its reason.
+ */
 export const expenseCapabilities = {
   bill_storage: {
     available: false,
-    reason: 'No document service here, so the file itself cannot be kept — record where the bill is.',
+    reason:
+      'No document service is configured for this deployment, so the file itself cannot be kept here — record where the bill is.',
     accepts: ['application/pdf', 'image/jpeg', 'image/png'],
     max_bytes: 10485760,
   },
@@ -826,6 +997,32 @@ export const expenseCapabilities = {
     reason:
       'Needs a document-extraction service, and none is configured for this deployment. Typing the details records exactly the same expense.',
   },
+}
+
+/**
+ * The same screen once both services are configured, as `?docs=on`.
+ *
+ * Photographing this is how the drop zone and the bill reader get checked
+ * without a document service being stood up first — the capability flags are
+ * the only difference between the two, which is the point.
+ */
+export const expenseCapabilitiesConfigured = {
+  bill_storage: {
+    available: true,
+    reason: null,
+    accepts: ['application/pdf', 'image/jpeg', 'image/png'],
+    max_bytes: 10485760,
+  },
+  bill_extraction: { available: true, reason: null },
+}
+
+/** What `POST v1/expenses/bill` hands back once a bill has been taken. */
+export const storedBill = {
+  reference: 'doc_01J9WQ2K7MRB',
+  filename: 'airtel-broadband-sep.pdf',
+  size: 284_193,
+  content_type: 'application/pdf',
+  url: null,
 }
 
 export const recentExpenses = {
@@ -1311,4 +1508,91 @@ export const savedWithdrawal = {
   books_voucher_no: 'CON/0045',
   last_error: null,
   created_at: '2026-09-19T06:20:00Z',
+}
+
+/* -------------------------------------------------------------------------
+   Money → Money received.
+
+   The "in" half of the money fixtures: a customer's open bills, what that
+   customer owes, and receipts already recorded. Keyed to Vaibhav Traders
+   (701) from the customer pool above, so picking that name in the harness
+   leads to the bills and the balance below. Invented, as all of these are.
+   ------------------------------------------------------------------------- */
+
+export const openBillsIn = {
+  account_id: 701,
+  source: 'books',
+  bills: [
+    { bill_no: 'INV-0214', bill_date: '2026-07-18', due_date: '2026-08-02', balance: 48000, voucher_id: 3214, voucher_uuid: 'vch-r14' },
+    { bill_no: 'INV-0241', bill_date: '2026-08-21', due_date: '2026-09-05', balance: 36500, voucher_id: 3241, voucher_uuid: 'vch-r41' },
+    { bill_no: 'INV-0266', bill_date: '2026-09-09', due_date: '2026-09-24', balance: 40000, voucher_id: 3266, voucher_uuid: 'vch-r66' },
+  ],
+}
+
+/** `v1/receivables?account_id=701` — this one customer's dues, aged in Billing. */
+export const customerDues = {
+  title: 'Money to collect',
+  as_on: '2026-09-21',
+  source: 'books',
+  total: 124500,
+  overdue: 84500,
+  due_today: 0,
+  due_this_week: 40000,
+  ageing: { current: 40000, '1_30': 36500, '31_60': 48000, '61_90': 0, '90_plus': 0, no_due_date: 0 },
+  ageing_reconciles: true,
+  parties: [
+    { account_id: 701, account_name: 'Vaibhav Traders', total: 124500, overdue: 84500, bill_count: 3, oldest_overdue_days: 50 },
+  ],
+  bills: [],
+  note: 'Read from Smart Books just now.',
+}
+
+/**
+ * `v1/money/recent?direction=in`.
+ *
+ * Rows carry both halves the endpoint joins: the register's document and,
+ * where Billing recorded it, the mode, reference and account the user typed.
+ * One row has `recorded_here: false` and empty detail cells, because that is
+ * what a receipt entered in Books looks like here.
+ */
+export const moneyRecentIn = {
+  direction: 'in',
+  period: {
+    key: 'month',
+    label: 'September 2026',
+    from: '2026-09-01',
+    to: '2026-09-21',
+    previous_from: '2026-08-11',
+    previous_to: '2026-08-31',
+    previous_label: 'the previous 21 days',
+  },
+  available: true,
+  reason: null,
+  complete: true,
+  source: 'books',
+  note: 'Read from Smart Books as this screen opened. Billing keeps no copy.',
+  summary: {
+    available: true,
+    reason: null,
+    total: 352500,
+    count: 6,
+    average: 58750,
+    largest: { amount: 120000, party: 'Sunrise Electronics', party_id: 702, date: '2026-09-18', voucher_id: 3811 },
+    comparison: {
+      available: true,
+      percent: 9.2,
+      direction: 'up',
+      label: '+9.2% vs the previous 21 days',
+      tone: 'positive',
+      previous: 322800,
+    },
+  },
+  rows: [
+    { voucher_id: 3812, voucher_uuid: 'vch-r812', document_no: 'RCP-2026-0012', date: '2026-09-19', party: 'Vaibhav Traders', party_id: 701, amount: 50000, status: null, request_id: 812, kind: 'receipt', account_id: 9002, account_name: 'HDFC Current ••••1234', payment_mode: 'upi', reference_no: 'UTR987654321', narration: null, created_by: 'demo-owner', recorded_here: true },
+    { voucher_id: 3811, voucher_uuid: 'vch-r811', document_no: 'RCP-2026-0011', date: '2026-09-18', party: 'Sunrise Electronics', party_id: 702, amount: 120000, status: null, request_id: 811, kind: 'receipt', account_id: 9003, account_name: 'ICICI Current ••••8890', payment_mode: 'cheque', reference_no: 'CHQ789123', narration: null, created_by: 'demo-owner', recorded_here: true },
+    { voucher_id: 3810, voucher_uuid: 'vch-r810', document_no: 'RCP-2026-0010', date: '2026-09-17', party: 'Deepak General Store', party_id: 703, amount: 75000, status: null, request_id: 810, kind: 'receipt', account_id: 9001, account_name: 'Cash in hand', payment_mode: 'cash', reference_no: null, narration: null, created_by: 'demo-owner', recorded_here: true },
+    { voucher_id: 3809, voucher_uuid: 'vch-r809', document_no: 'RCP-2026-0009', date: '2026-09-16', party: 'Kaveri Retail LLP', party_id: 704, amount: 32500, status: null, request_id: null, kind: null, account_id: null, account_name: null, payment_mode: null, reference_no: null, narration: null, created_by: null, recorded_here: false },
+    { voucher_id: 3806, voucher_uuid: 'vch-r806', document_no: 'RCP-2026-0006', date: '2026-09-12', party: 'Vaibhav Traders', party_id: 701, amount: 25000, status: null, request_id: 806, kind: 'receipt', account_id: 9002, account_name: 'HDFC Current ••••1234', payment_mode: 'bank_transfer', reference_no: 'UTR123456789', narration: null, created_by: 'demo-owner', recorded_here: true },
+    { voucher_id: 3801, voucher_uuid: 'vch-r801', document_no: 'RCP-2026-0001', date: '2026-09-02', party: 'Vaibhav Traders', party_id: 701, amount: 50000, status: null, request_id: 801, kind: 'receipt', account_id: 9003, account_name: 'ICICI Current ••••8890', payment_mode: 'cheque', reference_no: 'CHQ123456', narration: null, created_by: 'demo-owner', recorded_here: true },
+  ],
 }
