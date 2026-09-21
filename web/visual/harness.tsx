@@ -183,7 +183,7 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Res
   if (/v1\/catalog\/items\/search/.test(url)) {
     const term = (new URL(url, window.location.origin).searchParams.get('q') ?? '').toLowerCase()
     const rows = everyItem().filter(
-      (row) => (row.item_name ?? '').toLowerCase().includes(term) || (row.item_sku ?? '').toLowerCase().includes(term),
+      (row) => String(row.item_name ?? '').toLowerCase().includes(term) || String(row.item_sku ?? '').toLowerCase().includes(term),
     )
     return new Response(JSON.stringify({ data: rows, meta: { total: rows.length, limit: 20, offset: 0 } }), {
       status: 200,
@@ -197,7 +197,7 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Res
   if (/v1\/catalog\/items\/barcode\//.test(url)) {
     const code = decodeURIComponent(url.split('/barcode/')[1]?.split('?')[0] ?? '').toLowerCase()
     const item = everyItem().find(
-      (row) => (row.barcode ?? '').toLowerCase() === code || (row.item_sku ?? '').toLowerCase() === code,
+      (row) => String(row.barcode ?? '').toLowerCase() === code || String(row.item_sku ?? '').toLowerCase() === code,
     )
     return new Response(JSON.stringify(item ? { data: item } : { error: { code: 'not_found', message: 'No such code.' } }), {
       status: item ? 200 : 404,
