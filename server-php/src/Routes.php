@@ -8,6 +8,7 @@ use Aicountly\Api\Controllers\CatalogController;
 use Aicountly\Api\Controllers\DashboardController;
 use Aicountly\Api\Controllers\DashboardsController;
 use Aicountly\Api\Controllers\DuesController;
+use Aicountly\Api\Controllers\ExpensesController;
 use Aicountly\Api\Controllers\ManageController;
 use Aicountly\Api\Controllers\MoneyController;
 use Aicountly\Api\Controllers\ProfilesController;
@@ -57,6 +58,12 @@ final class Routes
         //     | expense | bank_deposit | bank_withdrawal | bank_transfer
         $router->post('v1/transactions/{kind}', [TransactionsController::class, 'create']);
         $router->get('v1/transactions/unfinished', [TransactionsController::class, 'unfinished']);
+        // Around the expense form: what was recorded lately, and what this
+        // deployment can do with a bill file. Recording one is still
+        // POST v1/transactions/expense, above.
+        $router->get('v1/expenses/recent', [ExpensesController::class, 'recent']);
+        $router->get('v1/expenses/capabilities', [ExpensesController::class, 'capabilities']);
+        $router->post('v1/expenses/read-bill', [ExpensesController::class, 'readBill']);
         // Invoices a credit note (or bills a debit note) can be raised against.
         $router->get('v1/original-documents', [TransactionsController::class, 'originalDocuments']);
         $router->get('v1/transactions/{id}', [TransactionsController::class, 'show']);

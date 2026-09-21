@@ -73,10 +73,13 @@ same-origin.
 | `npm run typecheck` | Type-check only |
 | `npm run preview` | Serve the production build locally |
 
-`web/visual.html` is a development-only photo booth: it mounts the real
-dashboard components against fixtures so the screens can be checked at four
-widths without a portal session or a company's data. `vite build` takes
-`index.html` only, so none of it reaches the deployed bundle.
+`web/visual.html` is a development-only photo booth: it mounts the real page
+components against fixtures so the screens can be checked at any width without a
+portal session or a company's data. `?screen=` picks one — the five dashboards,
+or `expense` — `?as=biller` narrows the profile, and `?fail=recent,categories`
+makes those endpoints answer 503, which is how the "one panel is down, the form
+still works" states get checked. `vite build` takes `index.html` only, so none of
+it reaches the deployed bundle.
 
 The PHP API has no build step and no dependencies. To run it locally:
 

@@ -21,7 +21,9 @@ Env::load(__DIR__ . '/../.env');
 use Aicountly\Api\Domain\BillerDeskService;
 use Aicountly\Api\Domain\CollectionsService;
 use Aicountly\Api\Domain\ComplianceService;
+use Aicountly\Api\Domain\DocumentCapture;
 use Aicountly\Api\Domain\DuesService;
+use Aicountly\Api\Domain\ExpenseHistory;
 use Aicountly\Api\Domain\Metric;
 use Aicountly\Api\Domain\MoneyActivityService;
 use Aicountly\Api\Domain\OverviewService;
@@ -1100,6 +1102,109 @@ check('a biller cannot run a report about money they may not see', function () u
         'does not show balances',
         'a biller running the cash summary',
     );
+});
+
+echo "\nThe expense screen\n";
+
+check('recent expenses are this company\'s own posted ones, newest first, named live', function () use ($ctx, $auth) {
+    resetDatabase();
+    $service = new TransactionService($ctx, $auth);
+    $service->create('expense', ['amount' => 2450, 'expense_account_id' => 810, 'cash_bank_account_id' => 101, 'date' => '2026-09-11', 'narration' => 'Office stationery']);
+    $service->create('expense', ['amount' => 1320, 'expense_account_id' => 811, 'cash_bank_account_id' => 101, 'date' => '2026-09-15', 'narration' => 'Client meeting']);
+
+    $recent = (new ExpenseHistory($ctx, $auth))->recent(5);
+
+    assertSame(2, count($recent['rows']), 'both expenses come back');
+    assertSame('2026-09-15', $recent['rows'][0]['date'], 'newest first');
+    assertSame(1320.0, $recent['rows'][0]['amount'], 'the amount is what was recorded');
+    // The NAME is Books', read on this request. Billing stores the id only.
+    assertTrue($recent['names_available'], 'Books answered, so the heads are named');
+    assertSame('Travel & Conveyance', $recent['rows'][0]['category_name'], 'the head is named from Books');
+    assertSame('Cash in hand', $recent['rows'][0]['paid_from_name'], 'so is the account it came out of');
+});
+
+check('a sale is not an expense, and an unposted one is not history', function () use ($ctx, $auth) {
+    resetDatabase();
+    (new TransactionService($ctx, $auth))->create('sale', saleInput());
+
+    stubFail('vouchers/drafts', 500);
+    try {
+        (new TransactionService($ctx, $auth))->create('expense', [
+            'amount' => 700, 'expense_account_id' => 810, 'cash_bank_account_id' => 101, 'date' => '2026-09-16',
+        ]);
+    } catch (\Throwable) {
+        // The point of the case: it did not reach Books.
+    }
+    stubRecover();
+
+    assertSame([], (new ExpenseHistory($ctx, $auth))->recent(5)['rows'], 'neither one shows as a recorded expense');
+});
+
+check('another company\'s expenses are not in this one\'s list', function () use ($auth) {
+    resetDatabase();
+    $mine = freshContext(55);
+    $theirs = freshContext(77);
+
+    (new TransactionService($mine, $auth))->create('expense', ['amount' => 100, 'expense_account_id' => 810, 'cash_bank_account_id' => 101, 'date' => '2026-09-12']);
+    (new TransactionService($theirs, $auth))->create('expense', ['amount' => 200, 'expense_account_id' => 810, 'cash_bank_account_id' => 101, 'date' => '2026-09-12']);
+
+    $rows = (new ExpenseHistory($mine, $auth))->recent(5)['rows'];
+    assertSame(1, count($rows), 'only this company\'s');
+    assertSame(100.0, $rows[0]['amount'], 'and it is the right one');
+});
+
+check('Books being unreachable costs the chips, not the list', function () use ($ctx, $auth) {
+    resetDatabase();
+    (new TransactionService($ctx, $auth))->create('expense', [
+        'amount' => 999, 'expense_account_id' => 810, 'cash_bank_account_id' => 101, 'date' => '2026-09-12', 'narration' => 'Internet bill',
+    ]);
+
+    stubFail('masters/accounts', 503);
+    $recent = (new ExpenseHistory($ctx, $auth))->recent(5);
+    stubRecover();
+
+    assertSame(1, count($recent['rows']), 'the expense is still listed');
+    assertSame(999.0, $recent['rows'][0]['amount'], 'with its amount');
+    assertTrue($recent['names_available'] === false, 'and the screen is told the names are missing');
+    assertSame(null, $recent['rows'][0]['category_name'], 'rather than being given a guess');
+});
+
+check('the expense carries the party, bill number and tax category it was given', function () use ($ctx, $auth) {
+    resetDatabase();
+    $expense = (new TransactionService($ctx, $auth))->create('expense', [
+        'amount'               => 1250.5,
+        'expense_account_id'   => 814,
+        'cash_bank_account_id' => 102,
+        'date'                 => '2026-09-18',
+        'party_account_id'     => 605,
+        'reference_no'         => 'INV-9001',
+        'tax_cat_id'           => 1,
+        'attachment_ref'       => 'Drive / bills / 2026-09',
+        'narration'            => 'Quarterly audit fee',
+    ]);
+
+    $payload = Db::jsonColumn(Db::scalar(
+        'SELECT payload FROM billing_transaction_requests WHERE request_id = :id',
+        ['id' => $expense['request_id']],
+    ));
+
+    assertSame(605, $payload['party_acc_id'], 'the party goes with it');
+    assertSame('INV-9001', $payload['reference_no'], 'so does the supplier\'s own bill number');
+    assertSame(1, $payload['tax_cat_id'], 'and the tax category Books will apply');
+    assertSame('Drive / bills / 2026-09', $payload['attachment_ref'], 'and where the bill is kept');
+});
+
+check('a bill file cannot be kept here, and the screen is told why', function () {
+    $storage = DocumentCapture::storage();
+    assertTrue($storage['available'] === false, 'there is nowhere to put it');
+    assertTrue(is_string($storage['reason']) && $storage['reason'] !== '', 'and the reason says so in words');
+    assertSame(['application/pdf', 'image/jpeg', 'image/png'], $storage['accepts'], 'what one would be, when there is');
+
+    // No DOCUMENT_EXTRACTION_BASE in the test environment, so the reader is off
+    // — with an explanation rather than a button that does nothing.
+    $extraction = DocumentCapture::extraction();
+    assertTrue($extraction['available'] === false, 'and no service reads one either');
+    assertTrue(str_contains((string) $extraction['reason'], 'document-extraction'), 'named, so it can be turned on');
 });
 
 echo "\nData ownership (release-blocking)\n";

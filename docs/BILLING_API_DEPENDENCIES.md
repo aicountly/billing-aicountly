@@ -110,16 +110,23 @@ by the person confirming it.
 panel explains the missing capability, and the checklist step says so rather
 than pretending there is nothing to match.
 
-## Not available: supplier-bill extraction
+## Not available: bill extraction
 
-**Dashboard 4 shows an unavailable state for this.**
+**Dashboard 4 and the expense screen both show an unavailable state for this.**
 
 Reading a bill out of a PDF or a photo needs a document-extraction service, and
 this deployment has none. Billing does not add an OCR stack, and it does not ask
 a model to guess at a supplier's totals.
 
 Enabled by setting `DOCUMENT_EXTRACTION_BASE` in `server-php/.env` once a service
-exists. The expected shape, following the house "deterministic first, AI only for
+exists. Billing's half of it is written: `POST /api/v1/expenses/read-bill` takes
+the upload, checks its type from the file's own content and its size, calls the
+service below, and hands the fields back for the person to confirm. It records
+nothing — not the file, not the answer — and the expense the user then saves is
+the only thing that survives the request. One switch, `DocumentCapture`, answers
+for both screens, so they cannot disagree about what this deployment can read.
+
+The expected shape, following the house "deterministic first, AI only for
 what is left" rule:
 
 ```
@@ -135,8 +142,44 @@ POST <DOCUMENT_EXTRACTION_BASE>/v1/extract
 ```
 
 Every extracted field must arrive reviewable, and nothing is posted until a
-person has approved it. **Until this exists**, the panel offers the manual path,
-which records exactly the same purchase bill.
+person has approved it. The expense screen shows what was read, applies only the
+amount, bill date and bill number, and leaves the supplier for a person to pick
+— matching a name against a ledger is a choice with accounting consequences.
+**Until this exists**, both screens offer the manual path, which records exactly
+the same thing.
+
+## Not available: keeping the bill file
+
+**The expense screen shows a reference field instead.**
+
+There is nowhere in this deployment to put a PDF or a photo of a bill and get it
+back later, and Billing is the wrong place to build one: the deploy runs
+`rsync --delete` over the document root (see `DEPLOYMENT.md`), so a folder of
+uploads beside the app would not survive a release.
+
+So the expense screen records **where the bill is kept** — a file number, a
+folder, a link — and sends it to Books as `attachment_ref` on the voucher, which
+is a field the expense request already accepted. That is a smaller thing than an
+attachment and it is honest about being one.
+
+Two pieces are needed to turn it into a real attachment, and the first is
+configuration:
+
+```
+DOCUMENT_STORAGE_BASE=<service>     in server-php/.env
+
+POST <DOCUMENT_STORAGE_BASE>/v1/documents
+  multipart: file=<pdf|jpg|png>, scope=<cmp_id>/<fy_id>
+  → { data: { reference, filename, size, content_type, url } }
+
+GET <DOCUMENT_STORAGE_BASE>/v1/documents/<reference>
+  → the file, for whoever may see the voucher
+```
+
+The second is a client for it in `server-php/src/Clients/`, and one line in
+`DocumentCapture::storage()`. Until both exist that method answers `false`
+whatever the environment says, because configuring a service Billing cannot call
+would put a drop zone on screen that swallows a photo and loses it.
 
 ## Not depended on: Aicountly Pay
 

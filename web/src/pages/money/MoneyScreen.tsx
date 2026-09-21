@@ -54,6 +54,8 @@ export function MoneyScreen({ direction }: { direction: Direction }) {
   const [period, setPeriod] = useState<MoneyPeriodKey>('month')
   const [allocationOpen, setAllocationOpen] = useState(false)
   const [saveAndNew, setSaveAndNew] = useState(false)
+  /** Bumped after a Save & New, to put the caret back on the party field. */
+  const [refocusParty, setRefocusParty] = useState(0)
   const { toasts, push, dismiss } = useToasts()
 
   const pageRef = useRef<HTMLDivElement>(null)
@@ -103,7 +105,11 @@ export function MoneyScreen({ direction }: { direction: Direction }) {
           detail: `${money(amount)} ${isOut ? 'paid to' : 'received from'} ${partyName}`,
         })
         setAllocationOpen(false)
-        window.setTimeout(() => partyInputRef.current?.focus(), 0)
+        // Focus is moved by an effect, not a timer. The party input only exists
+        // once the form has re-rendered empty, and a setTimeout(0) raced that
+        // commit -- sometimes focusing an input that was about to be replaced,
+        // leaving the caret on the amount instead of the party.
+        setRefocusParty((n) => n + 1)
         return
       }
 
@@ -161,6 +167,11 @@ export function MoneyScreen({ direction }: { direction: Direction }) {
   useEffect(() => {
     if (businessToday) adoptBusinessDate(businessToday)
   }, [businessToday, adoptBusinessDate])
+
+  useEffect(() => {
+    if (refocusParty === 0) return
+    partyInputRef.current?.focus()
+  }, [refocusParty])
 
   // -------------------------------------------------------------------------
   // Leaving with something typed

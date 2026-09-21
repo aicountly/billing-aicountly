@@ -25,6 +25,7 @@ import Receivables from '../src/dashboards/Receivables'
 import Payables from '../src/dashboards/Payables'
 import CashCompliance from '../src/dashboards/CashCompliance'
 import { MoneyScreen } from '../src/pages/money/MoneyScreen'
+import ExpensePage from '../src/pages/expense/ExpensePage'
 import { saveSession, setAuthToken } from '../src/auth/tokens'
 import { setScope } from '../src/services/api'
 import * as fixtures from './fixtures'
@@ -35,6 +36,24 @@ const params = new URLSearchParams(window.location.search)
 const screen = params.get('screen') ?? 'overview'
 const asBiller = params.get('as') === 'biller'
 
+/**
+ * Endpoints to answer with a 503, as `?fail=recent,categories`.
+ *
+ * Photographing what a screen does when one of its panels cannot load is the
+ * other half of what this booth is for: the expense form has to stay usable
+ * when the recent list does not arrive, and that is only checkable if the
+ * booth can refuse to answer.
+ */
+const failing = new Set((params.get('fail') ?? '').split(',').filter(Boolean))
+
+const FAILABLE: Array<[string, RegExp]> = [
+  ['recent', /v1\/expenses\/recent/],
+  ['categories', /v1\/catalog\/expense-accounts/],
+  ['paid-from', /v1\/catalog\/cash-bank/],
+  ['parties', /v1\/catalog\/parties/],
+  ['capabilities', /v1\/expenses\/capabilities/],
+]
+
 const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
   overview: { path: '/dashboard/overview', element: <Overview /> },
   biller: { path: '/dashboard/biller', element: <BillerDesk /> },
@@ -43,6 +62,7 @@ const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
   'cash-compliance': { path: '/dashboard/cash-compliance', element: <CashCompliance /> },
   'money-out': { path: '/money-out/new', element: <MoneyScreen direction="out" /> },
   'money-in': { path: '/money-in/new', element: <MoneyScreen direction="in" /> },
+  expense: { path: '/more/expense', element: <ExpensePage /> },
 }
 
 /** The fixture behind each endpoint the screens call. */
@@ -66,13 +86,19 @@ const RESPONSES: Array<[RegExp, unknown]> = [
   [/v1\/money\/party-context/, fixtures.moneyPartyContext],
   [/v1\/money\/recent/, fixtures.moneyRecent],
   [/v1\/open-bills/, fixtures.openBills],
-  [/v1\/catalog\/cash-bank/, fixtures.cashBank],
-  [/v1\/catalog\/parties/, fixtures.parties],
+  [/v1\/catalog\/expense-accounts/, fixtures.expenseAccounts],
+  [/v1\/catalog\/tax-categories/, fixtures.taxCategories],
+  [/v1\/expenses\/recent/, fixtures.recentExpenses],
+  [/v1\/transactions\/expense/, fixtures.savedExpense],
+  [/v1\/expenses\/capabilities/, fixtures.expenseCapabilities],
+  // One entry, shared: this list is matched in order and a second
+  // cash-bank pattern below would never be reached.
+  [/v1\/catalog\/cash-bank/, fixtures.cashBankAccounts],
   [/v1\/manage\/companies/, { data: [{ cmp_id: 1, cmp_name: 'Sharma Enterprises' }], meta: { total: 1 } }],
   [/v1\/manage\/companyinfo/, {
     cmp_id: 1,
     cmp_name: 'Sharma Enterprises',
-    fy_list: [{ fy_id: 4, fy_name: 'FY 2026–27' }],
+    fy_list: [{ fy_id: 4, fy_name: 'FY 2026-27', fy_start: '2026-04-01', fy_end: '2027-03-31' }],
     branch_list: [{ bo_id: 1, bo_name: 'Main Branch', is_head_office: true }],
   }],
 ]
@@ -81,6 +107,25 @@ const originalFetch = window.fetch.bind(window)
 
 window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+
+  for (const [key, pattern] of FAILABLE) {
+    if (failing.has(key) && pattern.test(url)) {
+      return new Response(JSON.stringify({ error: { code: 'upstream_unavailable', message: 'Not answering, by request.' } }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+  }
+
+  // Party search really searches, so the empty state is reachable here too.
+  if (/v1\/catalog\/parties/.test(url)) {
+    const term = (new URL(url, window.location.origin).searchParams.get('q') ?? '').toLowerCase()
+    const rows = fixtures.suppliers.filter((row) => row.acc_name.toLowerCase().includes(term))
+    return new Response(JSON.stringify({ data: rows, meta: { total: rows.length, limit: 20, offset: 0 } }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
 
   for (const [pattern, payload] of RESPONSES) {
     if (pattern.test(url)) {
