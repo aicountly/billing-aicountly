@@ -28,6 +28,27 @@ final class TransactionsController extends Controller
         Http::data((new TransactionService($ctx, $auth))->create($kind, Http::body()), 201);
     }
 
+    /**
+     * Save a transaction WITHOUT sending it to Books.
+     *
+     * The counter's answer to an interruption. What is typed goes to the server
+     * under the same validation a real save runs, and stays there as a request
+     * nobody has posted — not in a browser, where a day's takings would belong
+     * to one machine.
+     */
+    public static function saveDraft(string $kind): void
+    {
+        [$auth, $ctx] = self::enter();
+        Http::data((new TransactionService($ctx, $auth))->draft($kind, Http::body()), 201);
+    }
+
+    /** Replace what a draft holds. Refused once it has been posted. */
+    public static function updateDraft(string $id): void
+    {
+        [$auth, $ctx] = self::enter();
+        Http::data((new TransactionService($ctx, $auth))->updateDraft((int) $id, Http::body()));
+    }
+
     public static function show(string $id): void
     {
         [$auth, $ctx] = self::enter();

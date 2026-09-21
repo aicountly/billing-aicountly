@@ -33,6 +33,18 @@ final class TransactionService
     public const COMMAND_POST = 'billing.transaction.post';
 
     /**
+     * How money can travel between two of the business's own accounts.
+     *
+     * Cash and cheque are what a deposit slip offers. The electronic modes are
+     * here because a bank transfer between two of your own accounts is an
+     * ordinary thing and refusing to name it would push people to record it as
+     * cash, which is the one answer that is definitely wrong.
+     *
+     * @var list<string>
+     */
+    private const CONTRA_MODES = ['cash', 'cheque', 'upi', 'bank_transfer', 'neft', 'rtgs', 'imps'];
+
+    /**
      * kind => [Books voucher type, permission, plain-English name]
      *
      * @var array<string, array{0:int, 1:string, 2:string}>
@@ -63,10 +75,7 @@ final class TransactionService
      */
     public function create(string $kind, array $input): array
     {
-        if (!isset(self::KINDS[$kind])) {
-            Http::validationFailed('Unknown transaction type "' . $kind . '".', ['field' => 'kind']);
-        }
-        [$vchTypeId, $permission, $label] = self::KINDS[$kind];
+        [$vchTypeId, $permission, $label] = self::kind($kind);
 
         Permissions::assert($this->ctx, $this->auth, $permission);
 
@@ -193,9 +202,109 @@ final class TransactionService
         if ($row === null) {
             return [];
         }
+        // Decoded rather than handed over as a JSON string: the screens that
+        // reopen a draft read this back into their own fields, and making each
+        // of them guess whether PostgreSQL returned text or an array is how one
+        // of them eventually guesses wrong.
+        $row['payload'] = Db::jsonColumn($row['payload']);
         $row['commands'] = IntegrationCommand::forEntity($this->ctx, 'transaction_request', $requestId);
 
         return $row;
+    }
+
+    /**
+     * Save what the user typed WITHOUT sending it to Books.
+     *
+     * A draft is this same request row in the state it is in before `post()`
+     * runs: nothing has been posted, no voucher exists, and no ledger has
+     * moved. It is not a second store and not a parallel document — which is
+     * exactly why it is here rather than in a `billing_draft_deposits` table or
+     * in one browser's localStorage, where a day's counter takings would live
+     * on whichever machine happened to type them.
+     *
+     * The same validation runs as on a real save, so a draft cannot hold
+     * something the posted path would refuse. Saving it costs nothing at the
+     * counter and posting it later reuses this row, and therefore the same
+     * idempotency key.
+     *
+     * @param array<string, mixed> $input
+     * @return array<string, mixed>
+     */
+    public function draft(string $kind, array $input): array
+    {
+        [, $permission, $label] = self::kind($kind);
+        Permissions::assert($this->ctx, $this->auth, $permission);
+
+        $payload = $this->normalise($kind, $input, $label);
+
+        $requestId = (int) Db::insert('billing_transaction_requests', [
+            'cmp_id'           => $this->ctx->cmpId,
+            'fy_id'            => $this->ctx->fyId,
+            'bo_id'            => $this->ctx->boId,
+            'kind'             => $kind,
+            'status'           => 'DRAFT',
+            'party_account_id' => $payload['party_acc_id'] ?? null,
+            'transaction_date' => $payload['vch_date'],
+            'payload'          => $payload,
+            'created_by'       => $this->auth->uuid,
+        ], 'request_id');
+
+        Audit::record($this->ctx, $this->auth, 'transaction.draft.' . $kind, 'transaction_request', $requestId);
+
+        return $this->find($requestId);
+    }
+
+    /**
+     * Replace what a draft holds.
+     *
+     * Only while it is still a draft. Once a request has been sent to Books the
+     * payload is the record of what was asked for, and editing it would leave
+     * this row describing something other than the voucher it produced.
+     *
+     * @param array<string, mixed> $input
+     * @return array<string, mixed>
+     */
+    public function updateDraft(int $requestId, array $input): array
+    {
+        $request = Db::first(
+            'SELECT kind, status FROM billing_transaction_requests WHERE request_id = :id AND cmp_id = :cmp',
+            ['id' => $requestId, 'cmp' => $this->ctx->cmpId],
+        );
+        if ($request === null) {
+            Http::notFound('That draft does not exist.');
+        }
+        if ($request['status'] !== 'DRAFT') {
+            Http::conflict('That entry has already been sent to Smart Books, so it can no longer be edited here.');
+        }
+
+        $kind = (string) $request['kind'];
+        [, $permission, $label] = self::kind($kind);
+        Permissions::assert($this->ctx, $this->auth, $permission);
+
+        $payload = $this->normalise($kind, $input, $label);
+
+        Db::update('billing_transaction_requests', [
+            'party_account_id' => $payload['party_acc_id'] ?? null,
+            'transaction_date' => $payload['vch_date'],
+            'payload'          => $payload,
+            'updated_at'       => self::now(),
+        ], ['request_id' => $requestId]);
+
+        Audit::record($this->ctx, $this->auth, 'transaction.draft.' . $kind, 'transaction_request', $requestId);
+
+        return $this->find($requestId);
+    }
+
+    /**
+     * @return array{0:int, 1:string, 2:string}
+     */
+    private static function kind(string $kind): array
+    {
+        if (!isset(self::KINDS[$kind])) {
+            Http::validationFailed('Unknown transaction type "' . $kind . '".', ['field' => 'kind']);
+        }
+
+        return self::KINDS[$kind];
     }
 
     /**
@@ -205,6 +314,10 @@ final class TransactionService
      * list of what was actually billed is Books' register, read live. Keeping a
      * "recent bills" list here would be a second answer to that question.
      *
+     * A DRAFT belongs here for the same reason a FAILED one does. To the person
+     * who typed it there is no difference worth a separate screen: money is in
+     * this app and not yet in the books.
+     *
      * @return list<array<string, mixed>>
      */
     public function unfinished(int $limit = 50): array
@@ -213,7 +326,7 @@ final class TransactionService
 
         return Db::all(
             "SELECT * FROM billing_transaction_requests
-             WHERE {$scope} AND status IN ('PENDING', 'POSTING', 'FAILED')
+             WHERE {$scope} AND status IN ('DRAFT', 'PENDING', 'POSTING', 'FAILED')
              ORDER BY created_at DESC LIMIT " . (int) $limit,
             $params,
         );
@@ -530,11 +643,34 @@ final class TransactionService
             Http::validationFailed('The money has to move between two different accounts.', ['field' => 'to_account_id']);
         }
 
+        // How the money travelled. The key is `payment_mode` rather than a new
+        // word of our own because that is what Books is already sent for a
+        // receipt or a payment, and one vocabulary across the three is one
+        // fewer thing for the far end to special-case.
+        $mode = self::text($input['payment_mode'] ?? null) ?? 'cash';
+        if (!in_array($mode, self::CONTRA_MODES, true)) {
+            Http::validationFailed('That is not a way money can be moved.', ['field' => 'payment_mode']);
+        }
+
+        $instrumentNo = self::text($input['instrument_no'] ?? $input['reference'] ?? null);
+        if ($mode === 'cheque' && $instrumentNo === null) {
+            // A cheque with no number cannot be traced to the slip, and the
+            // person reconciling the statement in three weeks is the one who
+            // pays for that.
+            Http::validationFailed('Enter the cheque number.', ['field' => 'instrument_no']);
+        }
+
         return [
             'from_account_id' => $from,
             'to_account_id'   => $to,
             'amount'          => $amount,
-            'instrument_no'   => self::text($input['instrument_no'] ?? null),
+            'payment_mode'    => $mode,
+            'instrument_no'   => $instrumentNo,
+            'instrument_date' => $mode === 'cheque' ? self::text($input['instrument_date'] ?? null) : null,
+            // Where the slip is kept, when this deployment can keep one. The
+            // same field an expense already carries, and the same rule: Billing
+            // holds the reference the document service gave back, never bytes.
+            'attachment_ref'  => self::text($input['attachment_ref'] ?? null),
             'contra_kind'     => $kind,
         ];
     }

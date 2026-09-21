@@ -18,6 +18,7 @@ require __DIR__ . '/../src/Autoload.php';
 
 Env::load(__DIR__ . '/../.env');
 
+use Aicountly\Api\Domain\BankDepositHistory;
 use Aicountly\Api\Domain\BankWithdrawalHistory;
 use Aicountly\Api\Domain\BillerDeskService;
 use Aicountly\Api\Domain\BriefingService;
@@ -426,6 +427,82 @@ check('money cannot be moved between the same account twice', function () use ($
         ]),
         'two different accounts',
         'same-account contra',
+    );
+});
+
+check('a cheque deposit without a cheque number is refused', function () use ($ctx, $auth) {
+    resetDatabase();
+    assertThrows(
+        static fn () => (new TransactionService($ctx, $auth))->create('bank_deposit', [
+            'amount' => 5000, 'from_account_id' => 9001, 'to_account_id' => 9002, 'payment_mode' => 'cheque',
+        ]),
+        'cheque number',
+        'a cheque deposit with no number',
+    );
+});
+
+check('a draft is stored here and never reaches Books', function () use ($ctx, $auth) {
+    resetDatabase();
+    $draft = (new TransactionService($ctx, $auth))->draft('bank_deposit', [
+        'amount' => 5000, 'from_account_id' => 9001, 'to_account_id' => 9002,
+    ]);
+
+    assertSame('DRAFT', $draft['status'], 'it is a draft');
+    assertTrue($draft['books_voucher_id'] === null, 'no voucher was created');
+
+    foreach (stubRequests() as $request) {
+        assertTrue(!str_contains($request['path'], '/vouchers/drafts'), 'Books was not called');
+    }
+
+    // The counter's "not saved yet" screen is where an unfinished entry lives,
+    // whether it failed or was never sent.
+    $open = (new TransactionService($ctx, $auth))->unfinished();
+    assertSame(1, count($open), 'the draft is listed as unfinished');
+});
+
+check('a draft is validated as strictly as a real save', function () use ($ctx, $auth) {
+    resetDatabase();
+    assertThrows(
+        static fn () => (new TransactionService($ctx, $auth))->draft('bank_deposit', [
+            'amount' => 0, 'from_account_id' => 9001, 'to_account_id' => 9002,
+        ]),
+        'Enter the amount',
+        'a draft with no amount',
+    );
+});
+
+check('posting a draft drives the same row, so a draft is never a second voucher', function () use ($ctx, $auth) {
+    resetDatabase();
+    $service = new TransactionService($ctx, $auth);
+
+    $draft = $service->draft('bank_deposit', [
+        'amount' => 5000, 'from_account_id' => 9001, 'to_account_id' => 9002,
+    ]);
+    $edited = $service->updateDraft((int) $draft['request_id'], [
+        'amount' => 7500, 'from_account_id' => 9001, 'to_account_id' => 9002, 'reference' => 'DEP/9',
+    ]);
+    assertSame((int) $draft['request_id'], (int) $edited['request_id'], 'editing kept the same row');
+    assertSame(7500.0, (float) $edited['payload']['amount'], 'and holds what was typed second');
+
+    $posted = $service->post((int) $draft['request_id']);
+    assertSame('POSTED', $posted['status'], 'it posted');
+    assertSame((int) $draft['request_id'], (int) $posted['request_id'], 'on the same request row');
+
+    assertSame(1, (int) Db::scalar('SELECT COUNT(*) FROM billing_transaction_requests'), 'one row, one deposit');
+});
+
+check('a draft cannot be edited once it has been sent', function () use ($ctx, $auth) {
+    resetDatabase();
+    $service = new TransactionService($ctx, $auth);
+    $draft = $service->draft('bank_deposit', ['amount' => 5000, 'from_account_id' => 9001, 'to_account_id' => 9002]);
+    $service->post((int) $draft['request_id']);
+
+    assertThrows(
+        static fn () => $service->updateDraft((int) $draft['request_id'], [
+            'amount' => 1, 'from_account_id' => 9001, 'to_account_id' => 9002,
+        ]),
+        'already been sent',
+        'editing a posted request',
     );
 });
 
@@ -2204,6 +2281,103 @@ check('an account nothing has come out of reads zero, not an error', function ()
 
     assertSame(0.0, $summary['total'], 'no withdrawals, no total');
     assertSame(0, $summary['count'], 'and nothing counted');
+});
+
+echo "\nBank deposits\n";
+
+/** @param array<string, mixed> $overrides */
+function deposit(array $overrides = []): array
+{
+    return $overrides + [
+        'amount'          => 150000,
+        'from_account_id' => 101,
+        'to_account_id'   => 102,
+        'date'            => '2026-09-18',
+        'reference_no'    => 'DEP/01984',
+        'narration'       => "Saturday's takings",
+    ];
+}
+
+check('recent deposits are this company\'s own posted ones, newest first, named live', function () use ($ctx, $auth) {
+    resetDatabase();
+    $service = new TransactionService($ctx, $auth);
+    $service->create('bank_deposit', deposit(['amount' => 95000, 'date' => '2026-09-08']));
+    $service->create('bank_deposit', deposit());
+
+    $recent = (new BankDepositHistory($ctx, $auth))->recent(4);
+
+    assertSame(2, count($recent['rows']), 'both deposits come back');
+    assertSame('2026-09-18', $recent['rows'][0]['date'], 'newest first');
+    assertSame(150000.0, $recent['rows'][0]['amount'], 'the amount is what was recorded');
+    assertSame('DEP/01984', $recent['rows'][0]['reference_no'], 'and the slip number with it');
+    // A deposit runs the other way from a withdrawal, and the sides have to
+    // follow: the till is the source and the bank the destination.
+    assertSame(101, $recent['rows'][0]['cash_account_id'], 'the till it came out of');
+    assertSame(102, $recent['rows'][0]['bank_account_id'], 'and the bank it went into');
+    assertSame('cash', $recent['rows'][0]['payment_mode'], 'a plain deposit is cash');
+    assertTrue($recent['names_available'], 'Books answered, so the accounts are named');
+    assertSame('Cash in hand', $recent['rows'][0]['cash_account_name'], 'the till is named from Books');
+    assertSame('HDFC Current', $recent['rows'][0]['bank_account_name'], 'so is the bank');
+});
+
+check('a withdrawal is not a deposit, and an unposted one is not history', function () use ($ctx, $auth) {
+    resetDatabase();
+    (new TransactionService($ctx, $auth))->create('bank_withdrawal', withdrawal(['amount' => 9000]));
+
+    stubFail('vouchers/drafts', 500);
+    try {
+        (new TransactionService($ctx, $auth))->create('bank_deposit', deposit());
+    } catch (\Throwable) {
+        // The point of the case: it did not reach Books.
+    }
+    stubRecover();
+
+    assertSame([], (new BankDepositHistory($ctx, $auth))->recent(4)['rows'], 'neither one shows as a deposit');
+});
+
+check('a cheque deposit is remembered as one', function () use ($ctx, $auth) {
+    resetDatabase();
+    (new TransactionService($ctx, $auth))->create('bank_deposit', deposit([
+        'payment_mode' => 'cheque', 'instrument_no' => '004217',
+    ]));
+
+    $rows = (new BankDepositHistory($ctx, $auth))->recent(4)['rows'];
+    assertSame('cheque', $rows[0]['payment_mode'], 'the mode the person chose survives');
+});
+
+check('the month\'s deposits are counted for the bank they went INTO', function () use ($ctx, $auth) {
+    resetDatabase();
+    $service = new TransactionService($ctx, $auth);
+    $today = (new \DateTimeImmutable('now', new \DateTimeZone('Asia/Kolkata')))->format('Y-m-d');
+    $longAgo = (new \DateTimeImmutable('now', new \DateTimeZone('Asia/Kolkata')))->modify('-90 days')->format('Y-m-d');
+
+    $service->create('bank_deposit', deposit(['amount' => 30000, 'date' => $today]));
+    $service->create('bank_deposit', deposit(['amount' => 20000, 'date' => $today]));
+    // Another bank, and one older than the window. Neither should be counted.
+    $service->create('bank_deposit', deposit(['amount' => 99000, 'date' => $today, 'to_account_id' => 103]));
+    $service->create('bank_deposit', deposit(['amount' => 88000, 'date' => $longAgo]));
+
+    $summary = (new BankDepositHistory($ctx, $auth))->summary(102);
+
+    assertSame(50000.0, $summary['total'], 'only this bank, only the last 30 days');
+    assertSame(2, $summary['count'], 'and the count matches the total');
+});
+
+check('a deposit carries the slip reference it was given, and nothing else of the file', function () use ($ctx, $auth) {
+    resetDatabase();
+    $saved = (new TransactionService($ctx, $auth))->create('bank_deposit', deposit([
+        'attachment_ref' => 'doc_01J9WQ2K7MRB',
+    ]));
+
+    $payload = Db::jsonColumn(Db::scalar(
+        'SELECT payload FROM billing_transaction_requests WHERE request_id = :id',
+        ['id' => $saved['request_id']],
+    ));
+
+    assertSame('doc_01J9WQ2K7MRB', $payload['attachment_ref'], 'the reference the document service gave back');
+    foreach (['file', 'bytes', 'content', 'slip_data'] as $forbidden) {
+        assertTrue(!array_key_exists($forbidden, $payload), "the payload must not carry {$forbidden}");
+    }
 });
 
 check('a BILLER cannot record a withdrawal or read the list of them', function () use ($ctx) {

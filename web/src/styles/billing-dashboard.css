@@ -107,6 +107,8 @@
 }
 
 .billing-nav__child {
+  display: block;
+  position: relative;
   padding: 6px 10px;
   border-radius: 8px;
   color: var(--billing-muted);
@@ -120,7 +122,25 @@
   text-decoration: none;
 }
 
-.billing-nav__child[aria-current='page'] { color: var(--billing-action); font-weight: 650; }
+/* The screen you are on, said three ways — tint, weight and a bar down the
+   left edge. Colour alone would leave anyone who cannot separate green from
+   grey with no idea which of four sub-screens they are looking at. */
+.billing-nav__child[aria-current='page'] {
+  background: var(--billing-mint);
+  color: var(--billing-action);
+  font-weight: 700;
+}
+
+.billing-nav__child[aria-current='page']::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--billing-action);
+}
 
 .billing-sidebar__footer {
   margin-top: auto;

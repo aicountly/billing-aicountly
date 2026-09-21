@@ -359,30 +359,40 @@ entered by hand. Books still validates the quantity when the note is posted.
 
 ---
 
-## Not available: an unfinished document kept on the server
+## Partly available: an unfinished document kept on the server
 
-**Purchases → Debit note says this wherever it mentions a draft.**
+**Bank deposit has this. Purchases → Debit note does not, and says so wherever
+it mentions a draft.**
 
 `POST vouchers/drafts` and `POST vouchers/drafts/{id}/post` are one step from
 Billing's point of view: `TransactionService` creates the request row and posts
-it in the same request, and `billing_transaction_requests` has no DRAFT state —
-its unfinished rows are PENDING, POSTING or FAILED, which mean "on its way to
-Books", not "still being typed".
+it in the same request. Until Bank deposit, `billing_transaction_requests` had
+no DRAFT state — its unfinished rows were PENDING, POSTING or FAILED, which mean
+"on its way to Books", not "still being typed".
 
-So *Save as draft* keeps the form in `localStorage`, under the company and
-financial year it was typed in, and the screen says exactly that: kept in this
-browser, not on the server, not visible to anybody else. It is offered back when
-the screen is next opened, and thrown away once the note posts.
+It has one now, and it needed no new table. A draft is that same request row
+before `post()` runs: validated identically, never sent to Books, listed under
+*Entries not saved yet* beside the ones that tried and failed, and posted later
+on its ORIGINAL row and therefore its original idempotency key — so a draft can
+never become a second voucher.
 
-### The contract Billing would need
+```
+POST v1/transactions/{kind}/draft   → the request row, status DRAFT
+PUT  v1/transactions/{id}/draft     → replace what it holds, while still DRAFT
+POST v1/transactions/{id}/retry     → send it, on the key it was born with
+```
 
-Owner: **Billing**, not Books — a half-typed document is not an accounting
-record and should never reach the ledger. It needs a `billing_document_drafts`
-table and three endpoints (`GET` / `PUT` / `DELETE v1/drafts/{kind}`), scoped to
-the company, the financial year and the user.
+`{kind}` is any kind `TransactionService` knows, so the mechanism is not
+deposit-specific; Bank deposit is simply the first screen to use it.
 
-**Until that exists**, the local draft is the honest version: it works, it is
-labelled, and it cannot leave a half-made voucher anywhere near the accounts.
+**What is still missing** is the OTHER kind of draft: a half-typed document with
+lines, a party and a tax treatment, which is a bigger shape than a request
+payload and belongs to a screen that can reopen it. The debit note keeps that in
+`localStorage`, under the company and financial year it was typed in, and says
+exactly that on screen: kept in this browser, not on the server, not visible to
+anybody else. Giving those screens a server draft means the same row plus a
+screen that can rehydrate its own form from the payload — which is what Bank
+deposit does with `?draft=<id>`, and what the others would each have to do.
 
 ---
 

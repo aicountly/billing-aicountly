@@ -42,6 +42,7 @@ import MoneyReceived from '../src/pages/money-received'
 import ExpensePage from '../src/pages/expense/ExpensePage'
 import ItemsPage from '../src/pages/items/ItemsPage'
 import BankWithdrawalPage from '../src/pages/bank-withdrawal/BankWithdrawalPage'
+import BankDepositPage from '../src/pages/bank-deposit/BankDepositPage'
 import SalesBillPage from '../src/pages/sale/SalesBillPage'
 import CreditNotePage from '../src/pages/credit-note/CreditNotePage'
 import NewPurchasePage from '../src/pages/purchase/NewPurchasePage'
@@ -125,6 +126,8 @@ const FAILABLE: Array<[string, RegExp]> = [
   ['balance', /\/v1\/cash-bank(\?|$)/],
   ['withdrawals', /v1\/bank-withdrawals\/recent/],
   ['withdrawal-summary', /v1\/bank-withdrawals\/summary/],
+  ['deposits', /v1\/bank-deposits\/recent/],
+  ['deposit-summary', /v1\/bank-deposits\/summary/],
   // The report catalogue and one report, so "Reports couldn't be loaded" and
   // "This report couldn't be run" can both be photographed.
   ['report', /v1\/reports\/[a-z_]+(\?|$)/],
@@ -162,6 +165,7 @@ const SCREENS: Record<string, { path: string; entry?: string; element: React.Rea
   sale: { path: '/sales/new', element: <SalesBillPage /> },
   'credit-note': { path: '/more/credit-note', element: <CreditNotePage /> },
   'bank-withdrawal': { path: '/bank-cash/withdrawal', element: <BankWithdrawalPage /> },
+  'bank-deposit': { path: '/bank-cash/deposit', element: <BankDepositPage /> },
   purchase: { path: '/purchases/new', element: <NewPurchasePage /> },
   parties: { path: '/parties', element: <Parties /> },
 
@@ -259,6 +263,10 @@ const RESPONSES: Array<[RegExp, unknown | ((url: string) => unknown)]> = [
   [/v1\/bank-withdrawals\/recent/, fixtures.recentWithdrawals],
   [/v1\/bank-withdrawals\/summary/, fixtures.withdrawalSummary],
   [/v1\/transactions\/bank_withdrawal/, fixtures.savedWithdrawal],
+  [/v1\/bank-deposits\/recent/, fixtures.recentDeposits],
+  [/v1\/bank-deposits\/summary/, fixtures.depositSummary],
+  [/v1\/bank-deposits\/capabilities/, documentsConfigured ? fixtures.depositCapabilitiesConfigured : fixtures.depositCapabilities],
+  [/v1\/transactions\/bank_deposit/, fixtures.savedDeposit],
   [/v1\/manage\/companies/, { data: [{ cmp_id: 1, cmp_name: 'Sharma Enterprises' }], meta: { total: 1 } }],
   // Two branches and two years on purpose: switching one mid-entry is a case
   // the expense form has to handle (it clears the ids that belonged to the

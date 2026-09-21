@@ -121,6 +121,12 @@ const Dues = lazy(() => import('./receivables/DuesScreen').then((module) => ({ d
 const NewPurchase = lazy(() => import('./pages/purchase/NewPurchasePage'))
 
 /**
+ * Bank deposit, split out for the same reason as its mirror image above — its
+ * own stylesheet and its own context rail, which the counter never opens.
+ */
+const BankDeposit = lazy(() => import('./pages/bank-deposit/BankDepositPage'))
+
+/**
  * Money to Pay is split out for the same reason: it carries its own stylesheet,
  * its charts and its filter panel, and a biller who may not see payables at all
  * should never download any of it.
@@ -261,7 +267,14 @@ function Shell() {
 
         <Route path="bank-cash">
           <Route index element={<RequireScope><BankCashOverview /></RequireScope>} />
-          <Route path="deposit" element={<RequireScope><BankCash kind="bank_deposit" /></RequireScope>} />
+          <Route
+            path="deposit"
+            element={
+              <Suspense fallback={<Loading />}>
+                <RequireScope><BankDeposit /></RequireScope>
+              </Suspense>
+            }
+          />
           <Route
             path="withdrawal"
             element={

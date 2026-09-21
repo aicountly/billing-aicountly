@@ -159,51 +159,15 @@ final class ExpensesController extends Controller
     /**
      * The uploaded file, checked before it goes anywhere.
      *
-     * The type is taken from the CONTENT, not from what the browser said it was:
-     * a client-declared Content-Type is a claim by the same party that chose the
-     * file.
+     * The checks moved to DocumentCapture when the bank-deposit screen started
+     * taking a slip: two screens taking a file have to agree about what a file
+     * may be, and they cannot if each keeps its own copy of the rules.
      *
      * @return array{path:string, name:string, type:string}
      */
     private static function takeUpload(string $missing): array
     {
-        $file = $_FILES['file'] ?? null;
-        if (!is_array($file) || !isset($file['tmp_name']) || !is_uploaded_file((string) $file['tmp_name'])) {
-            Http::validationFailed($missing, ['field' => 'file']);
-        }
-
-        $error = (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE);
-        if ($error === UPLOAD_ERR_INI_SIZE || $error === UPLOAD_ERR_FORM_SIZE) {
-            Http::validationFailed('That file is too large.', ['field' => 'file']);
-        }
-        if ($error !== UPLOAD_ERR_OK) {
-            Http::validationFailed('That file did not arrive in one piece. Try again.', ['field' => 'file']);
-        }
-
-        $path = (string) $file['tmp_name'];
-        $size = (int) ($file['size'] ?? 0);
-        if ($size <= 0 || $size > DocumentCapture::MAX_BYTES) {
-            Http::validationFailed(
-                sprintf('A bill has to be under %d MB.', (int) (DocumentCapture::MAX_BYTES / 1024 / 1024)),
-                ['field' => 'file'],
-            );
-        }
-
-        $type = false;
-        if (function_exists('finfo_open')) {
-            $finfo = finfo_open(FILEINFO_MIME_TYPE);
-            if ($finfo !== false) {
-                $type = finfo_file($finfo, $path);
-                finfo_close($finfo);
-            }
-        }
-        if (!is_string($type) || !in_array($type, DocumentCapture::ACCEPTS, true)) {
-            Http::validationFailed('A bill has to be a PDF, JPG or PNG.', ['field' => 'file']);
-        }
-
-        $name = basename((string) ($file['name'] ?? 'bill'));
-
-        return ['path' => $path, 'name' => $name === '' ? 'bill' : $name, 'type' => $type];
+        return DocumentCapture::takeUpload($missing, 'bill');
     }
 
     /**
