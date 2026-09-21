@@ -34,11 +34,20 @@ document, receipts and payments with allocation, bank deposits and withdrawals,
 ten live reports with CSV export behind a searchable Reports screen, and
 Billing profiles deciding who sees what.
 
+<<<<<<< HEAD
 The party directory sits alongside them — every customer and supplier with what
 they owe beside the name, searchable, filterable and exportable. It is composed
 from Smart Books on each request and stores nothing: no party table, no balance,
 no sync. A figure Books does not carry is drawn as "—" with the reason on it,
 never as a zero.
+=======
+Behind those, `/settings` is a hub over twelve categories — company, documents,
+users, taxes, money, preferences, items, parties, automation, security,
+integrations and advanced. Each row says plainly whether the setting lives in
+Billing, in the product that owns it, or nowhere yet, and the setup checklist on
+it is worked out from your actual configuration rather than fixed. See
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#settings).
+>>>>>>> origin/main
 
 See [docs/BILLING_IMPLEMENTATION_STATUS.md](docs/BILLING_IMPLEMENTATION_STATUS.md)
 for what each figure means, and
@@ -91,7 +100,7 @@ same-origin.
 components against fixtures so the screens can be checked at any width without a
 portal session or a company's data. `?screen=` picks one — the five dashboards,
 `money-in`, `money-out`, `expense`, `credit-note`, `bank-withdrawal`, `sale`,
-`items`, `purchase`, `dues` (Money to Collect), `dues-payable` (Money to Pay),
+`items`, `purchase`, `settings`, `dues` (Money to Collect), `dues-payable` (Money to Pay),
 `reports` (the Reports discovery screen) or `report` (one report, open) —
 `?as=biller` narrows the profile, and `?fail=recent,categories` makes those
 endpoints answer 503, which is how the "one panel is down, the form still
@@ -104,8 +113,10 @@ the Items screen adds `items`, `stats` and `groups`, and the Reports screens
 add `reports` and `report`, so their degraded states are reachable too. `?at=` sets the screen's OWN query string
 (`?screen=items&at=stock_status%3Dlow`), which is the only way to photograph a
 screen that keeps its state in the address bar in its filtered, sorted or paged
-states. `vite build` takes `index.html` only, so none of it reaches the
-deployed bundle.
+states. The settings hub
+adds `&category=` for its twelve detail pages
+(`?screen=settings&category=taxes`). `vite build` takes `index.html` only, so
+none of it reaches the deployed bundle.
 
 The dues screens add two more: `?state=empty|error|slow` for the three states
 they must survive — nothing outstanding, Books unreachable, and the skeletons
