@@ -94,6 +94,91 @@ export interface TransactionRequest {
   commands?: IntegrationCommand[]
 }
 
+// ---------------------------------------------------------------------------
+// The original a credit or debit note is raised against
+// ---------------------------------------------------------------------------
+
+/**
+ * One invoice (or supplier bill) as Books' register describes it.
+ *
+ * `outstanding` is the unpaid balance from Books' bill-by-bill report, matched
+ * to this document on the same request. It is null when that report could not
+ * be read — never zero, because "settled" and "we could not tell" are the two
+ * facts this column exists to keep apart.
+ */
+export interface OriginalDocument {
+  voucher_id: number | null
+  voucher_uuid: string | null
+  document_no: string | null
+  date: string | null
+  party: string | null
+  party_id: number | null
+  amount: number | null
+  status: string | null
+  outstanding?: number | null
+}
+
+export interface OriginalDocuments {
+  party_account_id: number
+  from: string
+  to: string
+  documents: OriginalDocument[]
+  /** False when more documents exist in the range than one read could hold. */
+  complete: boolean
+  outstanding_available: boolean
+  note: string
+}
+
+/**
+ * A line that was billed on the original, as Books has it.
+ *
+ * The quantity DESCRIBES the invoice; it is not a permission to credit that
+ * much. Books decides what may still be credited when the note is posted.
+ */
+export interface OriginalDocumentLine {
+  line_ref: string
+  item_id: number | null
+  item_name: string | null
+  sku: string | null
+  hsn_sac: string | null
+  unit_id: number | null
+  unit_name: string | null
+  warehouse_id: number | null
+  batch_id: number | null
+  batch_no: string | null
+  qty: number | null
+  rate: number | null
+  discount_pc: number | null
+  amount: number | null
+  tax_cat_id: number | null
+  tax_rate: number | null
+  /** False for a service or described charge: creditable, but never stock. */
+  stockable: boolean
+}
+
+export interface OriginalDocumentDetail extends OriginalDocument {
+  available: boolean
+  reason: string | null
+  /** False when Books answered without lines this product could read. */
+  lines_available: boolean
+  lines: OriginalDocumentLine[]
+  note: string
+}
+
+/** Credit notes raised this month against the window before it. */
+export interface CreditNoteTrend {
+  available: boolean
+  reason: string | null
+  label?: string
+  from?: string
+  to?: string
+  count?: number
+  value?: number | null
+  previous_label?: string
+  previous_count?: number | null
+  series?: Array<{ label: string; count: number }>
+}
+
 export interface DueBill {
   account_id: number
   account_name: string
