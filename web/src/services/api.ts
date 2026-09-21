@@ -102,6 +102,24 @@ interface RequestOptions {
   signal?: AbortSignal
 }
 
+export interface UploadOptions {
+  params?: QueryParams
+  /**
+   * How much of the file has left the browser, 0 to 1.
+   *
+   * Called only while the browser can measure it, so a caller that never hears
+   * from it should show an unmeasured bar rather than a stalled one.
+   */
+  onProgress?: (fraction: number) => void
+  /** Cancels the upload — the person changed their mind, or left the screen. */
+  signal?: AbortSignal
+}
+
+/** What an aborted request rejects with, matching what fetch() throws. */
+function abortError(): DOMException {
+  return new DOMException('The upload was cancelled', 'AbortError')
+}
+
 async function send<T>(path: string, options: RequestOptions, sesKey: string): Promise<T> {
   const scoped = options.scoped !== false
   const method = options.method ?? 'GET'
@@ -231,44 +249,88 @@ export const api = {
   /**
    * A file, posted with the session key and the company scope.
    *
+   * XMLHttpRequest rather than fetch, for one reason: fetch cannot say how much
+   * of the body has left the browser, and a ten-megabyte photo of a bill on a
+   * shop's connection is exactly the case where a person needs to see that
+   * something is happening. Everything else matches send() — the same envelope,
+   * the same ApiError, the same one retry on a stale session key.
+   *
    * Content-Type is deliberately NOT set: the browser has to write the
    * multipart boundary itself, and setting it by hand produces a body the
    * server cannot take apart. The scope rides in the query string, which is
    * where it already goes for every other call — a multipart body is not JSON
    * and the backend's Http::param() reads the URL first for exactly this case.
    */
-  async upload<T>(path: string, form: FormData, params?: QueryParams): Promise<ItemResponse<T>> {
-    const send = async (sesKey: string): Promise<ItemResponse<T>> => {
-      const response = await fetch(buildUrl(path, params, true), {
-        method: 'POST',
-        headers: { Accept: 'application/json', Authorization: `Bearer ${sesKey}` },
-        body: form,
-      })
-
-      const text = await response.text()
-      let parsed: unknown = null
-      if (text) {
-        try {
-          parsed = JSON.parse(text)
-        } catch {
-          parsed = null
+  async upload<T>(path: string, form: FormData, options: UploadOptions = {}): Promise<ItemResponse<T>> {
+    const send = (sesKey: string): Promise<ItemResponse<T>> =>
+      new Promise((resolve, reject) => {
+        if (options.signal?.aborted) {
+          reject(abortError())
+          return
         }
-      }
 
-      if (!response.ok) {
-        const envelope = parsed as
-          | { error?: { code?: string; message?: string; details?: Record<string, unknown> } }
-          | null
-        throw new ApiError(
-          response.status,
-          envelope?.error?.code ?? 'error',
-          envelope?.error?.message ?? `That file was not accepted (${response.status})`,
-          envelope?.error?.details ?? {},
-        )
-      }
+        const request = new XMLHttpRequest()
+        request.open('POST', buildUrl(path, options.params, true))
+        request.setRequestHeader('Accept', 'application/json')
+        request.setRequestHeader('Authorization', `Bearer ${sesKey}`)
 
-      return parsed as ItemResponse<T>
-    }
+        const stop = () => request.abort()
+        options.signal?.addEventListener('abort', stop)
+        const finished = () => options.signal?.removeEventListener('abort', stop)
+
+        if (options.onProgress) {
+          request.upload.addEventListener('progress', (event) => {
+            // Not every browser and proxy can measure it. When none can, the
+            // caller gets no fraction and shows an unmeasured bar instead of
+            // a made-up one.
+            if (event.lengthComputable && event.total > 0) {
+              options.onProgress?.(Math.min(1, event.loaded / event.total))
+            }
+          })
+        }
+
+        request.addEventListener('abort', () => {
+          finished()
+          reject(abortError())
+        })
+
+        request.addEventListener('error', () => {
+          finished()
+          reject(new ApiError(0, 'network', 'That file could not be sent. Check the connection and try again.'))
+        })
+
+        request.addEventListener('load', () => {
+          finished()
+
+          let parsed: unknown = null
+          if (request.responseText) {
+            try {
+              parsed = JSON.parse(request.responseText)
+            } catch {
+              parsed = null
+            }
+          }
+
+          if (request.status < 200 || request.status >= 300) {
+            const envelope = parsed as
+              | { error?: { code?: string; message?: string; details?: Record<string, unknown> } }
+              | null
+            reject(
+              new ApiError(
+                request.status,
+                envelope?.error?.code ?? 'error',
+                envelope?.error?.message ?? `That file was not accepted (${request.status})`,
+                envelope?.error?.details ?? {},
+              ),
+            )
+            return
+          }
+
+          resolve(parsed as ItemResponse<T>)
+        })
+
+        request.send(form)
+      })
 
     const sesKey = await ensureSesKey()
     try {

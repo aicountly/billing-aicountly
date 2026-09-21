@@ -263,7 +263,7 @@ approximated.
 
 ## Verification
 
-* `server-php/tests/run.sh` — 101 passing, 0 failing, against a real
+* `server-php/tests/run.sh` — 103 passing, 0 failing, against a real
   PostgreSQL and a stub standing in for Books and Inventory. Among them the
   release-blocking pair, which fail the build if a table or column ever starts
   holding a voucher, ledger, balance, item or party.

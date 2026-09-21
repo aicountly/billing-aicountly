@@ -13,13 +13,14 @@
  * Manage. Billing stores none of them. Saving is the same call the screen this
  * replaced used, `POST v1/transactions/expense`, with the fields that request
  * already accepted and the old form did not offer: the party, the bill number,
- * the tax category and where the bill is kept.
+ * the tax category and the bill — the file itself where a document service is
+ * configured, and otherwise a note of where it is kept.
  *
  * NOTHING ON THIS SCREEN IS INVENTED. The quick-category cards are matched
  * against this company's own heads and hidden when they match nothing; the
- * recent list is what this product recorded, and says so; the bill reader is
- * off with a reason unless a document service is configured for the
- * deployment. There is no demo data behind any of it.
+ * recent list is what this product recorded, and says so; the drop zone and the
+ * bill reader are off with a reason unless a document service is configured for
+ * the deployment. There is no demo data behind any of it.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -200,6 +201,10 @@ export default function ExpensePage() {
    * another company's chart of accounts, so they go; what is company-neutral —
    * the amount, the date, the bill number, the note — stays, because throwing
    * away typing nobody asked to throw away is its own bug.
+   *
+   * The attached bill goes with them. It was filed under the scope that was
+   * open when it was uploaded, so carrying it over would put one company's
+   * document on another company's voucher.
    */
   const previousScope = useRef(scopeKey)
   useEffect(() => {
@@ -207,10 +212,14 @@ export default function ExpensePage() {
     previousScope.current = scopeKey
 
     setDraft((current) => {
-      const stale = current.categoryId !== '' || current.paidFromId !== '' || current.vendor !== null
+      const stale =
+        current.categoryId !== '' ||
+        current.paidFromId !== '' ||
+        current.vendor !== null ||
+        current.bill !== null
       if (!stale) return current
       setScopeChanged(true)
-      return { ...current, categoryId: '', paidFromId: '', vendor: null, taxCategoryId: '' }
+      return { ...current, categoryId: '', paidFromId: '', vendor: null, taxCategoryId: '', bill: null }
     })
     setSaved(null)
     setError(null)
@@ -501,8 +510,8 @@ export default function ExpensePage() {
       <div style={{ display: 'grid', gap: 12, marginBottom: 14 }}>
         {scopeChanged && (
           <Notice tone="warning" title="The company, branch or year changed" onDismiss={() => setScopeChanged(false)}>
-            The category, payment account and vendor were cleared, because they belonged to the company that was open
-            before. Everything else you typed is still here.
+            The category, payment account, vendor and any attached bill were cleared, because they belonged to the
+            company that was open before. Everything else you typed is still here.
           </Notice>
         )}
 
@@ -576,6 +585,9 @@ export default function ExpensePage() {
             paidFrom={paidFrom}
             taxCategories={taxCategories}
             billStorage={capability?.bill_storage ?? null}
+            billExtraction={capability?.bill_extraction ?? null}
+            extractionBusy={aiBusy}
+            onReadBill={(file) => void readBill(file)}
             aiFilled={aiFilled}
             saving={saving}
             saveAndNew={saveAndNew}
@@ -588,6 +600,7 @@ export default function ExpensePage() {
         </main>
 
         <ExpenseHelperPanel
+          storage={capability?.bill_storage ?? null}
           categories={categories}
           selectedCategoryId={draft.categoryId}
           onPickCategory={(accountId) => {
@@ -604,9 +617,11 @@ export default function ExpensePage() {
         />
       </div>
 
-      {/* The reader's file picker. Hidden, never a drop target: this deployment
-          has nowhere to keep a bill, so a file is read and forgotten, and a
-          drop zone would promise otherwise. */}
+      {/* The reader's own file picker, for "Upload & Read Bill" on the right.
+          Reading and keeping are separate things: a bill already attached to
+          the form is read from the drop zone without being chosen again, and
+          this is the path for a deployment that can read one but has nowhere
+          to keep it. Either way the file is read and forgotten. */}
       <input
         ref={billInput}
         type="file"

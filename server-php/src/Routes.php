@@ -74,6 +74,7 @@ final class Routes
         // POST v1/transactions/expense, above.
         $router->get('v1/expenses/recent', [ExpensesController::class, 'recent']);
         $router->get('v1/expenses/capabilities', [ExpensesController::class, 'capabilities']);
+        $router->post('v1/expenses/bill', [ExpensesController::class, 'storeBill']);
         $router->post('v1/expenses/read-bill', [ExpensesController::class, 'readBill']);
         // Around the bank-withdrawal form: what this product withdrew lately,
         // and how much has come out of the chosen bank in the last month.
