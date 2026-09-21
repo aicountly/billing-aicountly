@@ -945,6 +945,15 @@
 
 /* ------------------------------------------------------------ responsive */
 
+/* A 1366-wide laptop is the commonest screen this product is used on, and at
+   that width the three scope selects plus the search box wrapped the New
+   button and the avatar onto a second row. Narrowing the controls keeps the
+   bar one row; nothing above 1440 is touched. */
+@media (max-width: 1440px) {
+  .billing-scope-select { max-width: 10.5rem; }
+  .billing-search { flex: 1 1 12rem; min-width: 8rem; max-width: 20rem; }
+}
+
 @media (max-width: 1200px) {
   .billing-app { grid-template-columns: 200px minmax(0, 1fr); }
   .billing-main { padding-inline: 20px; }

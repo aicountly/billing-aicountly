@@ -189,6 +189,17 @@ export interface DueBill {
   days_overdue: number
   voucher_id: number | null
   voucher_uuid: string | null
+  /**
+   * The gross value of the bill, and what has been received against it.
+   *
+   * Both are OPTIONAL and both are null unless Books' bill-by-bill row carried
+   * a gross figure — Billing does not compute an invoice value, and a received
+   * amount inferred from the balance alone would be a guess. Null renders as
+   * "not known"; it is never shown as zero, because zero means the customer has
+   * paid nothing and that is a different statement.
+   */
+  bill_amount?: number | null
+  received?: number | null
 }
 
 export interface DueParty {

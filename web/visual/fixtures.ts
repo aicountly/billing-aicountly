@@ -14,7 +14,7 @@ import type {
   PayablesDashboard,
   ReceivablesDashboard,
 } from '../src/dashboards/types'
-import type { BillingSession } from '../src/services/types'
+import type { BillingSession, Dues as DuesShape } from '../src/services/types'
 
 const PERIOD = {
   key: 'month',
@@ -450,6 +450,155 @@ export const compliance: ComplianceDashboard = {
   },
   generated_at: '2026-09-16T09:12:00Z',
 }
+
+// ---------------------------------------------------------------------------
+// Money to Collect / Money to Pay
+// ---------------------------------------------------------------------------
+
+/**
+ * The dues payload is BUILT rather than written out.
+ *
+ * The screen refuses to draw the ageing when the buckets do not add up to the
+ * total, which is exactly the check a hand-typed fixture quietly breaks the
+ * first time somebody edits one number. Composing it the way DuesService does
+ * means the fixture cannot disagree with itself, and the reconciliation path is
+ * exercised for real.
+ */
+const DUES_AS_ON = '2026-09-19'
+
+interface FixtureBill {
+  account_id: number
+  account_name: string
+  bill_no: string
+  bill_date: string
+  due_date: string | null
+  balance: number
+  bill_amount?: number
+}
+
+function daysBetween(from: string, to: string): number {
+  const day = (iso: string) => {
+    const [y, m, d] = iso.split('-').map(Number)
+    return Date.UTC(y, m - 1, d) / 86_400_000
+  }
+  return day(to) - day(from)
+}
+
+function buildDues(title: string, asOn: string, rows: FixtureBill[]): DuesShape {
+  const ageing = { current: 0, '1_30': 0, '31_60': 0, '61_90': 0, '90_plus': 0, no_due_date: 0 }
+  const parties = new Map<number, DuesShape['parties'][number]>()
+  const bills: DuesShape['bills'] = []
+  let total = 0
+  let overdue = 0
+  let dueToday = 0
+  let dueThisWeek = 0
+
+  for (const row of rows) {
+    const days = row.due_date === null ? null : daysBetween(asOn, row.due_date)
+    total += row.balance
+
+    if (days === null) ageing.no_due_date += row.balance
+    else if (days >= 0) {
+      ageing.current += row.balance
+      if (days === 0) dueToday += row.balance
+      if (days <= 7) dueThisWeek += row.balance
+    } else {
+      const late = Math.abs(days)
+      overdue += row.balance
+      if (late <= 30) ageing['1_30'] += row.balance
+      else if (late <= 60) ageing['31_60'] += row.balance
+      else if (late <= 90) ageing['61_90'] += row.balance
+      else ageing['90_plus'] += row.balance
+    }
+
+    const party = parties.get(row.account_id) ?? {
+      account_id: row.account_id,
+      account_name: row.account_name,
+      total: 0,
+      overdue: 0,
+      bill_count: 0,
+      oldest_overdue_days: 0,
+    }
+    party.total += row.balance
+    party.bill_count += 1
+    if (days !== null && days < 0) {
+      party.overdue += row.balance
+      party.oldest_overdue_days = Math.max(party.oldest_overdue_days, Math.abs(days))
+    }
+    parties.set(row.account_id, party)
+
+    bills.push({
+      account_id: row.account_id,
+      account_name: row.account_name,
+      bill_no: row.bill_no,
+      bill_date: row.bill_date,
+      due_date: row.due_date,
+      balance: row.balance,
+      bill_amount: row.bill_amount ?? null,
+      received: row.bill_amount === undefined ? null : Math.max(0, row.bill_amount - row.balance),
+      days_overdue: days !== null && days < 0 ? Math.abs(days) : 0,
+      voucher_id: 4000 + bills.length,
+      voucher_uuid: `vch-due-${bills.length}`,
+    })
+  }
+
+  bills.sort((a, b) => b.days_overdue - a.days_overdue)
+
+  return {
+    title,
+    as_on: asOn,
+    source: 'books',
+    total: Math.round(total * 100) / 100,
+    overdue: Math.round(overdue * 100) / 100,
+    due_today: Math.round(dueToday * 100) / 100,
+    due_this_week: Math.round(dueThisWeek * 100) / 100,
+    ageing,
+    ageing_reconciles: true,
+    parties: [...parties.values()].sort((a, b) => b.total - a.total),
+    bills,
+    note: 'Read from Smart Books just now. Billing keeps no balance of its own, so this never disagrees with the accounts.',
+  }
+}
+
+const RECEIVABLE_BILLS: FixtureBill[] = [
+  // Not yet due
+  { account_id: 11, account_name: 'ABC Traders', bill_no: 'INV-2026-0012', bill_date: '2026-09-05', due_date: '2026-09-19', balance: 124800, bill_amount: 124800 },
+  { account_id: 12, account_name: 'Kumar & Sons', bill_no: 'INV-2026-0009', bill_date: '2026-09-15', due_date: '2026-09-30', balance: 75600, bill_amount: 75600 },
+  { account_id: 13, account_name: 'Sunrise Retail', bill_no: 'INV-2026-0014', bill_date: '2026-09-16', due_date: '2026-09-24', balance: 44560, bill_amount: 90000 },
+  // 1–30 days late
+  { account_id: 14, account_name: 'Sharma Enterprises', bill_no: 'INV-2026-0011', bill_date: '2026-08-28', due_date: '2026-09-12', balance: 215000, bill_amount: 215000 },
+  { account_id: 13, account_name: 'Sunrise Retail', bill_no: 'INV-2026-0008', bill_date: '2026-08-10', due_date: '2026-09-10', balance: 108300, bill_amount: 108300 },
+  // 31–60
+  { account_id: 15, account_name: 'Global Marketing Pvt Ltd', bill_no: 'INV-2026-0010', bill_date: '2026-08-21', due_date: '2026-08-25', balance: 248500, bill_amount: 348500 },
+  { account_id: 11, account_name: 'ABC Traders', bill_no: 'INV-2026-0006', bill_date: '2026-07-20', due_date: '2026-08-04', balance: 96200, bill_amount: 96200 },
+  // 61–90
+  { account_id: 16, account_name: 'Nandini Foods', bill_no: 'INV-2026-0004', bill_date: '2026-06-28', due_date: '2026-07-13', balance: 132450, bill_amount: 180000 },
+  // Over 90
+  { account_id: 11, account_name: 'ABC Traders', bill_no: 'INV-2026-0002', bill_date: '2026-05-12', due_date: '2026-06-01', balance: 186400, bill_amount: 186400 },
+  { account_id: 17, account_name: 'Verma Hardware', bill_no: 'INV-2026-0001', bill_date: '2026-04-30', due_date: '2026-05-15', balance: 86650, bill_amount: 86650 },
+  // No due date at all — the bucket that exists so nothing hides in the green
+  { account_id: 18, account_name: 'Patel Textiles', bill_no: 'INV-2026-0015', bill_date: '2026-09-02', due_date: null, balance: 30100 },
+]
+
+const PAYABLE_BILLS: FixtureBill[] = [
+  { account_id: 61, account_name: 'Mahalaxmi Distributors', bill_no: 'MD-7812', bill_date: '2026-09-09', due_date: '2026-09-24', balance: 148000, bill_amount: 148000 },
+  { account_id: 62, account_name: 'R.K. Industries', bill_no: 'RKI-4490', bill_date: '2026-08-30', due_date: '2026-09-14', balance: 62500, bill_amount: 92500 },
+  { account_id: 63, account_name: 'Aarti Plastics', bill_no: 'AP-9021', bill_date: '2026-07-18', due_date: '2026-08-02', balance: 34800, bill_amount: 34800 },
+]
+
+// Named `…Dues` because `receivables` and `payables` above are the DASHBOARD
+// payloads — a different endpoint and a different shape.
+export const receivableDues = buildDues('Money to collect', DUES_AS_ON, RECEIVABLE_BILLS)
+export const payableDues = buildDues('Money to pay', DUES_AS_ON, PAYABLE_BILLS)
+
+/** The same ledger a month earlier, so the movement on the cards has something real to compare against. */
+export const receivableDuesEarlier = buildDues(
+  'Money to collect',
+  '2026-08-20',
+  RECEIVABLE_BILLS.filter((bill) => bill.bill_date <= '2026-08-20'),
+)
+
+export const duesEmpty = buildDues('Money to collect', DUES_AS_ON, [])
 
 // ---------------------------------------------------------------------------
 // Money paid / money received

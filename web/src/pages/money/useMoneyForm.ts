@@ -56,6 +56,7 @@ export function useMoneyForm({
   direction,
   bills,
   today,
+  prefill,
   onSaved,
   onFailed,
 }: {
@@ -63,14 +64,24 @@ export function useMoneyForm({
   bills: OpenBill[]
   /** The company's today, once the server has told us what it is. */
   today: string
+  /**
+   * A party and an amount the screen was opened with — Money to Collect links
+   * here from a bill it already knows the party and the balance of.
+   *
+   * It fills the FORM and nothing else. The open bills are still read from
+   * Books when the party lands and the allocation is still worked out from
+   * those, so a bill settled since the link was made cannot be paid twice.
+   * Read once, as the opening value: a later edit is the user's, not the URL's.
+   */
+  prefill?: { party: PickedParty | null; amount: string }
   onSaved: (result: { requestId: number; amount: number; partyName: string; savedAndNew: boolean }) => void
   onFailed: (message: string) => void
 }) {
   const isOut = direction === 'out'
 
   const [values, setValues] = useState<MoneyFormValues>(() => ({
-    party: null,
-    amount: '',
+    party: prefill?.party ?? null,
+    amount: prefill?.amount ?? '',
     entryDate: today,
     accountId: '',
     mode: 'cash',

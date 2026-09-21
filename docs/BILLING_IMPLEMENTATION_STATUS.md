@@ -95,6 +95,53 @@ New in this change, and why each is not a second source of truth:
 Both are covered by the release-blocking ownership tests, whose numeric-column
 allow-list now names two columns explicitly rather than one.
 
+## Money to Collect and Money to Pay
+
+`/receivables` and `/payables` are **one screen** — `web/src/receivables/` —
+because `v1/receivables` and `v1/payables` return the same shape from the same
+service. The side decides the wording and which actions are offered; a second
+copy would be a second place for the ageing rule to drift.
+
+It reads once, from the endpoint that already existed, and does the rest in the
+browser over the rows it was given:
+
+| Comes from the server | Worked out here |
+|---|---|
+| total, overdue, due today, due this week | the COUNT of bills behind each of those |
+| the five ageing buckets, and whether they reconcile | which bucket each row is in, and how many rows per bucket |
+| every open bill, with its balance and days overdue | days still to run, status, filtering, sorting, paging |
+| the per-party totals | the share each party holds, and the concentration of overdue |
+
+Every derivation is against the response's own `as_on` date rather than the
+browser's clock, so a row can never disagree with the totals above it. The
+arithmetic lives in `src/receivables/model.ts`, which imports nothing and is
+covered by `web/tests/receivables-model.test.ts`.
+
+**Ageing is measured from the due date**, never the bill date, and calendar days
+are counted at UTC midnight on both ends — dividing a millisecond difference by
+86,400,000 turns "due today" into "one day overdue" for anyone an hour off UTC.
+
+**Status is timing, and part-paid is a separate fact.** A bill that is half
+settled and ninety days late is still ninety days late; one badge that could
+only say "Partially paid" would hide the half that decides whether anybody rings
+the customer today. So the row carries both.
+
+**Nothing is settled from this screen.** "Record money received" navigates to the
+receipt screen, which reads the open bills from Books when the party lands and
+posts a receipt Books allocates. There is no status flip in the browser, and the
+bulk action refuses a selection spanning more than one party because a receipt
+is recorded against one.
+
+**The collection health label is two published percentages and two thresholds** —
+the share overdue and the share more than sixty days late — and the card states
+both. There is no score, because a collections figure a user cannot check is a
+figure they should not act on.
+
+Three things this screen wanted and did not get are in
+`BILLING_API_DEPENDENCIES.md`: what a bill was raised for (partly available, and
+shown as "not known" when absent), how a customer is classified, and a document
+route for one bill.
+
 ## Reports
 
 Ten, at `/reports`, all read live: sales, purchase, credit-note and debit-note
@@ -216,21 +263,17 @@ approximated.
 
 ## Verification
 
-* `server-php/tests/run.sh` — 80 passing, 0 failing, against a real PostgreSQL
-  and a stub standing in for Books and Inventory. Among them the
+* `server-php/tests/run.sh` — 95 passing, 0 failing, against a real
+  PostgreSQL and a stub standing in for Books and Inventory. Among them the
   release-blocking pair, which fail the build if a table or column ever starts
-  holding a voucher, ledger, balance, **item** or party.
-* `npm run build` in `web/` — `tsc -b` clean, seven lazy chunks.
-* Visual pass at 1920, 1600, 1440, 1366, 1280, 1024, 768 and 390 px across the
-  five dashboards and the Items workspace, via `web/visual.html` — a
-  development-only entry point that mounts the real components against
-  fixtures. `vite build` does not include it, and no fake record is written
-  anywhere.
-* `server-php/tests/run.sh` — 76 passing, 0 failing, against a real PostgreSQL
-  and a stub standing in for Books and Inventory.
-* `npm run build` in `web/` — `tsc -b` clean, eight lazy chunks.
-* Visual pass at 1512, 1024 and 390 px across all five dashboards, the expense
-  screen and the bank-withdrawal screen, via `web/visual.html` — a
-  development-only entry point that mounts the real components against
-  fixtures, including their unavailable states (`?fail=balance,withdrawals`).
-  `vite build` does not include it, and no fake record is written anywhere.
+  holding a voucher, ledger, balance, item or party.
+* `npm test` in `web/` — the ageing, status, filter, summary and export rules,
+  run by node's own test runner against `src/receivables/model.ts`. No test
+  framework is installed; that file imports nothing, so node runs it directly.
+* `npm run build` in `web/` — `tsc -b` clean, thirteen lazy chunks.
+* Visual pass across the five dashboards, the Items workspace, the expense,
+  bank-withdrawal, sale, credit-note and money screens and both dues screens,
+  via `web/visual.html` — a development-only entry point that mounts the real
+  components against fixtures, including their unavailable states
+  (`?fail=balance,withdrawals`, `?state=error`). `vite build` does not include
+  it, and no fake record is written anywhere.
