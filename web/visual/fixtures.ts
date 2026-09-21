@@ -431,3 +431,129 @@ export const compliance: ComplianceDashboard = {
   },
   generated_at: '2026-09-16T09:12:00Z',
 }
+
+// ---------------------------------------------------------------------------
+// Money paid / money received
+// ---------------------------------------------------------------------------
+
+export const parties = [
+  { acc_id: 601, acc_name: 'Aarti Plastics', gstin: '27AABCA1234K1ZP' },
+  { acc_id: 602, acc_name: 'Mahalaxmi Distributors', gstin: null },
+  { acc_id: 603, acc_name: 'R.K. Industries', gstin: '27AAECR9876M1Z4' },
+]
+
+export const cashBank = [
+  { acc_id: 9001, acc_name: 'Cash in hand', group_name: 'Cash-in-hand' },
+  { acc_id: 9002, acc_name: 'HDFC Current', group_name: 'Bank Accounts' },
+  { acc_id: 9003, acc_name: 'ICICI Current', group_name: 'Bank Accounts' },
+]
+
+export const openBills = {
+  account_id: 601,
+  source: 'books',
+  bills: [
+    { bill_no: 'AP-9021', bill_date: '2026-08-12', due_date: '2026-09-11', balance: 11800, voucher_id: 4504, voucher_uuid: 'vch-p4' },
+    { bill_no: 'AP-9044', bill_date: '2026-08-28', due_date: '2026-09-27', balance: 26500, voucher_id: 4508, voucher_uuid: 'vch-p8' },
+    { bill_no: 'AP-9070', bill_date: '2026-09-09', due_date: '2026-10-09', balance: 9400, voucher_id: 4512, voucher_uuid: 'vch-p12' },
+  ],
+}
+
+export const moneyPartyContext = {
+  party_account_id: 601,
+  direction: 'out',
+  looked_back_days: 180,
+  from: '2026-03-23',
+  to: '2026-09-19',
+  available: true,
+  complete: true,
+  entries_in_window: 6,
+  last: { date: '2026-08-22', amount: 18000, document_no: 'PAY/0044', voucher_id: 4290, days_ago: 28 },
+  source: 'books',
+}
+
+export const moneyRecent = {
+  direction: 'out',
+  period: {
+    key: 'month',
+    label: 'September 2026',
+    from: '2026-09-01',
+    to: '2026-09-19',
+    previous_from: '2026-08-13',
+    previous_to: '2026-08-31',
+    previous_label: 'the previous 19 days',
+  },
+  available: true,
+  reason: null,
+  complete: true,
+  source: 'books',
+  note: 'Read from Smart Books as this screen opened. Billing keeps no copy.',
+  summary: {
+    available: true,
+    reason: null,
+    total: 124500,
+    count: 8,
+    average: 15562.5,
+    largest: { amount: 48000, party: 'Mahalaxmi Distributors', party_id: 602, date: '2026-09-12', voucher_id: 4305 },
+    comparison: {
+      available: true,
+      percent: 12.4,
+      direction: 'up',
+      label: '+12.4% vs the previous 19 days',
+      tone: 'warning',
+      previous: 110800,
+    },
+  },
+  rows: [
+    {
+      voucher_id: 4310, voucher_uuid: 'vch-p10', document_no: 'PAY/0051', date: '2026-09-19',
+      party: 'Office Rent', party_id: 701, amount: 50000, status: null,
+      request_id: 221, kind: 'expense', account_id: 9002, account_name: 'HDFC Current',
+      payment_mode: 'bank_transfer', reference_no: 'UTR123456789', narration: 'September rent',
+      created_by: 'demo-owner', recorded_here: true,
+    },
+    {
+      voucher_id: 4309, voucher_uuid: 'vch-p9', document_no: 'PAY/0050', date: '2026-09-18',
+      party: 'Aarti Plastics', party_id: 601, amount: 25000, status: null,
+      request_id: 219, kind: 'payment', account_id: 9002, account_name: 'HDFC Current',
+      payment_mode: 'upi', reference_no: '8901234567', narration: 'Material payment against AP-9021 and part of AP-9044',
+      created_by: 'someone-else', recorded_here: true,
+    },
+    {
+      voucher_id: 4308, voucher_uuid: 'vch-p8', document_no: 'PAY/0049', date: '2026-09-17',
+      party: 'Electricity Board', party_id: 702, amount: 12450, status: null,
+      request_id: null, kind: null, account_id: null, account_name: null,
+      payment_mode: null, reference_no: null, narration: null,
+      created_by: null, recorded_here: false,
+    },
+    {
+      voucher_id: 4307, voucher_uuid: 'vch-p7', document_no: 'PAY/0048', date: '2026-09-15',
+      party: 'R.K. Industries', party_id: 603, amount: 18000, status: null,
+      request_id: 214, kind: 'payment', account_id: 9003, account_name: 'ICICI Current',
+      payment_mode: 'cheque', reference_no: '245678', narration: 'Against bill no. 456',
+      created_by: 'demo-owner', recorded_here: true,
+    },
+    {
+      voucher_id: 4305, voucher_uuid: 'vch-p5', document_no: 'PAY/0047', date: '2026-09-12',
+      party: 'Mahalaxmi Distributors', party_id: 602, amount: 48000, status: null,
+      request_id: 208, kind: 'payment', account_id: 9001, account_name: 'Cash in hand',
+      payment_mode: 'cash', reference_no: null, narration: null,
+      created_by: 'demo-owner', recorded_here: true,
+    },
+  ],
+}
+
+/** What the API answers when the harness "saves" an entry. */
+export const savedPayment = {
+  request_id: 999,
+  request_uuid: 'demo-request',
+  kind: 'payment',
+  status: 'POSTED',
+  party_account_id: 601,
+  transaction_date: '2026-09-19',
+  payload: {},
+  books_voucher_id: 4399,
+  books_voucher_uuid: 'vch-p99',
+  books_voucher_no: 'PAY/0052',
+  last_error: null,
+  created_at: '2026-09-19T10:00:00Z',
+}
