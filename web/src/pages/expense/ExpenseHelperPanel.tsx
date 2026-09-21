@@ -32,6 +32,8 @@ import { resolveQuickCategories } from './quickCategories'
 const TIP_KEY = 'billing:expense:tip'
 
 export interface ExpenseHelperPanelProps {
+  /** Whether a bill file can be kept here, which decides what the tip advises. */
+  storage: DocumentCapability | null
   categories: AsyncState<ListResponse<CatalogAccount>>
   selectedCategoryId: string
   onPickCategory: (accountId: number) => void
@@ -48,7 +50,7 @@ export interface ExpenseHelperPanelProps {
 export function ExpenseHelperPanel(props: ExpenseHelperPanelProps) {
   return (
     <aside className="billing-expense__aside" aria-label="Expense shortcuts">
-      <ProTipCard />
+      <ProTipCard storage={props.storage} extraction={props.extraction} />
       <QuickExpenseCategories
         categories={props.categories}
         selectedCategoryId={props.selectedCategoryId}
@@ -78,8 +80,18 @@ export function ExpenseHelperPanel(props: ExpenseHelperPanelProps) {
  *
  * Whether somebody has read a tip is not accounting data and has no business
  * in the company's records, so it does not go to the API.
+ *
+ * What it ADVISES follows what this deployment can do. Telling somebody to
+ * attach the bill and have it read, on a deployment with neither service
+ * configured, is advice they cannot take.
  */
-function ProTipCard() {
+function ProTipCard({
+  storage,
+  extraction,
+}: {
+  storage: DocumentCapability | null
+  extraction: DocumentCapability | null
+}) {
   const [dismissed, setDismissed] = useState(() => {
     try {
       return window.localStorage.getItem(TIP_KEY) === 'dismissed'
@@ -95,7 +107,7 @@ function ProTipCard() {
       <Lightbulb size={19} aria-hidden className="billing-expense-tip__icon" />
       <div>
         <strong>Pro Tip</strong>
-        <p>Record the bill number and where the bill is kept — that is what makes an expense findable a year later.</p>
+        <p>{tipFor(storage, extraction)}</p>
       </div>
       <button
         type="button"
@@ -114,6 +126,17 @@ function ProTipCard() {
       </button>
     </section>
   )
+}
+
+function tipFor(storage: DocumentCapability | null, extraction: DocumentCapability | null): string {
+  if (storage?.available && extraction?.available) {
+    return 'Attach the bill and auto-read the details using AI.'
+  }
+  if (storage?.available) {
+    return 'Attach the bill — it stays with the voucher, so the expense is still provable a year later.'
+  }
+
+  return 'Record the bill number and where the bill is kept — that is what makes an expense findable a year later.'
 }
 
 // ---------------------------------------------------------------------------

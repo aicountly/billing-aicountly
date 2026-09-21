@@ -341,25 +341,24 @@ which is worse than having no preview at all.
 
 ---
 
-## Not available: keeping the bill file
+## Needs configuring: keeping the bill file
 
-**The expense screen shows a reference field instead.**
+**The drop zone appears when `DOCUMENT_STORAGE_BASE` is set, and not before.**
 
-There is nowhere in this deployment to put a PDF or a photo of a bill and get it
-back later, and Billing is the wrong place to build one: the deploy runs
+Billing stores no bytes of its own and should not: the deploy runs
 `rsync --delete` over the document root (see `DEPLOYMENT.md`), so a folder of
-uploads beside the app would not survive a release.
+uploads beside the app would not survive a release. The file goes straight out
+to a document service and what comes back — a reference — is what travels to
+Books on the voucher as `attachment_ref`, a field the expense request already
+accepted.
 
-So the expense screen records **where the bill is kept** — a file number, a
-folder, a link — and sends it to Books as `attachment_ref` on the voucher, which
-is a field the expense request already accepted. That is a smaller thing than an
-attachment and it is honest about being one.
-
-Two pieces are needed to turn it into a real attachment, and the first is
-configuration:
+The client exists (`server-php/src/Clients/DocumentStorageClient.php`) and
+`DocumentCapture::storage()` reports the capability from the configuration
+alone, so turning this on is one line in `server-php/.env`:
 
 ```
 DOCUMENT_STORAGE_BASE=<service>     in server-php/.env
+DOCUMENT_STORAGE_KEY=<bearer>       optional, if the service wants one
 
 POST <DOCUMENT_STORAGE_BASE>/v1/documents
   multipart: file=<pdf|jpg|png>, scope=<cmp_id>/<fy_id>
@@ -369,10 +368,17 @@ GET <DOCUMENT_STORAGE_BASE>/v1/documents/<reference>
   → the file, for whoever may see the voucher
 ```
 
-The second is a client for it in `server-php/src/Clients/`, and one line in
-`DocumentCapture::storage()`. Until both exist that method answers `false`
-whatever the environment says, because configuring a service Billing cannot call
-would put a drop zone on screen that swallows a photo and loses it.
+`reference` is the only part Billing insists on. A 2xx without one is treated as
+a failure and nothing is attached, because an expense pointing at a bill nobody
+can find again is worse than an expense with no bill on it.
+
+**Until it is configured**, the expense screen does not show a drop zone that
+would swallow a photo and lose it. It asks **where the bill is kept** — a file
+number, a folder, a link — and sends that as `attachment_ref` instead. That is a
+smaller thing than an attachment and the screen says so. Both shapes can be
+looked at without standing a service up: `/visual.html?screen=expense` for the
+deployment as it is today, and `?screen=expense&docs=on` for the same screen
+once a service answers.
 
 **Money received is in the same position, with one difference.** A receipt is
 often backed by a UPI screenshot, a counterfoil or a bank advice, and the screen
