@@ -85,8 +85,8 @@ same-origin.
 components against fixtures so the screens can be checked at any width without a
 portal session or a company's data. `?screen=` picks one — the five dashboards,
 `money-in`, `money-out`, `expense`, `credit-note`, `bank-withdrawal`, `sale`,
-`items`, `dues` (Money to Collect), `dues-payable` (Money to Pay), `reports`
-(the Reports discovery screen) or `report` (one report, open) —
+`items`, `purchase`, `dues` (Money to Collect), `dues-payable` (Money to Pay),
+`reports` (the Reports discovery screen) or `report` (one report, open) —
 `?as=biller` narrows the profile, and `?fail=recent,categories` makes those
 endpoints answer 503, which is how the "one panel is down, the form still
 works" states get checked. `?fail=overview` and `?fail=briefing` are the

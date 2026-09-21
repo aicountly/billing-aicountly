@@ -17,7 +17,7 @@ import { AlertCircle, Package, Plus, ScanLine, Trash2 } from 'lucide-react'
 import { api } from '../../services/api'
 import type { CatalogItem } from '../../services/types'
 import { money } from '../../ui'
-import { SaleCombo } from './SaleCombo'
+import { Combo } from '../../components/Combo'
 import {
   fromPaise,
   grouped,
@@ -207,7 +207,8 @@ const BillItemRow = memo(function BillItemRow({
 
       <td>
         {line.itemId === null ? (
-          <SaleCombo<ItemRow>
+          <Combo<ItemRow>
+            portal
             label={`Item on line ${index + 1}`}
             placeholder="Search or scan item…"
             compact
