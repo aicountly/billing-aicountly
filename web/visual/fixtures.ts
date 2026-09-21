@@ -472,10 +472,16 @@ export const taxCategories = [
   { tax_cat_id: 4, tax_cat_name: 'Exempt' },
 ]
 
+/**
+ * What a deployment with neither document service configured answers — which
+ * is every deployment today, and the shape the expense screen has to be good
+ * in: a reference field, and the bill reader off with its reason.
+ */
 export const expenseCapabilities = {
   bill_storage: {
     available: false,
-    reason: 'No document service here, so the file itself cannot be kept — record where the bill is.',
+    reason:
+      'No document service is configured for this deployment, so the file itself cannot be kept here — record where the bill is.',
     accepts: ['application/pdf', 'image/jpeg', 'image/png'],
     max_bytes: 10485760,
   },
@@ -484,6 +490,32 @@ export const expenseCapabilities = {
     reason:
       'Needs a document-extraction service, and none is configured for this deployment. Typing the details records exactly the same expense.',
   },
+}
+
+/**
+ * The same screen once both services are configured, as `?docs=on`.
+ *
+ * Photographing this is how the drop zone and the bill reader get checked
+ * without a document service being stood up first — the capability flags are
+ * the only difference between the two, which is the point.
+ */
+export const expenseCapabilitiesConfigured = {
+  bill_storage: {
+    available: true,
+    reason: null,
+    accepts: ['application/pdf', 'image/jpeg', 'image/png'],
+    max_bytes: 10485760,
+  },
+  bill_extraction: { available: true, reason: null },
+}
+
+/** What `POST v1/expenses/bill` hands back once a bill has been taken. */
+export const storedBill = {
+  reference: 'doc_01J9WQ2K7MRB',
+  filename: 'airtel-broadband-sep.pdf',
+  size: 284_193,
+  content_type: 'application/pdf',
+  url: null,
 }
 
 export const recentExpenses = {

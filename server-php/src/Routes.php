@@ -62,6 +62,7 @@ final class Routes
         // POST v1/transactions/expense, above.
         $router->get('v1/expenses/recent', [ExpensesController::class, 'recent']);
         $router->get('v1/expenses/capabilities', [ExpensesController::class, 'capabilities']);
+        $router->post('v1/expenses/bill', [ExpensesController::class, 'storeBill']);
         $router->post('v1/expenses/read-bill', [ExpensesController::class, 'readBill']);
         // Invoices a credit note (or bills a debit note) can be raised against.
         $router->get('v1/original-documents', [TransactionsController::class, 'originalDocuments']);

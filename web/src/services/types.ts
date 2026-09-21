@@ -285,3 +285,20 @@ export interface CatalogAccount {
   acc_id: number
   acc_name: string
 }
+
+/**
+ * A bill file the document service has taken, as `POST v1/expenses/bill`
+ * describes it.
+ *
+ * `reference` is the part that matters: it is what travels to Books on the
+ * voucher as `attachment_ref`. The rest is for the person looking at the form —
+ * `url` is present only when the document service hands one back, and there is
+ * no link to the stored bill when it does not.
+ */
+export interface StoredBill {
+  reference: string
+  filename: string | null
+  size: number | null
+  content_type: string | null
+  url: string | null
+}

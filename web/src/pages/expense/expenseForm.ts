@@ -6,7 +6,7 @@
  * is written down in one place next to the rules that let it be sent.
  */
 
-import type { CatalogParty } from '../../services/types'
+import type { CatalogParty, StoredBill } from '../../services/types'
 
 export interface ExpenseDraft {
   /** As typed, grouping and all. Parsed once, on the way out. */
@@ -19,6 +19,8 @@ export interface ExpenseDraft {
   /** A Books tax category, or '' for an expense with no GST on it. */
   taxCategoryId: string
   note: string
+  /** The bill file itself, once a document service has taken it. */
+  bill: StoredBill | null
   /** Where the bill is kept, when this deployment cannot hold the file itself. */
   billReference: string
 }
@@ -44,6 +46,7 @@ export function emptyDraft(date = today()): ExpenseDraft {
     reference: '',
     taxCategoryId: '',
     note: '',
+    bill: null,
     billReference: '',
   }
 }
@@ -75,6 +78,7 @@ export function isDirty(draft: ExpenseDraft, baseline: ExpenseDraft): boolean {
     draft.reference.trim() !== baseline.reference.trim() ||
     draft.taxCategoryId !== baseline.taxCategoryId ||
     draft.note.trim() !== baseline.note.trim() ||
+    (draft.bill?.reference ?? null) !== (baseline.bill?.reference ?? null) ||
     draft.billReference.trim() !== baseline.billReference.trim()
   )
 }
@@ -162,7 +166,9 @@ export function toExpenseRequest(draft: ExpenseDraft): Record<string, unknown> {
     party_account_id: draft.vendor?.acc_id ?? undefined,
     reference_no: draft.reference.trim() || undefined,
     tax_cat_id: draft.taxCategoryId ? Number(draft.taxCategoryId) : undefined,
-    attachment_ref: draft.billReference.trim() || undefined,
+    // The stored file when there is one, and otherwise whatever the person
+    // said about where the bill is. One field on the voucher either way.
+    attachment_ref: draft.bill?.reference ?? (draft.billReference.trim() || undefined),
   }
 }
 

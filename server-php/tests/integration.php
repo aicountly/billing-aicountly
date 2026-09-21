@@ -21,6 +21,7 @@ Env::load(__DIR__ . '/../.env');
 use Aicountly\Api\Domain\BillerDeskService;
 use Aicountly\Api\Domain\CollectionsService;
 use Aicountly\Api\Domain\ComplianceService;
+use Aicountly\Api\Clients\DocumentStorageClient;
 use Aicountly\Api\Domain\DocumentCapture;
 use Aicountly\Api\Domain\DuesService;
 use Aicountly\Api\Domain\ExpenseHistory;
@@ -1193,17 +1194,56 @@ check('the expense carries the party, bill number and tax category it was given'
     assertSame('Drive / bills / 2026-09', $payload['attachment_ref'], 'and where the bill is kept');
 });
 
-check('a bill file cannot be kept here, and the screen is told why', function () {
+check('with no document service configured, the screen is told why', function () {
+    // Nothing is configured in the test environment, so both answers are no —
+    // and each one says so in words the screen can show.
     $storage = DocumentCapture::storage();
-    assertTrue($storage['available'] === false, 'there is nowhere to put it');
+    assertTrue($storage['available'] === false, 'there is nowhere to put a bill file');
     assertTrue(is_string($storage['reason']) && $storage['reason'] !== '', 'and the reason says so in words');
     assertSame(['application/pdf', 'image/jpeg', 'image/png'], $storage['accepts'], 'what one would be, when there is');
+    assertSame(10 * 1024 * 1024, $storage['max_bytes'], 'and how big it may get');
 
-    // No DOCUMENT_EXTRACTION_BASE in the test environment, so the reader is off
-    // — with an explanation rather than a button that does nothing.
     $extraction = DocumentCapture::extraction();
     assertTrue($extraction['available'] === false, 'and no service reads one either');
     assertTrue(str_contains((string) $extraction['reason'], 'document-extraction'), 'named, so it can be turned on');
+});
+
+check('configuring a document service is all it takes to turn the drop zone on', function () {
+    // The capability is configuration and nothing else: there is no second
+    // switch to forget, which is what made the old answer "false whatever the
+    // environment says" worth removing once the client existed.
+    putenv('DOCUMENT_STORAGE_BASE=https://documents.example.test');
+    putenv('DOCUMENT_EXTRACTION_BASE=https://extract.example.test');
+
+    try {
+        $storage = DocumentCapture::storage();
+        assertTrue($storage['available'] === true, 'the file can be kept');
+        assertTrue($storage['reason'] === null, 'and there is nothing to apologise for');
+        assertTrue(DocumentStorageClient::configured(), 'the client agrees it has somewhere to send it');
+
+        $extraction = DocumentCapture::extraction();
+        assertTrue($extraction['available'] === true, 'and a bill can be read');
+        assertTrue($extraction['reason'] === null, 'with no reason to show');
+    } finally {
+        putenv('DOCUMENT_STORAGE_BASE');
+        putenv('DOCUMENT_EXTRACTION_BASE');
+    }
+
+    assertTrue(DocumentCapture::storage()['available'] === false, 'and it goes back off when it is unset');
+});
+
+check('a document service that answers without a reference is not a success', function () {
+    // The reference is the whole point of the call. A 200 without one would
+    // otherwise put an expense on record pointing at a bill nobody can find.
+    assertTrue(DocumentStorageClient::stored([]) === null, 'an empty body stores nothing');
+    assertTrue(DocumentStorageClient::stored(['data' => ['url' => 'x']]) === null, 'nor does a url on its own');
+
+    $stored = DocumentStorageClient::stored([
+        'data' => ['reference' => ' doc_99 ', 'filename' => 'bill.pdf', 'size' => '2048', 'content_type' => 'application/pdf'],
+    ]);
+    assertSame('doc_99', $stored['reference'], 'a reference is taken, trimmed');
+    assertSame(2048, $stored['size'], 'and a size that arrived as text is still a number');
+    assertTrue($stored['url'] === null, 'a url that was not sent is absent rather than invented');
 });
 
 echo "\nData ownership (release-blocking)\n";
