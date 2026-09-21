@@ -165,12 +165,13 @@ final class CatalogController extends Controller
     }
 
     /**
-     * One item, by its id, in the same shape the list uses.
+     * One item, by its Inventory id, in the same shape the list uses.
      *
-     * The billing screens are opened with an item already chosen — from the
-     * Items screen, from the biller desk — and the id in that URL is a request,
-     * not a fact: the name, the rate and the stock have to come from the
-     * product that owns them on this request, whoever typed the id.
+     * For a screen that was handed an id rather than a name: the Items screen,
+     * the biller desk and the global search all link into the bill screen that
+     * way. The id is a request, not a fact, so the name, the rate, the unit and
+     * the stock are read from the product that owns them on this request rather
+     * than carried in the URL.
      */
     public static function item(string $id): void
     {
@@ -181,6 +182,8 @@ final class CatalogController extends Controller
             Http::validationFailed('That is not an item id.', ['field' => 'id']);
         }
 
+        // Shaped the same way the list is, so a screen handed one item and a
+        // screen handed a page of them are reading the same fields.
         $result = (new InventoryClient())->withSession($auth->sesKey())->item($ctx, $itemId);
         if ($result['ok'] && is_array($result['body']['data'] ?? null)) {
             $result['body']['data'] = ItemCatalog::normalise($result['body']['data']);

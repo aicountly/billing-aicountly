@@ -344,6 +344,18 @@ final class TransactionService
             'service_lines'   => $serviceLines,
             'payment_terms'   => self::text($input['payment_terms'] ?? null),
             'due_date'        => self::text($input['due_date'] ?? null),
+            // Facts about the document, carried to Books — NOT computations.
+            //
+            // The place of supply is what decides CGST + SGST against IGST, and
+            // it belongs to the supply rather than to the party: the same
+            // customer can be billed for goods delivered in another state. It
+            // is passed through because the person making the bill knows it;
+            // Books still decides the tax, and no tax figure is sent with it.
+            'place_of_supply' => self::text($input['place_of_supply'] ?? null),
+            // What prints under the items. Billing owns the company default
+            // (billing_settings.default_sale_terms); this is the copy on this
+            // document.
+            'terms'           => self::text($input['terms'] ?? null),
         ];
 
         if ($kind === 'purchase' || $kind === 'debit_note') {
@@ -357,6 +369,10 @@ final class TransactionService
         if ($settledTo !== null) {
             $payload['settlement_account_id'] = $settledTo;
             $payload['is_cash_transaction'] = true;
+            // The same field name a receipt carries, for the same reason: how
+            // the money arrived is a fact about the settlement, and the ledger
+            // alone does not always say it.
+            $payload['payment_mode'] = self::text($input['payment_mode'] ?? null) ?? 'cash';
         }
 
         if (($against = self::id($input['against_voucher_id'] ?? null)) !== null) {

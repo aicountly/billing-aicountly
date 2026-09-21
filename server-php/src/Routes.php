@@ -51,9 +51,9 @@ final class Routes
         $router->get('v1/catalog/item-groups', [CatalogController::class, 'itemGroups']);
         $router->get('v1/catalog/items/favourites', [CatalogController::class, 'favourites']);
         $router->get('v1/catalog/items/barcode/{code}', [CatalogController::class, 'itemByBarcode']);
-        // LAST of the four-segment /catalog/items routes: `{id}` matches any
-        // segment, so declaring it above `search`, `stats`, `export` or
-        // `favourites` would swallow all four.
+        // LAST of the four-segment /catalog/items routes. The router takes the
+        // first match and `{id}` matches any segment, so declaring it above
+        // `search`, `stats`, `export` or `favourites` would swallow all four.
         $router->get('v1/catalog/items/{id}', [CatalogController::class, 'item']);
         $router->get('v1/catalog/stock', [CatalogController::class, 'stock']);
         $router->get('v1/catalog/low-stock', [CatalogController::class, 'lowStock']);
