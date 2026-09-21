@@ -7,7 +7,7 @@ import SignIn from './pages/SignIn'
 import Onboarding from './pages/Onboarding'
 import SaleEditor from './pages/SaleEditor'
 import { DuesScreen, PartyStatement } from './pages/Dues'
-import { BankCash, MoneyScreen } from './pages/MoneyMovement'
+import { BankCash } from './pages/MoneyMovement'
 import { Items, Parties } from './pages/Directory'
 import {
   BankCashOverview,
@@ -35,6 +35,18 @@ const CashCompliance = lazy(() => import('./dashboards/CashCompliance'))
 const Reports = lazy(() => import('./pages/Reports'))
 
 /**
+ * Money paid and money received, split for the same reason.
+ *
+ * The screen is a form, a period summary, a party's history and a recent list,
+ * and only one of the two directions is ever open. Left in the main bundle it
+ * costs every screen in the app, including the counter machine that never
+ * opens it.
+ */
+const MoneyScreen = lazy(() =>
+  import('./pages/money/MoneyScreen').then((module) => ({ default: module.MoneyScreen })),
+)
+
+/**
  * The expense screen carries its own stylesheet and helper panel, and most
  * sessions never open it. Split for the same reason the dashboards are.
  */
@@ -42,6 +54,13 @@ const ExpensePage = lazy(() => import('./pages/expense/ExpensePage'))
 
 /** The bank-withdrawal screen, for the same reason: its own stylesheet, its own panel. */
 const BankWithdrawalPage = lazy(() => import('./pages/bank-withdrawal/BankWithdrawalPage'))
+
+/**
+ * The credit note screen, split for the same reason again: its own
+ * stylesheet, its own table and its own readings of the bill being credited,
+ * and a counter that only makes bills never opens it.
+ */
+const CreditNotePage = lazy(() => import('./pages/credit-note/CreditNotePage'))
 
 initAnalytics()
 
@@ -157,14 +176,14 @@ function Shell() {
         </Route>
 
         <Route path="money-in">
-          <Route index element={<RequireScope><MoneyScreen direction="in" /></RequireScope>} />
-          <Route path="new" element={<RequireScope><MoneyScreen direction="in" /></RequireScope>} />
+          <Route index element={<Suspense fallback={<Loading />}><RequireScope><MoneyScreen direction="in" /></RequireScope></Suspense>} />
+          <Route path="new" element={<Suspense fallback={<Loading />}><RequireScope><MoneyScreen direction="in" /></RequireScope></Suspense>} />
           <Route path=":id" element={<RequireScope><TransactionDetail /></RequireScope>} />
         </Route>
 
         <Route path="money-out">
-          <Route index element={<RequireScope><MoneyScreen direction="out" /></RequireScope>} />
-          <Route path="new" element={<RequireScope><MoneyScreen direction="out" /></RequireScope>} />
+          <Route index element={<Suspense fallback={<Loading />}><RequireScope><MoneyScreen direction="out" /></RequireScope></Suspense>} />
+          <Route path="new" element={<Suspense fallback={<Loading />}><RequireScope><MoneyScreen direction="out" /></RequireScope></Suspense>} />
           <Route path=":id" element={<RequireScope><TransactionDetail /></RequireScope>} />
         </Route>
 
@@ -206,7 +225,14 @@ function Shell() {
             />
             <Route path=":id" element={<RequireScope><TransactionDetail /></RequireScope>} />
           </Route>
-          <Route path="credit-note" element={<RequireScope><SaleEditor kind="credit_note" /></RequireScope>} />
+          <Route
+            path="credit-note"
+            element={
+              <Suspense fallback={<Loading />}>
+                <RequireScope><CreditNotePage /></RequireScope>
+              </Suspense>
+            }
+          />
           <Route path="debit-note" element={<RequireScope><SaleEditor kind="debit_note" /></RequireScope>} />
           <Route path="recurring" element={<RequireScope><Recurring /></RequireScope>} />
           <Route path="unfinished" element={<RequireScope><Unfinished /></RequireScope>} />

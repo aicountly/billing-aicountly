@@ -118,7 +118,7 @@ What is on it, and where each thing comes from:
 | On screen | Source | Notes |
 |---|---|---|
 | Bank account, cash account | `v1/catalog/cash-bank` → Books' `masters/accounts` | The ledgers that may be posted to. Nothing is cached |
-| Which of them is cash and which is bank | `v1/cash-bank` | Books' account summary, classified by its own group. Missing → **both lists show every ledger**, because guessing from a name would be wrong for exactly the companies that name accounts carefully |
+| Which of them is cash and which is bank | `v1/cash-bank`, else the ledger's own `group_name` | Books' own classification either way, never the ledger's name — "Cash Credit A/c" is a bank. Neither available → **both lists show every ledger** rather than a guess |
 | Available balance, estimated balance after | `v1/cash-bank` | `cash.view` / `bank.view` decide whether a balance is shown at all. The estimate is arithmetic on screen and is written nowhere |
 | Last 30 days withdrawals, and the count | `v1/bank-withdrawals/summary` | Billing's own request rows for that account, in the company's timezone. Says so under the figure |
 | Recent bank withdrawals | `v1/bank-withdrawals/recent` | Billing's own posted requests; the account NAMES are read live from Books on the request |

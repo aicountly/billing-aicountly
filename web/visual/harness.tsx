@@ -25,8 +25,10 @@ import BillerDesk from '../src/dashboards/BillerDesk'
 import Receivables from '../src/dashboards/Receivables'
 import Payables from '../src/dashboards/Payables'
 import CashCompliance from '../src/dashboards/CashCompliance'
+import { MoneyScreen } from '../src/pages/money/MoneyScreen'
 import ExpensePage from '../src/pages/expense/ExpensePage'
 import BankWithdrawalPage from '../src/pages/bank-withdrawal/BankWithdrawalPage'
+import CreditNotePage from '../src/pages/credit-note/CreditNotePage'
 import { saveSession, setAuthToken } from '../src/auth/tokens'
 import { setScope } from '../src/services/api'
 import * as fixtures from './fixtures'
@@ -53,6 +55,11 @@ const FAILABLE: Array<[string, RegExp]> = [
   ['paid-from', /v1\/catalog\/cash-bank/],
   ['parties', /v1\/catalog\/parties/],
   ['capabilities', /v1\/expenses\/capabilities/],
+  ['bills', /v1\/original-documents(\?|$)/],
+  ['bill-lines', /v1\/original-documents\/\d+/],
+  ['warehouses', /v1\/catalog\/warehouses/],
+  ['trend', /v1\/credit-notes\/trend/],
+  ['issue', /v1\/transactions\/credit_note/],
   // The withdrawal screen's two sidebar panels and its balance, each of which
   // has to be able to fail without taking the form down with it.
   ['balance', /\/v1\/cash-bank(\?|$)/],
@@ -66,7 +73,10 @@ const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
   receivables: { path: '/dashboard/receivables', element: <Receivables /> },
   payables: { path: '/dashboard/payables', element: <Payables /> },
   'cash-compliance': { path: '/dashboard/cash-compliance', element: <CashCompliance /> },
+  'money-out': { path: '/money-out/new', element: <MoneyScreen direction="out" /> },
+  'money-in': { path: '/money-in/new', element: <MoneyScreen direction="in" /> },
   expense: { path: '/more/expense', element: <ExpensePage /> },
+  'credit-note': { path: '/more/credit-note', element: <CreditNotePage /> },
   'bank-withdrawal': { path: '/bank-cash/withdrawal', element: <BankWithdrawalPage /> },
 }
 
@@ -87,13 +97,25 @@ const RESPONSES: Array<[RegExp, unknown]> = [
     { item_id: 2, item_name: 'Blue Ball Pen', item_sku: 'PEN-BL', unit_id: 1, hsn_sac: '9608', mrp: '12' },
     { item_id: 3, item_name: 'Stapler', item_sku: 'STP-01', unit_id: 1, hsn_sac: '8472', mrp: '450' },
   ]],
+  [/v1\/transactions\/(payment|receipt)/, fixtures.savedPayment],
+  [/v1\/money\/party-context/, fixtures.moneyPartyContext],
+  [/v1\/money\/recent/, fixtures.moneyRecent],
+  [/v1\/open-bills/, fixtures.openBills],
+  [/v1\/original-documents\/\d+/, fixtures.originalDocument],
+  [/v1\/original-documents/, fixtures.originalDocuments],
+  [/v1\/credit-notes\/trend/, fixtures.creditNoteTrend],
+  [/v1\/catalog\/warehouses/, fixtures.warehouses],
+  [/v1\/transactions\/credit_note/, fixtures.savedCreditNote],
   [/v1\/catalog\/expense-accounts/, fixtures.expenseAccounts],
-  [/v1\/catalog\/cash-bank/, fixtures.cashBankAccounts],
   [/v1\/catalog\/tax-categories/, fixtures.taxCategories],
   [/v1\/expenses\/recent/, fixtures.recentExpenses],
   [/v1\/transactions\/expense/, fixtures.savedExpense],
   [/v1\/expenses\/capabilities/, fixtures.expenseCapabilities],
-  // After v1/catalog/cash-bank above, so the catalog list keeps that URL.
+  // One entry, shared: this list is matched in order and a second
+  // cash-bank pattern below would never be reached.
+  [/v1\/catalog\/cash-bank/, fixtures.cashBankAccounts],
+  // The BALANCES are a different endpoint, and its pattern is anchored so it
+  // cannot swallow the catalog URL above.
   [/\/v1\/cash-bank(\?|$)/, fixtures.cashBankBalances],
   [/v1\/bank-withdrawals\/recent/, fixtures.recentWithdrawals],
   [/v1\/bank-withdrawals\/summary/, fixtures.withdrawalSummary],
@@ -121,10 +143,34 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Res
     }
   }
 
+  // Item search really searches, so a line can be added by hand in the booth.
+  if (/v1\/catalog\/items\/search/.test(url)) {
+    const term = (new URL(url, window.location.origin).searchParams.get('q') ?? '').toLowerCase()
+    const rows = fixtures.catalogItems.filter(
+      (row) => row.item_name.toLowerCase().includes(term) || row.item_sku.toLowerCase().includes(term),
+    )
+    return new Response(JSON.stringify({ data: rows, meta: { total: rows.length, limit: 20, offset: 0 } }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  // Scan to credit: a code that matches an SKU resolves, anything else 404s.
+  if (/v1\/catalog\/items\/barcode\//.test(url)) {
+    const code = decodeURIComponent(url.split('/barcode/')[1].split('?')[0]).toLowerCase()
+    const item = fixtures.catalogItems.find((row) => row.item_sku.toLowerCase() === code)
+    return new Response(JSON.stringify(item ? { data: item } : { error: { code: 'not_found', message: 'No such code.' } }), {
+      status: item ? 200 : 404,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
   // Party search really searches, so the empty state is reachable here too.
   if (/v1\/catalog\/parties/.test(url)) {
     const term = (new URL(url, window.location.origin).searchParams.get('q') ?? '').toLowerCase()
-    const rows = fixtures.suppliers.filter((row) => row.acc_name.toLowerCase().includes(term))
+    const side = new URL(url, window.location.origin).searchParams.get('side') ?? 'customer'
+    const pool = side === 'supplier' ? fixtures.suppliers : fixtures.customers
+    const rows = pool.filter((row) => row.acc_name.toLowerCase().includes(term))
     return new Response(JSON.stringify({ data: rows, meta: { total: rows.length, limit: 20, offset: 0 } }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },

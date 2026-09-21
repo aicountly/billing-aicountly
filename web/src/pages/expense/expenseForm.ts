@@ -169,9 +169,8 @@ export function toExpenseRequest(draft: ExpenseDraft): Record<string, unknown> {
 /**
  * Reading a row whose key spelling we do not control.
  *
- * Books' lists have grown several shapes; the server parses them the same way
- * (see BooksReadings) and the browser's half of that rule lives in
- * services/rows.ts, so the withdrawal screen and this one read a Books row
- * through the same two functions rather than two copies of them.
+ * These moved to services/shapes.ts when the credit note screen needed the
+ * same three rules for Books' warehouse and invoice-line lists. Re-exported
+ * here so the form that has always imported them from this module still can.
  */
-export { readId, readText } from '../../services/rows'
+export { readId, readNumber, readText } from '../../services/shapes'

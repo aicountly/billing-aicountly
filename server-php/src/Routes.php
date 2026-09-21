@@ -11,6 +11,7 @@ use Aicountly\Api\Controllers\DashboardsController;
 use Aicountly\Api\Controllers\DuesController;
 use Aicountly\Api\Controllers\ExpensesController;
 use Aicountly\Api\Controllers\ManageController;
+use Aicountly\Api\Controllers\MoneyController;
 use Aicountly\Api\Controllers\ProfilesController;
 use Aicountly\Api\Controllers\ReportsController;
 use Aicountly\Api\Controllers\ScheduleController;
@@ -69,12 +70,22 @@ final class Routes
         // Recording one is still POST v1/transactions/bank_withdrawal, above.
         $router->get('v1/bank-withdrawals/recent', [BankWithdrawalsController::class, 'recent']);
         $router->get('v1/bank-withdrawals/summary', [BankWithdrawalsController::class, 'summary']);
-        // Invoices a credit note (or bills a debit note) can be raised against.
+        // Invoices a credit note (or bills a debit note) can be raised against,
+        // and — for one of them — the lines that were billed on it, so the note
+        // can start from what was sold instead of an empty table.
         $router->get('v1/original-documents', [TransactionsController::class, 'originalDocuments']);
+        $router->get('v1/original-documents/{voucherId}', [TransactionsController::class, 'originalDocument']);
+        // How many credit notes this month, against the window before it.
+        $router->get('v1/credit-notes/trend', [TransactionsController::class, 'creditNoteTrend']);
         $router->get('v1/transactions/{id}', [TransactionsController::class, 'show']);
         $router->post('v1/transactions/{id}/retry', [TransactionsController::class, 'retry']);
         $router->get('v1/transactions/{id}/statutory', [TransactionsController::class, 'statutoryStatus']);
         $router->post('v1/transactions/{id}/statutory/{what}', [TransactionsController::class, 'generateStatutory']);
+
+        // The money screens' own context: the period's entries, their totals,
+        // and when a party was last paid. Books' register, read on the request.
+        $router->get('v1/money/recent', [MoneyController::class, 'recent']);
+        $router->get('v1/money/party-context', [MoneyController::class, 'partyContext']);
 
         // Dues — every figure read live from Books.
         $router->get('v1/receivables', [DuesController::class, 'receivables']);

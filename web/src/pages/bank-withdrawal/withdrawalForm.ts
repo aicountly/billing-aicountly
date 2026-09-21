@@ -10,7 +10,7 @@
  * must be filled in before the request is worth sending.
  */
 
-import { readText } from '../../services/rows'
+import { readText } from '../../services/shapes'
 import type { CashBankAccount, RecentWithdrawal } from '../../services/types'
 
 export interface WithdrawalDraft {
@@ -269,14 +269,31 @@ export function maskAccountNumber(account: CashBankAccount): string | null {
 }
 
 /**
+ * Which kind of ledger Books says this is, from the GROUP it put it in.
+ *
+ * The same rule the server applies in DuesService, and for the same reason:
+ * the group is Books' own classification, so reading it is not guessing. The
+ * NAME is never read — "Cash Credit A/c" is a bank — so a ledger whose group
+ * Books did not send stays unclassified rather than being sorted by its label.
+ */
+function kindFromGroup(account: CashBankAccount): AccountKind {
+  const group = (account.group_name ?? account.nature ?? '').toLowerCase()
+  if (group === '') return null
+
+  return group.includes('cash') ? 'cash' : 'bank'
+}
+
+/**
  * The ledgers Books returned, with the balance and the kind attached where they
  * are known.
  *
  * The LIST is `v1/catalog/cash-bank` — Books' cash and bank ledgers, which is
- * what may be posted to. The kind and the balance come from `v1/cash-bank`,
- * which is permission-gated: a profile without `bank.view` gets the list and no
+ * what may be posted to. The balance comes from `v1/cash-bank`, which is
+ * permission-gated: a profile without `bank.view` gets the list and no
  * balances, and the screen still works because the balance is context, not a
- * requirement for recording what the bank already did.
+ * requirement for recording what the bank already did. The kind comes from
+ * there too, and falls back to the group on the ledger itself — so the two
+ * lists stay sorted for somebody who may not be shown a balance at all.
  */
 export function buildAccountOptions(
   accounts: CashBankAccount[],
@@ -290,7 +307,7 @@ export function buildAccountOptions(
     return {
       id: account.acc_id,
       name: account.acc_name,
-      kind: match?.kind ?? null,
+      kind: match?.kind ?? kindFromGroup(account),
       balance: match ? match.balance : null,
       maskedNumber: maskAccountNumber(account),
     }
