@@ -37,6 +37,15 @@ const Reports = lazy(() => import('./pages/reports'))
 const ReportView = lazy(() => import('./pages/reports/ReportView'))
 
 /**
+ * Settings is split out too.
+ *
+ * It carries the whole settings catalogue, twelve detail panels and its own
+ * stylesheet, and a counter biller opening a bill does not need a byte of it.
+ */
+const SettingsHome = lazy(() => import('./pages/settings/SettingsHome'))
+const SettingsCategory = lazy(() => import('./pages/settings/SettingsCategory'))
+
+/**
  * Money paid and money received, split for the same reason.
  *
  * The screen is a form, a period summary, a party's history and a recent list,
@@ -299,8 +308,22 @@ function Shell() {
           <Route path=":reportKey" element={<Suspense fallback={<Loading />}><RequireScope><ReportView /></RequireScope></Suspense>} />
         </Route>
 
+        {/* Settings. The hub and its twelve categories. */}
+        <Route path="settings">
+          <Route index element={<Suspense fallback={<Loading />}><RequireScope><SettingsHome /></RequireScope></Suspense>} />
+          <Route path=":categoryId" element={<Suspense fallback={<Loading />}><RequireScope><SettingsCategory /></RequireScope></Suspense>} />
+        </Route>
+
+        {/*
+          `/more` was where Settings lived before the hub, and every one of its
+          children is still exactly where it was. Those are real screens with
+          real links out in the wild — a bookmark, the + New menu, a child in
+          the server's own menu — so they keep their URLs, and only the index
+          moves. Nothing here was removed; each one now also has a home in the
+          category it belongs to.
+        */}
         <Route path="more">
-          <Route index element={<RequireScope><More /></RequireScope>} />
+          <Route index element={<Navigate to="/settings" replace />} />
           <Route path="expense">
             <Route
               index
@@ -330,43 +353,6 @@ function Shell() {
         <Route path="*" element={<Notice tone="warning">That page does not exist.</Notice>} />
       </Route>
     </Routes>
-  )
-}
-
-function More() {
-  const { can } = useBilling()
-  const entries = [
-    { path: '/more/credit-note', label: 'Credit note', permission: 'credit_note.create' },
-    { path: '/more/debit-note', label: 'Debit note', permission: 'debit_note.create' },
-    { path: '/more/expense', label: 'Record an expense', permission: 'expense.create' },
-    { path: '/more/recurring', label: 'Recurring bills', permission: 'recurring.manage' },
-    { path: '/more/unfinished', label: 'Entries not saved yet', permission: null },
-    { path: '/more/profiles', label: 'Who can do what', permission: 'access.manage' },
-  ]
-
-  return (
-    <div style={{ display: 'grid', gap: '0.5rem', maxWidth: '28rem' }}>
-      <h1 style={{ margin: '0 0 0.5rem', fontSize: '1.3rem' }}>Settings</h1>
-      {entries
-        .filter((entry) => entry.permission === null || can(entry.permission))
-        .map((entry) => (
-          <a
-            key={entry.path}
-            href={entry.path}
-            style={{
-              display: 'block',
-              padding: '0.85rem 1rem',
-              background: 'var(--surface)',
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--radius)',
-              textDecoration: 'none',
-              color: 'var(--fg)',
-            }}
-          >
-            {entry.label}
-          </a>
-        ))}
-    </div>
   )
 }
 

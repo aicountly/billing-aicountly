@@ -92,7 +92,7 @@ export const ownerSession: BillingSession = {
     { key: 'parties', label: 'Parties', path: '/parties', children: [] },
     { key: 'items', label: 'Items', path: '/items', children: [] },
     { key: 'reports', label: 'Reports', path: '/reports', children: [] },
-    { key: 'more', label: 'Settings', path: '/more', children: [] },
+    { key: 'more', label: 'Settings', path: '/settings', children: [] },
   ],
   dashboards: [
     { key: 'overview', label: 'Overview', path: '/dashboard/overview' },
@@ -139,7 +139,7 @@ export const billerSession: BillingSession = {
     { key: 'sales', label: 'Sales', path: '/sales', children: [{ label: 'New bill', path: '/sales/new' }] },
     { key: 'money', label: 'Money', path: '/money-in', children: [] },
     { key: 'parties', label: 'Parties', path: '/parties', children: [] },
-    { key: 'more', label: 'Settings', path: '/more', children: [] },
+    { key: 'more', label: 'Settings', path: '/settings', children: [] },
   ],
   dashboards: [{ key: 'biller', label: 'Biller Desk', path: '/dashboard/biller' }],
   landing: '/dashboard/biller',
@@ -1909,3 +1909,34 @@ export const payablesNothingOwed: PayablesWorkspace = {
   pagination: { page: 1, page_size: 25, total: 0, pages: 1, from: 0, to: 0 },
   filtered: { count: 0, amount: 0, is_filtered: false },
 }
+
+// ---------------------------------------------------------------------------
+// Settings
+//
+// The hub reads its own catalogue out of the bundle, so the only fixtures it
+// needs are the live reads behind the setup checklist and the detail panels.
+// The company comes from the companyinfo fixture the harness already serves,
+// and the accounts and tax categories from the lists above.
+// ---------------------------------------------------------------------------
+
+export const profiles = {
+  profiles: [
+    { profile_id: 1, profile_code: 'biller', profile_name: 'Biller', description: 'Makes bills at the counter.', template_key: 'biller', permissions: [], is_system: true, is_active: true, member_count: '2' },
+    { profile_id: 2, profile_code: 'owner', profile_name: 'Owner', description: 'Everything in Billing.', template_key: 'owner', permissions: [], is_system: true, is_active: true, member_count: '1' },
+  ],
+  catalog: {},
+}
+
+export const reminderRules = [
+  {
+    rule_id: 1,
+    rule_name: 'Chase three days late',
+    offset_days: 3,
+    repeat_days: 0,
+    max_reminders: 3,
+    channel: 'whatsapp',
+    message_template: null,
+    minimum_amount: '500',
+    is_active: true,
+  },
+]
