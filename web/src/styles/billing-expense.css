@@ -344,6 +344,150 @@ textarea.billing-expense-control { min-height: 78px; resize: vertical; line-heig
 
 .billing-expense-bill__why { margin: 0; color: var(--billing-muted); font-size: 12px; line-height: 1.5; }
 
+/* The drop zone brings its own dashed edge, so the container around it does
+   not need a second one. */
+.billing-expense-bill--upload {
+  border-style: solid;
+  border-color: var(--billing-border);
+  background: var(--billing-surface);
+}
+
+.billing-expense-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 132px;
+  padding: 18px 14px;
+  border: 1.5px dashed var(--billing-border-strong);
+  border-radius: 12px;
+  background: var(--billing-surface-2);
+  color: var(--billing-text);
+  font: inherit;
+  text-align: center;
+  transition: border-color 160ms ease, background-color 160ms ease;
+}
+
+.billing-expense-drop--empty { cursor: pointer; }
+
+.billing-expense-drop--empty:hover,
+.billing-expense-drop--empty.is-dragging {
+  border-color: var(--billing-action);
+  background: var(--billing-mint);
+}
+
+/* Dragging a file over it is the one moment the zone should look like a
+   target rather than a button. */
+.billing-expense-drop--empty.is-dragging { border-style: solid; }
+
+.billing-expense-drop--empty:focus-visible {
+  outline: 3px solid rgb(24 122 18 / 16%);
+  outline-offset: 2px;
+}
+
+.billing-expense-drop__icon { color: var(--billing-action); flex-shrink: 0; }
+.billing-expense-drop__lead { font-size: 13px; }
+.billing-expense-drop__lead strong { color: var(--billing-action); font-weight: 650; }
+.billing-expense-drop__limits { color: var(--billing-muted); font-size: 11.5px; }
+
+.billing-expense-drop__name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.billing-expense-drop__why { color: var(--billing-muted); font-size: 12px; line-height: 1.5; }
+.billing-expense-drop__row { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; }
+
+.billing-expense-drop--busy { border-style: solid; border-color: var(--billing-mint-strong); background: var(--billing-mint); }
+
+.billing-expense-drop--failed {
+  border-style: solid;
+  border-color: var(--billing-danger);
+  background: var(--billing-danger-bg);
+}
+
+.billing-expense-drop--failed .billing-expense-drop__icon { color: var(--billing-danger); }
+
+.billing-expense-drop__bar {
+  display: block;
+  width: 100%;
+  max-width: 220px;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #fff;
+}
+
+.billing-expense-drop__fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--billing-action);
+  transition: width 180ms ease;
+}
+
+/* Some browsers and proxies cannot measure an upload. A bar that slides
+   rather than fills says "working" without claiming a percentage. */
+.billing-expense-drop__fill--unmeasured {
+  width: 40%;
+  animation: billing-expense-slide 1.1s ease-in-out infinite;
+}
+
+@keyframes billing-expense-slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(250%); }
+}
+
+/* --------------------------------------------------------- attached bill */
+
+.billing-expense-attached {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px;
+  border: 1px solid var(--billing-mint-strong);
+  border-radius: 12px;
+  background: var(--billing-mint);
+}
+
+.billing-expense-attached__thumb {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: 9px;
+  border: 1px solid var(--billing-border);
+  background: #fff;
+  color: var(--billing-action);
+}
+
+.billing-expense-attached__thumb img { width: 100%; height: 100%; object-fit: cover; }
+.billing-expense-attached__thumb--pdf { color: var(--billing-danger); }
+
+.billing-expense-attached__main { min-width: 0; display: grid; gap: 2px; flex: 1; }
+
+.billing-expense-attached__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.billing-expense-attached__meta { color: var(--billing-muted); font-size: 11.5px; }
+.billing-expense-attached__meta a { color: var(--billing-action); font-weight: 600; }
+
+.billing-expense-attached__actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; flex-wrap: wrap; }
+
 .billing-expense-aside-note {
   display: flex;
   align-items: flex-start;
