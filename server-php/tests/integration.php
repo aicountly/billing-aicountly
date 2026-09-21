@@ -22,6 +22,7 @@ use Aicountly\Api\Domain\BillerDeskService;
 use Aicountly\Api\Domain\CollectionsService;
 use Aicountly\Api\Domain\ComplianceService;
 use Aicountly\Api\Domain\DocumentCapture;
+use Aicountly\Api\Domain\CreditNoteContext;
 use Aicountly\Api\Domain\DuesService;
 use Aicountly\Api\Domain\ExpenseHistory;
 use Aicountly\Api\Domain\Metric;
@@ -1003,6 +1004,47 @@ check('a part-paid invoice never reads as paid', function () {
     assertSame('PARTIALLY_PAID', $part, 'half of it is still owed and the badge says so');
     assertSame('UNPAID', $none, 'none of it paid');
     assertSame(null, $unknown, 'and an unreadable row shows no status rather than a guessed one');
+});
+
+check('an invoice\'s lines are read whatever Books calls them', function () {
+    // Two deployments, two spellings, one set of lines. A credit note that
+    // cannot start from the bill is a credit note somebody retypes off paper.
+    $ours = CreditNoteContext::linesOf(['inventory_lines' => [[
+        'source_line_ref' => '1', 'item_id' => 7, 'item_name' => 'Wireless Mouse', 'item_sku' => 'M221-BLK',
+        'mc_id' => 3, 'batch_no' => 'BATCH-A1', 'qty' => 5, 'rate' => 850, 'discount_pc' => 0,
+        'amount' => 4250, 'tax_cat_id' => 4, 'tax_rate' => 18,
+    ]], 'service_lines' => [[
+        'source_line_ref' => '2', 'description' => 'Installation', 'amount' => 500,
+    ]]]);
+
+    assertSame(2, count($ours), 'the goods line and the service line');
+    assertSame('Wireless Mouse', $ours[0]['item_name'], 'the item');
+    assertSame(3, $ours[0]['warehouse_id'], 'the warehouse it went out of');
+    assertTrue($ours[0]['stockable'], 'goods can come back');
+    assertTrue($ours[1]['stockable'] === false, 'a described charge never does');
+
+    $theirs = CreditNoteContext::linesOf(['items' => [[
+        'product_id' => 9, 'product_name' => 'USB-C Cable', 'code' => 'CB11-1M', 'quantity' => '3',
+        'unit_price' => '450.00', 'discount_percent' => '5', 'line_amount' => '1282.50',
+        'gst_rate' => '18', 'warehouse_id' => 2,
+    ]]]);
+
+    assertSame(1, count($theirs), 'the other spelling reads too');
+    assertSame(3.0, $theirs[0]['qty'], 'quantity as a number, from a string');
+    assertSame(18.0, $theirs[0]['tax_rate'], 'the rate Books had on the bill');
+});
+
+check('the accounting legs of a voucher are never read as goods', function () {
+    // "Output CGST 9%" in a list of things coming back is the one mistake this
+    // normaliser must not make, so those containers are not even looked at.
+    $legs = CreditNoteContext::linesOf([
+        'entries' => [['account_name' => 'Output CGST 9%', 'amount' => 382.5, 'dr_cr' => 'CR']],
+        'ledger_entries' => [['account_name' => 'Sales', 'amount' => 4250]],
+    ]);
+    assertSame(0, count($legs), 'no lines from the ledger side of the voucher');
+
+    $unknown = CreditNoteContext::linesOf(['something_else' => [['foo' => 'bar']]]);
+    assertSame(0, count($unknown), 'and none from a shape we do not recognise');
 });
 
 check('a comparison against nothing is refused, and a rise is not always good', function () {

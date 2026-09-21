@@ -321,6 +321,7 @@ final class TransactionService
                 'unit_id'         => self::id($line['unit_id'] ?? null),
                 'mc_id'           => self::id($line['warehouse_id'] ?? null),
                 'batch_id'        => self::id($line['batch_id'] ?? null),
+                'batch_no'        => self::text($line['batch_no'] ?? null),
                 'qty'             => $qty,
                 'rate'            => $rate,
                 'discount_pc'     => $discountPc,
@@ -328,6 +329,12 @@ final class TransactionService
                 'tax_cat_id'      => self::id($line['tax_cat_id'] ?? null),
                 'hsn_sac'         => self::text($line['hsn_sac'] ?? null),
                 'description'     => self::text($line['description'] ?? null),
+                // Which line of the original this one credits, and what came
+                // back in what state. Both are recorded on the request whether
+                // or not the far end has a field for them: six months later
+                // "3 of the 5 on line 2, damaged" is the whole story.
+                'against_line_ref'  => self::text($line['against_line_ref'] ?? null),
+                'return_condition'  => self::text($line['return_condition'] ?? null),
             ];
         }
 
@@ -368,6 +375,17 @@ final class TransactionService
             // A price adjustment returns no goods. Saying so explicitly keeps a
             // value-only credit from being read downstream as stock coming back.
             $payload['value_adjustment_only'] = (bool) ($input['value_adjustment_only'] ?? false);
+
+            // And it is enforced here rather than trusted from the form: a
+            // warehouse on a value-only note is the one field that could make
+            // Inventory move stock nobody said came back.
+            if ($payload['value_adjustment_only']) {
+                foreach ($payload['inventory_lines'] as $index => $inventoryLine) {
+                    $payload['inventory_lines'][$index] = [
+                        'mc_id' => null, 'batch_id' => null, 'batch_no' => null, 'return_condition' => null,
+                    ] + $inventoryLine;
+                }
+            }
         }
 
         return $payload;
