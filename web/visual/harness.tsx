@@ -51,6 +51,10 @@ const FAILABLE: Array<[string, RegExp]> = [
   ['paid-from', /v1\/catalog\/cash-bank/],
   ['parties', /v1\/catalog\/parties/],
   ['capabilities', /v1\/expenses\/capabilities/],
+  // The overview's two halves, so "the dashboard is down" and "only the
+  // written summary is down" can both be photographed.
+  ['briefing', /v1\/dashboards\/overview\/briefing/],
+  ['overview', /v1\/dashboards\/overview(\?|$)/],
 ]
 
 const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
@@ -65,6 +69,18 @@ const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
 /** The fixture behind each endpoint the screens call. */
 const RESPONSES: Array<[RegExp, unknown]> = [
   [/v1\/session/, asBiller ? fixtures.billerSession : fixtures.ownerSession],
+  // Before the dashboard itself: `v1/dashboards/overview` matches the briefing
+  // URL too, and the first pattern in this list wins.
+  [/v1\/dashboards\/overview\/briefing/, {
+    data: {
+      available: false,
+      reason: 'No briefing model is configured for this deployment, so there is nothing to write the summary. '
+        + 'The counted briefing above is unaffected.',
+      narrative: null,
+      sources: [],
+      generated_at: null,
+    },
+  }],
   [/v1\/dashboards\/overview/, fixtures.overview],
   [/v1\/dashboards\/biller/, fixtures.biller],
   [/v1\/dashboards\/receivables/, fixtures.receivables],

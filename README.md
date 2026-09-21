@@ -18,7 +18,7 @@ Five dashboards, all reading live from Smart Books and Inventory:
 
 | | |
 |---|---|
-| **Overview** | sales, what you are owed, what you owe, what is in hand |
+| **Overview** | sales, what you are owed, what you owe, what is in hand, and one counted line about what needs a decision today |
 | **Biller desk** | the counter screen — the next bill, and this user's own work |
 | **Receivables** | ageing, who to chase, what they promised |
 | **Payables** | what falls due, and bills worth a second look |
@@ -30,7 +30,7 @@ ten live reports with CSV export, and Billing profiles deciding who sees what.
 
 See [docs/BILLING_IMPLEMENTATION_STATUS.md](docs/BILLING_IMPLEMENTATION_STATUS.md)
 for what each figure means, and
-[docs/BILLING_API_DEPENDENCIES.md](docs/BILLING_API_DEPENDENCIES.md) for the two
+[docs/BILLING_API_DEPENDENCIES.md](docs/BILLING_API_DEPENDENCIES.md) for the
 capabilities no product in this deployment serves yet.
 
 Signing in is the AICOUNTLY portal's job, the same as every other AICOUNTLY
@@ -71,6 +71,7 @@ same-origin.
 | `npm run dev` | Vite dev server on http://localhost:5173 |
 | `npm run build` | Type-check, then build to `web/dist/` |
 | `npm run typecheck` | Type-check only |
+| `npm test` | Unit tests, on Node's own runner — no framework, no build step |
 | `npm run preview` | Serve the production build locally |
 
 `web/visual.html` is a development-only photo booth: it mounts the real page
@@ -78,8 +79,10 @@ components against fixtures so the screens can be checked at any width without a
 portal session or a company's data. `?screen=` picks one — the five dashboards,
 or `expense` — `?as=biller` narrows the profile, and `?fail=recent,categories`
 makes those endpoints answer 503, which is how the "one panel is down, the form
-still works" states get checked. `vite build` takes `index.html` only, so none of
-it reaches the deployed bundle.
+still works" states get checked. `?fail=overview` and `?fail=briefing` are the
+overview's two halves, so "the dashboard is down" and "only the written summary
+is down" can be checked apart from each other. `vite build` takes `index.html`
+only, so none of it reaches the deployed bundle.
 
 The PHP API has no build step and no dependencies. To run it locally:
 

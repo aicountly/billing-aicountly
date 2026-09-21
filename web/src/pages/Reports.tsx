@@ -12,7 +12,8 @@
  * return. When the whole set cannot be read, the export is refused and says so.
  */
 
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Download, FileText } from 'lucide-react'
 import { api, ApiError } from '../services/api'
 import { useApi } from '../hooks/useApi'
@@ -37,12 +38,45 @@ interface ReportResult {
   note: string
 }
 
+/** The periods this screen accepts in a link. Anything else falls back. */
+const PERIOD_KEYS = new Set<string>(PERIOD_OPTIONS.map((option) => option.key))
+
 export default function Reports() {
   const { scope, can } = useBilling()
-  const [selected, setSelected] = useState<string | null>(null)
-  const [period, setPeriod] = useState<PeriodKey>('month')
+
+  /**
+   * The chosen report and period live in the URL.
+   *
+   * So that a dashboard card can link straight to the register behind it with
+   * the period the person was looking at still applied — a drill-down that
+   * lands on "pick one on the left" has not drilled into anything — and so
+   * that the result is a link somebody can send to their accountant.
+   */
+  const [params, setParams] = useSearchParams()
+  const selected = params.get('report')
+  const requested = params.get('period')
+  const period: PeriodKey = (requested !== null && PERIOD_KEYS.has(requested) ? requested : 'month') as PeriodKey
+
   const [downloading, setDownloading] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
+
+  const choose = useCallback(
+    (next: { report?: string; period?: PeriodKey }) => {
+      setParams(
+        (current) => {
+          const updated = new URLSearchParams(current)
+          if (next.report !== undefined) updated.set('report', next.report)
+          if (next.period !== undefined) updated.set('period', next.period)
+          return updated
+        },
+        // Replace rather than push: flipping between periods should not make
+        // Back walk through every one of them before leaving the screen.
+        { replace: true },
+      )
+      setExportError(null)
+    },
+    [setParams],
+  )
 
   const list = useApi(
     (signal) => api.one<{ reports: Array<{ key: string; label: string }>; note: string }>('v1/reports', undefined, signal),
@@ -108,10 +142,7 @@ export default function Reports() {
                   className="billing-nav__link"
                   aria-current={entry.key === selected ? 'page' : undefined}
                   style={{ border: 0, cursor: 'pointer', width: '100%', background: 'transparent' }}
-                  onClick={() => {
-                    setSelected(entry.key)
-                    setExportError(null)
-                  }}
+                  onClick={() => choose({ report: entry.key })}
                 >
                   <FileText size={15} aria-hidden /> {entry.label}
                 </button>
@@ -132,7 +163,7 @@ export default function Reports() {
                       type="button"
                       className="billing-segmented__option"
                       aria-pressed={period === option.key}
-                      onClick={() => setPeriod(option.key)}
+                      onClick={() => choose({ period: option.key })}
                     >
                       {option.label}
                     </button>

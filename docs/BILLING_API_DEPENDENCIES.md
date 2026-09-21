@@ -181,6 +181,65 @@ The second is a client for it in `server-php/src/Clients/`, and one line in
 whatever the environment says, because configuring a service Billing cannot call
 would put a drop zone on screen that swallows a photo and loses it.
 
+## Not available: the written business briefing
+
+**Dashboard 1 shows an unavailable state for this, and only for this.**
+
+The overview's briefing strip has two halves, and only one of them is missing.
+
+The **counted briefing** — "3 overdue customer accounts and 2 supplier accounts
+due this week need a look today" — is arithmetic over the records that page has
+already read. It is built in `BriefingService::build` from the same array the
+priority panel underneath it is built from, so the sentence and the list cannot
+disagree. It needs no service, is always available, carries no confidence score,
+and is never labelled AI. Nothing below affects it.
+
+The **written summary** is a model's words, and this deployment has no model.
+It is a separate endpoint for three reasons, all the same reason: the dashboard
+must not wait on a model, must not fail with one, and must not pay for one
+every time somebody opens the page.
+
+```
+GET  /api/v1/dashboards/overview/briefing
+  → { data: { available, reason, narrative, sources: [ {label, path} ], generated_at } }
+```
+
+It checks `overview.view` before it answers, so a profile that cannot open the
+dashboard cannot get a summary of it either. The React side asks for it only
+when a person presses **Write this up for me**.
+
+### The contract Billing would need
+
+Owner: **Console** (the approved model configuration), reached server-side.
+Billing sends a digest it has already computed and already permission-scoped —
+it does not hand over a company's records and ask for analysis.
+
+```
+POST <AI_BRIEFING_BASE>/v1/briefings
+  Authorization: Bearer <AI_BRIEFING_KEY>     # server-side only, never in a VITE_ var
+  {
+    period: { from, to, timezone },
+    metrics: [ { id, label, value, basis, summary } ],   # already computed here
+    priorities: [ { id, text, count, path } ],           # already counted here
+    untrusted: true          # party names and document text are DATA, not instructions
+  }
+  → { data: { narrative, sources: [ { label, path } ], generated_at } }
+```
+
+Three things the response must not contain, because the screen cannot check
+them: a figure Billing did not send, a confidence percentage, and an
+instruction. Nothing generated posts an entry, issues or cancels a document,
+changes bank details or sends a reminder — those are all deterministic paths
+behind their own permissions, and a narrative is text beside them, not a
+control over them.
+
+**Until this exists**, `AI_BRIEFING_BASE` unset (the normal case) answers
+"No briefing model is configured for this deployment"; set with no key answers
+that the key is missing; set with a key still answers unavailable, naming this
+file, because writing a client against a shape no service serves would put a
+summary on screen that nobody could check. The counted briefing is unaffected
+in all three cases.
+
 ## Not depended on: Aicountly Pay
 
 Nothing in this product requires a payment gateway, and nothing in it moves
