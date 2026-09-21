@@ -1,12 +1,12 @@
 /**
- * A photo booth for the five dashboards and the debit note editor.
- * Development only.
+ * A photo booth for the dashboards, the debit note editor and the dues
+ * screens. Development only.
  *
  * It mounts the REAL page components inside the REAL shell, with the real
  * hooks, the real loading states and the real router. The only thing replaced
- * is the network: `window.fetch` answers the dashboard endpoints from the
- * fixtures next door, so the screens can be photographed at four widths
- * without inventing records in anybody's company.
+ * is the network: `window.fetch` answers the endpoints from the fixtures next
+ * door, so the screens can be photographed at four widths without inventing
+ * records in anybody's company.
  *
  * It is a separate HTML entry point. `vite build` takes index.html only, so
  * none of this reaches the deployed bundle.
@@ -14,11 +14,17 @@
  *   /visual.html?screen=overview&as=owner
  *   /visual.html?screen=debit-note
  *   /visual.html?screen=bank-withdrawal&fail=balance
+ *   /visual.html?screen=dues&state=empty|error|slow
+ *   /visual.html?screen=dues&as=biller            (no receipt or reminder rights)
+ *   /visual.html?screen=items&at=stock_status%3Dlow
+ *   /visual.html?screen=dues&router=browser       (the real router and the real
+ *                                                  back button, for the filters
+ *                                                  that live in the address bar)
  */
 
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, MemoryRouter, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from '../src/auth/AuthProvider'
 import { BillingProvider } from '../src/context/BillingContext'
 import { AppShell } from '../src/shell/AppShell'
@@ -28,6 +34,7 @@ import Receivables from '../src/dashboards/Receivables'
 import Payables from '../src/dashboards/Payables'
 import CashCompliance from '../src/dashboards/CashCompliance'
 import DebitNote from '../src/pages/DebitNote'
+import { DuesScreen } from '../src/receivables/DuesScreen'
 import { MoneyScreen } from '../src/pages/money/MoneyScreen'
 import MoneyReceived from '../src/pages/money-received'
 import ExpensePage from '../src/pages/expense/ExpensePage'
@@ -44,6 +51,12 @@ import '../src/App.css'
 const params = new URLSearchParams(window.location.search)
 const screen = params.get('screen') ?? 'overview'
 const asBiller = params.get('as') === 'biller'
+const state = params.get('state') ?? 'normal'
+// `?router=browser` swaps the memory router for the real one, so the filter
+// round trip through the address bar — and the back button with it — can be
+// exercised as it behaves in the app. The screenshots keep the memory router,
+// which lets the sidebar highlight the route each screen really sits on.
+const realRouter = params.get('router') === 'browser'
 
 /**
  * `?docs=on` answers the capability endpoint as a deployment with a document
@@ -113,6 +126,10 @@ const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
   payables: { path: '/dashboard/payables', element: <Payables /> },
   'cash-compliance': { path: '/dashboard/cash-compliance', element: <CashCompliance /> },
   'debit-note': { path: '/more/debit-note', element: <DebitNote /> },
+
+  // The bill-by-bill screens. `/receivables` is the one the menu points at.
+  dues: { path: '/receivables', element: <DuesScreen side="receivable" /> },
+  'dues-payable': { path: '/payables', element: <DuesScreen side="payable" /> },
   'money-out': { path: '/money-out/new', element: <MoneyScreen direction="out" /> },
   'money-in': { path: '/money-in/new', element: <MoneyReceived /> },
   'money-in-form': { path: '/money-in/new', element: <MoneyScreen direction="in" /> },
@@ -123,8 +140,10 @@ const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
   'bank-withdrawal': { path: '/bank-cash/withdrawal', element: <BankWithdrawalPage /> },
 }
 
-/** The fixture behind each endpoint the screens call. */
-const RESPONSES: Array<[RegExp, unknown]> = [
+const DUES = /v1\/(receivables|payables)(\?|$)/
+
+/** The fixture behind each endpoint the screens call. A function gets the URL. */
+const RESPONSES: Array<[RegExp, unknown | ((url: string) => unknown)]> = [
   [/v1\/session/, asBiller ? fixtures.billerSession : fixtures.ownerSession],
   // Before the dashboard itself: `v1/dashboards/overview` matches the briefing
   // URL too, and the first pattern in this list wins.
@@ -143,6 +162,19 @@ const RESPONSES: Array<[RegExp, unknown]> = [
   [/v1\/dashboards\/receivables/, fixtures.receivables],
   [/v1\/dashboards\/payables/, fixtures.payables],
   [/v1\/dashboards\/cash-compliance/, fixtures.compliance],
+
+  [
+    DUES,
+    (url: string) => {
+      if (state === 'empty') return fixtures.duesEmpty
+      // The dues screen takes a second reading at an earlier date for the
+      // movement on the cards. Answering both from one fixture would show a
+      // flat 0% and never exercise the comparison at all.
+      if (url.includes('as_on=')) return fixtures.receivableDuesEarlier
+      return url.includes('v1/payables') ? fixtures.payableDues : fixtures.receivableDues
+    },
+  ],
+
   [/v1\/insights/, [
     { kind: 'overdue_receivable', tone: 'warning', message: '₹74,500.00 is overdue from customers.', action: { label: 'See who', path: '/dashboard/receivables' } },
     { kind: 'payable_due', tone: 'info', message: '₹48,000.00 is due to suppliers this week.', action: { label: 'See the list', path: '/dashboard/payables' } },
@@ -264,8 +296,23 @@ const everyItem = (): LooseItem[] => [...fixtures.catalogItems, ...fixtures.sale
 
 const originalFetch = window.fetch.bind(window)
 
+function json(payload: unknown, status = 200): Response {
+  const body = Array.isArray(payload) || !(payload as { data?: unknown }).data ? { data: payload } : payload
+
+  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+}
+
 window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+
+  // The error state is the whole point of having one: the screen has to keep
+  // its shell and say what failed, rather than going blank.
+  if (state === 'error' && DUES.test(url)) {
+    return json(
+      { error: { code: 'books_unavailable', message: 'Could not reach Smart Books to work out money to collect. Please retry.' } },
+      503,
+    )
+  }
 
   for (const [key, pattern] of FAILABLE) {
     if (failing.has(key) && pattern.test(url)) {
@@ -444,13 +491,11 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Res
 
   for (const [pattern, payload] of RESPONSES) {
     if (pattern.test(url)) {
-      const body = Array.isArray(payload) || !(payload as { data?: unknown }).data
-        ? { data: payload }
-        : payload
-      return new Response(JSON.stringify(body), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
+      const resolved = typeof payload === 'function' ? (payload as (url: string) => unknown)(url) : payload
+      // A deliberate pause, so the skeletons can be photographed too.
+      if (state === 'slow') await new Promise((resume) => window.setTimeout(resume, 4000))
+
+      return json(resolved)
     }
   }
 
@@ -481,17 +526,23 @@ try {
 const target = SCREENS[screen] ?? SCREENS.overview
 const entry = at === '' ? target.path : `${target.path}?${at}`
 
+const routes = (
+  <Routes>
+    <Route element={<AppShell />}>
+      <Route path={realRouter ? window.location.pathname : target.path} element={target.element} />
+    </Route>
+  </Routes>
+)
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <AuthProvider>
       <BillingProvider>
-        <MemoryRouter initialEntries={[entry]}>
-          <Routes>
-            <Route element={<AppShell />}>
-              <Route path={target.path} element={target.element} />
-            </Route>
-          </Routes>
-        </MemoryRouter>
+        {realRouter ? (
+          <BrowserRouter>{routes}</BrowserRouter>
+        ) : (
+          <MemoryRouter initialEntries={[entry]}>{routes}</MemoryRouter>
+        )}
       </BillingProvider>
     </AuthProvider>
   </StrictMode>,

@@ -17,7 +17,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Lightbulb, WalletCards } from 'lucide-react'
 import { api } from '../../services/api'
 import type {
@@ -57,6 +57,7 @@ export function MoneyScreen({ direction }: { direction: Direction }) {
   /** Bumped after a Save & New, to put the caret back on the party field. */
   const [refocusParty, setRefocusParty] = useState(0)
   const { toasts, push, dismiss } = useToasts()
+  const [search] = useSearchParams()
 
   const pageRef = useRef<HTMLDivElement>(null)
   const partyInputRef = useRef<HTMLInputElement>(null)
@@ -90,10 +91,33 @@ export function MoneyScreen({ direction }: { direction: Direction }) {
 
   const [bills, setBills] = useState<OpenBill[]>([])
 
+  /**
+   * What the link opened this screen with.
+   *
+   * Money to Collect sends the party and the balance it was looking at, so a
+   * user who clicked "Record money received" against a bill does not retype
+   * either. Read once, into the form's opening values — the open bills and the
+   * allocation still come from Books when the party lands.
+   */
+  const opening = useMemo(() => {
+    const id = Number(search.get('account_id'))
+    const name = search.get('account_name')
+    const amount = Number(search.get('amount'))
+
+    return {
+      party: Number.isFinite(id) && id > 0 && name ? { id, name } : null,
+      amount: Number.isFinite(amount) && amount > 0 ? amount.toFixed(2) : '',
+    }
+    // The opening value only: re-reading it after the user has typed would
+    // undo their edit on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const form = useMoneyForm({
     direction,
     bills,
     today: localToday(),
+    prefill: opening,
     onSaved: ({ requestId, amount, partyName, savedAndNew }) => {
       // The period totals and the recent list both just changed.
       activity.reload()

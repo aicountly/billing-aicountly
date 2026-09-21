@@ -507,6 +507,98 @@ GET v1/return-dispositions          → { data: [ { code, label, restocks: bool 
 
 Until that exists the list stays short, plain, and honest about being ours.
 
+## Partly available: what a bill was raised for
+
+**Money to Collect shows this when Books sends it, and "not known" when it does
+not. It is never rendered as zero.**
+
+The bill-by-bill report is an OUTSTANDING report: every row is guaranteed to
+carry the balance still owed, which is what the ageing, the totals and the
+follow-up list are built from. Three columns on the bill-by-bill table want more
+than that:
+
+| Column | Needs | Today |
+|---|---|---|
+| Bill amount | the gross value of the bill | passed through when the row carries one |
+| Received | gross less balance | derived, and only when the gross is present |
+| Part paid badge | the same | shown only when received is known and above zero |
+
+`DuesService::dues()` reads the gross from the first of `bill_amount`,
+`invoice_amount`, `total_amount`, `bill_value`, `grand_total` that the row
+actually carries, and emits `bill_amount` and `received` as **null** when none of
+them is there. Null prints as "not known".
+
+It is deliberately not inferred. A received amount worked out from the balance
+alone would be a guess, and the difference between "this customer has paid
+nothing" and "Books did not tell us what the bill was for" is the difference
+between ringing them and not.
+
+### The contract that would make it complete
+
+Owner: **Smart Books**. One additional field per row on
+`GET reports/bill-by-bill`:
+
+```
+  → { data: [ {
+        …the existing row…,
+        bill_amount: <number>     // the gross the bill was raised for
+      } ] }
+```
+
+Nothing else changes: `received` stays a subtraction Billing performs, so there
+is still only one authority for either figure.
+
+## Not available: how a customer is classified
+
+**Money to Collect shows "Who owes it" instead of "Receivables by party type".**
+
+A breakdown by customer type — regular, new, government, export/SEZ — needs a
+classification, and nothing in this deployment has one. Books' bill-by-bill
+carries no such field, `masters/accounts` carries no segment, and Billing owns
+no customer master of its own to put one in.
+
+So the donut shows what IS known exactly: the largest debtors by outstanding,
+with the tail gathered into one slice. That answers the same question a party-type
+chart is usually asked — *where is my money sitting* — without putting a
+confident label on a guess.
+
+### The contract that would allow the original
+
+Owner: **Smart Books** (or whichever product comes to own the customer master).
+A stable classification on the account:
+
+```
+GET masters/accounts
+  → { data: [ { acc_id, acc_name, …, party_segment: <string|null> } ] }
+```
+
+It must be a value somebody in the business SET, not one derived at read time:
+a segment computed from turnover changes under the chart between two page loads
+and cannot be reconciled against anything.
+
+## Not available: a document route for one bill
+
+**Money to Collect does not link a bill number to the bill.**
+
+Every row on the list carries Books' `voucher_id` and `voucher_uuid`, but no
+route in this product addresses a Books voucher: `/sales/:id` takes a Billing
+*request* id — the record of something this app asked Books to create — and a
+bill raised anywhere else has no such record. Linking the two would send the
+user to a page that does not exist for most rows.
+
+The row menu therefore offers what does exist: the party's statement, a receipt
+against the bill, a drafted reminder, and the bill number on the clipboard. The
+same gap is why there is no "Download PDF": `BooksClient::salesInvoicePdfUrl()`
+can build the URL, but no Billing route exposes it and no endpoint fetches it
+with the caller's own session key.
+
+### The contract that would allow it
+
+Owner: **Billing**, over Books' existing voucher endpoints — a read-through
+route that takes a Books voucher id, checks `sale.view`, and returns the voucher
+(or streams the invoice PDF) the way `v1/parties/{id}/statement` already does for
+a ledger.
+
 ## Not depended on: Aicountly Pay
 
 Nothing in this product requires a payment gateway, and nothing in it moves
@@ -518,3 +610,9 @@ There is no `Pay now` button, no payment link, no webhook listener and no
 settlement state. When Aicountly Pay is configured, it arrives as an adapter
 beside the existing methods; no screen in this product has been shaped around
 its absence, so none has to be reshaped by its arrival.
+
+Money to Collect keeps the integration point visible and honest: **Share a
+payment link** sits in the quick actions and in the collection-actions menu,
+permanently disabled, and says why when you hover it. A live-looking button that
+quietly did nothing would be the worst outcome on a collections screen — the
+user believes the customer was sent a way to pay and stops chasing them.

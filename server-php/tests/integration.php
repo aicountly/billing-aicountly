@@ -522,6 +522,33 @@ check('receivables are aged from the due date and totalled', function () use ($c
     assertTrue($dues['bills'][0]['days_overdue'] > 0, 'with its age');
 });
 
+check('the gross and what came in are passed through when Books sends them', function () use ($ctx, $auth) {
+    resetDatabase();
+    $bill = (new DuesService($ctx, $auth))->receivables()['bills'][0];
+
+    // The stub bill is 150000 raised, 120000 still owed. Both figures are
+    // Books' own; `received` is the subtraction and nothing else.
+    assertSame(150000.0, $bill['bill_amount'], 'the gross');
+    assertSame(30000.0, $bill['received'], 'and what has come in against it');
+    assertSame(120000.0, $bill['balance'], 'the balance is untouched by either');
+});
+
+check('a bill Books sent no gross for reports null, never zero', function () use ($ctx, $auth) {
+    // The distinction this protects: on screen, null prints as "not known" and
+    // zero prints as \u20b90.00. One of those says the customer has paid nothing,
+    // and inferring it from the balance alone would be a guess.
+    $service = new \ReflectionClass(DuesService::class);
+    $amount = $service->getMethod('amount');
+    $amount->setAccessible(true);
+
+    assertSame(null, $amount->invoke(null, ['balance' => 100.0], ['bill_amount']), 'key absent');
+    assertSame(null, $amount->invoke(null, ['bill_amount' => null], ['bill_amount']), 'key null');
+    assertSame(null, $amount->invoke(null, ['bill_amount' => ''], ['bill_amount']), 'key empty');
+    assertSame(null, $amount->invoke(null, ['bill_amount' => 'n/a'], ['bill_amount']), 'key not a number');
+    assertSame(0.0, $amount->invoke(null, ['bill_amount' => 0], ['bill_amount']), 'but a real zero is a real zero');
+    assertSame(9.5, $amount->invoke(null, ['invoice_amount' => '9.5'], ['bill_amount', 'invoice_amount']), 'second alias');
+});
+
 check('an unreachable Books is reported, not shown as zero', function () use ($ctx, $auth) {
     resetDatabase();
     stubFail('bill-by-bill', 500);

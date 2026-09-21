@@ -178,7 +178,7 @@ if (str_contains($path, '/masters/accounts/')) {
 }
 if (str_contains($path, '/reports/bill-by-bill')) {
     echo json_encode(['data' => [
-        ['bill_no' => 'INV/0001', 'bill_date' => '2026-08-01', 'due_date' => '2026-08-31', 'balance' => 120000.0],
+        ['bill_no' => 'INV/0001', 'bill_date' => '2026-08-01', 'due_date' => '2026-08-31', 'balance' => 120000.0, 'bill_amount' => 150000.0],
     ]]);
     exit;
 }
