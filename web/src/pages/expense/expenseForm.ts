@@ -173,29 +173,10 @@ export function toExpenseRequest(draft: ExpenseDraft): Record<string, unknown> {
 }
 
 /**
- * Read an id out of a row whose key spelling we do not control.
+ * Reading a row whose key spelling we do not control.
  *
- * Books' lists have grown several shapes; the server parses them the same way
- * (see BooksReadings) and the tax categories are the one list no screen had a
- * typed shape for yet.
+ * These moved to services/shapes.ts when the credit note screen needed the
+ * same three rules for Books' warehouse and invoice-line lists. Re-exported
+ * here so the form that has always imported them from this module still can.
  */
-export function readId(row: Record<string, unknown>, keys: string[]): number | null {
-  for (const key of keys) {
-    const value = row[key]
-    if (typeof value === 'number' && Number.isFinite(value) && value !== 0) return value
-    if (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value)) && Number(value) !== 0) {
-      return Number(value)
-    }
-  }
-
-  return null
-}
-
-export function readText(row: Record<string, unknown>, keys: string[]): string | null {
-  for (const key of keys) {
-    const value = row[key]
-    if (typeof value === 'string' && value.trim() !== '') return value.trim()
-  }
-
-  return null
-}
+export { readId, readNumber, readText } from '../../services/shapes'
