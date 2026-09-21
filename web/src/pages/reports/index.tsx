@@ -13,7 +13,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { api, ApiError } from '../../services/api'
 import { useApi } from '../../hooks/useApi'
 import { useBilling } from '../../context/BillingContext'
@@ -56,6 +56,24 @@ interface PageNotice {
  */
 export default function Reports() {
   const { scope } = useBilling()
+  const [params] = useSearchParams()
+
+  /**
+   * `/reports?report=<key>&period=<period>` still works.
+   *
+   * That is the shape the overview, the money screens and the receipts panel
+   * link with — a drill-down from a card into the register behind it, with the
+   * period the person was looking at still applied. The report has its own
+   * route now, so the link is carried to it rather than broken, and those call
+   * sites did not have to be touched to keep working.
+   */
+  const linked = params.get('report')
+  if (linked) {
+    const period = params.get('period')
+    const query = period ? `?period=${encodeURIComponent(period)}` : ''
+    return <Navigate replace to={`/reports/${encodeURIComponent(linked)}${query}`} />
+  }
+
   const key = scope ? `${scope.cmp_id}:${scope.fy_id}:${scope.bo_id}` : 'none'
 
   return <ReportsLanding key={key} />

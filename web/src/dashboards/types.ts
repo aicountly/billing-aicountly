@@ -41,6 +41,17 @@ export interface Metric {
   /** Present only when status is 'unavailable'. Never a zero in disguise. */
   reason?: string
   detail?: string
+  /**
+   * The one line under the figure, written by the server.
+   *
+   * It carries the time basis in words — "As at 19 Sep · ₹86,500.00 overdue",
+   * "01 Sep–19 Sep · including tax, before credit notes" — so a compact card
+   * needs neither a separate basis chip nor a three-line definition to be read
+   * correctly. Where it is absent the card falls back to `detail`, then to the
+   * full `definition`, and shows the basis as a chip; that is what the other
+   * four dashboards do.
+   */
+  summary?: string
 }
 
 export interface PeriodDescription {
@@ -80,6 +91,45 @@ export interface TrendSeries {
   points: Record<string, number>
 }
 
+/**
+ * One clause of the counted briefing, and the screen its records are on.
+ *
+ * Counted, not generated: `text` is arithmetic over the same reads the cards
+ * came from. The generated summary is a different shape entirely, below.
+ */
+export interface BriefingPoint {
+  id: string
+  text: string
+  tone: 'info' | 'warning' | 'danger'
+  count: number | null
+  path: string
+}
+
+export interface BriefingPanel {
+  available: boolean
+  headline: string
+  points: BriefingPoint[]
+  /** Only present when the server could draw a like-for-like comparison. */
+  movement: { text: string; tone: 'positive' | 'warning'; path: string } | null
+  basis: string
+  generated_at: string
+}
+
+/**
+ * The generated half, from its own endpoint.
+ *
+ * Asked for only when a person asks for it, so the dashboard neither waits on
+ * a model nor pays for one nobody wanted. `available: false` carries the reason
+ * and the rest of the screen is unaffected by it.
+ */
+export interface AssistantBriefing {
+  available: boolean
+  reason: string | null
+  narrative: string | null
+  sources: Array<{ label: string; path: string }>
+  generated_at: string | null
+}
+
 export interface OverviewDashboard {
   period: PeriodDescription
   metrics: Metric[]
@@ -92,6 +142,7 @@ export interface OverviewDashboard {
       basis: string
     }
     actions: SuggestedActionShape[]
+    briefing: BriefingPanel
     recent_documents: { available: boolean; reason: string | null; rows: DocumentRow[] } | null
   }
   generated_at: string

@@ -1,0 +1,699 @@
+/* ---------------------------------------------------------------------------
+   Debit note — the one screen in Purchases that is a document editor rather
+   than a list, and the only one dense enough to need its own sheet.
+
+   It is built on the same --billing-* tokens as everything else, so it changes
+   colour when the product does. The two accents below are the exception: the
+   screen needs one colour for "this is a document" and one for "this is an AI
+   feature", and inventing them per component is how a palette drifts. They are
+   declared on the page rather than on :root so nothing else can reach them.
+   --------------------------------------------------------------------------- */
+
+.dn-page {
+  --dn-blue: #1d4ed8;
+  --dn-blue-soft: #eef4ff;
+  --dn-violet: #6d28d9;
+  --dn-violet-soft: #f5f3ff;
+  --dn-amber-soft: #fff8ec;
+  --dn-gap: 16px;
+
+  display: grid;
+  /* minmax(0, 1fr), not the implicit `auto`: a grid column sized by its content
+     lets the wide item table push the whole page sideways instead of scrolling
+     inside its own wrapper. Every grid on this screen is written this way. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--dn-gap);
+  color: var(--billing-text);
+}
+
+/* --------------------------------------------------------------- breadcrumb */
+
+.dn-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--billing-muted);
+}
+
+.dn-breadcrumb a { color: var(--billing-muted); }
+.dn-breadcrumb a:hover { color: var(--billing-text); }
+.dn-breadcrumb strong { color: var(--billing-text); font-weight: 650; }
+
+/* ------------------------------------------------------------------- header */
+
+.dn-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.dn-head__title { display: flex; align-items: flex-start; gap: 14px; min-width: 0; }
+
+.dn-head__icon {
+  width: 46px;
+  height: 46px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  background: var(--dn-blue-soft);
+  color: var(--dn-blue);
+}
+
+.dn-head__title h1 {
+  margin: 0;
+  font-size: 26px;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.dn-head__title p {
+  margin: 6px 0 0;
+  max-width: 68ch;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--billing-muted);
+}
+
+.dn-head__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* ------------------------------------------------------------------ stepper */
+
+.dn-stepper {
+  padding: 14px 18px;
+  border: 1px solid var(--billing-border);
+  border-radius: var(--billing-radius);
+  background: var(--billing-surface);
+  box-shadow: var(--billing-shadow);
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  /* Without paint containment the strip's scrollable width is counted into the
+     document's, and a phone can be dragged 240px sideways over blank page even
+     though the strip itself scrolls correctly. */
+  contain: paint;
+}
+
+/* The row of steps is wider than the card on a phone and scrolls inside it.
+   `max-content` states that explicitly: a flex row that merely overflows its
+   scroller leaves the overflow on the document instead. */
+.dn-stepper__list {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: max-content;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dn-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 auto;
+}
+
+.dn-step:last-child { flex: 0 0 auto; }
+
+.dn-step__num {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #eef1ef;
+  color: var(--billing-muted);
+  font-size: 13px;
+  font-weight: 700;
+  transition: background 160ms cubic-bezier(.2,.8,.2,1), color 160ms cubic-bezier(.2,.8,.2,1);
+}
+
+.dn-step--active .dn-step__num { background: var(--billing-action); color: #fff; }
+.dn-step--done .dn-step__num { background: var(--billing-mint); color: var(--billing-action); }
+
+.dn-step__text { min-width: 0; }
+.dn-step__text strong { display: block; font-size: 13px; line-height: 1.3; }
+.dn-step__text span { display: block; margin-top: 2px; font-size: 11px; color: var(--billing-muted); }
+.dn-step--active .dn-step__text strong { color: var(--billing-action); }
+
+.dn-step__line { flex: 1 1 24px; min-width: 20px; height: 1px; margin: 0 8px; background: var(--billing-border); }
+
+/* ------------------------------------------------------------------ layout */
+
+.dn-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: var(--dn-gap);
+  align-items: start;
+}
+
+.dn-main, .dn-aside {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--dn-gap);
+  align-content: start;
+}
+
+/* ------------------------------------------------------------------- cards */
+
+.dn-card {
+  border: 1px solid var(--billing-border);
+  border-radius: var(--billing-radius);
+  background: var(--billing-surface);
+  box-shadow: var(--billing-shadow);
+  overflow: hidden;
+  transition: box-shadow 160ms cubic-bezier(.2,.8,.2,1), border-color 160ms cubic-bezier(.2,.8,.2,1);
+}
+
+.dn-card:focus-within { border-color: var(--billing-border-strong); box-shadow: var(--billing-shadow-lg); }
+
+.dn-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-height: 52px;
+  padding: 9px 16px;
+  border-bottom: 1px solid var(--billing-border);
+}
+
+.dn-card__title { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.dn-card__title h2 { margin: 0; font-size: 15px; line-height: 1.3; letter-spacing: -0.01em; }
+
+.dn-card__icon {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--billing-mint);
+  color: var(--billing-action);
+}
+
+.dn-card__icon--doc { background: var(--dn-blue-soft); color: var(--dn-blue); }
+.dn-card__icon--ai { background: var(--dn-violet-soft); color: var(--dn-violet); }
+
+.dn-card__body { padding: 16px; }
+.dn-card__actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* ------------------------------------------------------------------ fields */
+
+.dn-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+
+.dn-field { min-width: 0; display: grid; gap: 5px; align-content: start; }
+
+.dn-field__label {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--billing-muted);
+}
+
+.dn-req { color: var(--billing-danger); margin-left: 2px; }
+
+.dn-control {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 11px;
+  border: 1px solid var(--billing-border-strong);
+  border-radius: var(--billing-radius-sm);
+  background: var(--billing-surface);
+  color: var(--billing-text);
+  transition: border-color 160ms cubic-bezier(.2,.8,.2,1), box-shadow 160ms cubic-bezier(.2,.8,.2,1);
+}
+
+textarea.dn-control { min-height: 84px; padding: 10px 11px; resize: vertical; line-height: 1.5; }
+
+.dn-control:focus {
+  outline: none;
+  border-color: var(--billing-action);
+  box-shadow: 0 0 0 3px rgb(24 122 18 / 12%);
+}
+
+.dn-control:disabled, .dn-control[readonly] {
+  background: var(--billing-surface-2);
+  color: var(--billing-muted);
+}
+
+.dn-control--invalid { border-color: var(--billing-danger); }
+.dn-control--invalid:focus { box-shadow: 0 0 0 3px rgb(180 35 24 / 12%); }
+
+.dn-field__hint { font-size: 11.5px; color: var(--billing-muted); line-height: 1.45; }
+
+.dn-field__error {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--billing-danger);
+  line-height: 1.45;
+}
+
+.dn-field__links { display: flex; gap: 14px; flex-wrap: wrap; }
+
+.dn-linkbutton {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--billing-action);
+  font-size: 11.5px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.dn-linkbutton:hover { text-decoration: underline; }
+.dn-linkbutton:disabled { color: var(--billing-muted); cursor: not-allowed; text-decoration: none; }
+
+/* an input with a trailing button inside it (the number setting) */
+.dn-inputgroup { position: relative; display: flex; }
+.dn-inputgroup .dn-control { padding-right: 38px; }
+
+.dn-inputgroup__button {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--billing-muted);
+  cursor: pointer;
+}
+
+.dn-inputgroup__button:hover { background: var(--billing-surface-2); color: var(--billing-text); }
+
+/* --------------------------------------------------------- chosen document */
+
+.dn-chosen {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  border: 1px solid var(--billing-mint-strong);
+  border-radius: var(--billing-radius-sm);
+  background: var(--billing-mint);
+}
+
+.dn-chosen__meta { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--billing-muted); }
+.dn-chosen strong { font-size: 14px; }
+
+/* --------------------------------------------------------------- return type */
+
+.dn-returntype { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+
+.dn-radio {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid var(--billing-border);
+  border-radius: var(--billing-radius-sm);
+  background: var(--billing-surface);
+  cursor: pointer;
+  transition: border-color 160ms cubic-bezier(.2,.8,.2,1), background 160ms cubic-bezier(.2,.8,.2,1);
+}
+
+.dn-radio:hover { border-color: var(--billing-border-strong); background: var(--billing-surface-2); }
+.dn-radio--on { border-color: var(--billing-action); background: var(--billing-mint); }
+.dn-radio input { margin: 2px 0 0; flex: 0 0 auto; accent-color: var(--billing-action); }
+.dn-radio strong { display: block; font-size: 13px; }
+.dn-radio small { display: block; margin-top: 3px; font-size: 11.5px; line-height: 1.45; color: var(--billing-muted); }
+
+/* -------------------------------------------------------------------- items */
+
+.dn-tablewrap { overflow-x: auto; }
+
+/* `separate` rather than `collapse` because a collapsed table drops the borders
+   of sticky cells as they scroll under their neighbours.
+
+   `fixed` because the automatic algorithm sizes columns from their contents,
+   and the item column — which holds two stacked inputs — wins that argument and
+   squeezes the tax select down to "GS". Fixed gives every column the width it
+   is declared and hands the remainder to the item. */
+.dn-table {
+  width: 100%;
+  min-width: 760px;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.dn-table th {
+  padding: 10px 7px;
+  border-bottom: 1px solid var(--billing-border);
+  background: var(--billing-surface-2);
+  color: var(--billing-muted);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.dn-table th.dn-num, .dn-table td.dn-num { text-align: right; }
+
+/* Tighter than the rest of the screen on purpose: ten columns of financial
+   entry, and every pixel of padding here is a pixel the value cannot use. */
+.dn-table td { padding: 8px 7px; border-bottom: 1px solid var(--billing-border); vertical-align: middle; }
+.dn-table tbody tr:last-child td { border-bottom: 0; }
+
+/* The row number and the item stay put while the money columns scroll: on a
+   laptop the amount is off to the right, and a rate with no item beside it is
+   a number in the wrong row waiting to happen. */
+.dn-table th:first-child,
+.dn-table td.dn-cell--no,
+.dn-table th:nth-child(2),
+.dn-table td.dn-cell--item {
+  position: sticky;
+  z-index: 2;
+  background: var(--billing-surface);
+}
+
+.dn-table th:first-child, .dn-table td.dn-cell--no { left: 0; }
+.dn-table th:nth-child(2), .dn-table td.dn-cell--item { left: 30px; }
+.dn-table thead th:first-child, .dn-table thead th:nth-child(2) { z-index: 3; background: var(--billing-surface-2); }
+
+.dn-table th:nth-child(2), .dn-table td.dn-cell--item { box-shadow: 1px 0 0 var(--billing-border); }
+
+.dn-table .dn-control { min-height: 36px; padding: 0 7px; border-color: var(--billing-border); }
+.dn-table select.dn-control { padding-right: 2px; }
+
+.dn-rowno { color: var(--billing-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+.dn-unit { display: inline-block; color: var(--billing-text); font-size: 13px; white-space: nowrap; }
+
+.dn-amount {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 8px;
+  border-radius: 7px;
+  background: var(--billing-surface-2);
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.dn-iconbtn {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--billing-muted);
+  cursor: pointer;
+  transition: background 160ms cubic-bezier(.2,.8,.2,1), color 160ms cubic-bezier(.2,.8,.2,1);
+}
+
+.dn-iconbtn:hover { background: var(--billing-surface-2); color: var(--billing-text); }
+.dn-iconbtn--danger:hover { background: var(--billing-danger-bg); color: var(--billing-danger); }
+.dn-iconbtn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.dn-addrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 38px;
+  border: 1px dashed var(--billing-border-strong);
+  border-radius: var(--billing-radius-sm);
+  background: none;
+  color: var(--billing-action);
+  font-weight: 650;
+  cursor: pointer;
+  transition: background 160ms cubic-bezier(.2,.8,.2,1), border-color 160ms cubic-bezier(.2,.8,.2,1);
+}
+
+.dn-addrow:hover { background: var(--billing-mint); border-color: var(--billing-action); }
+
+.dn-aihint {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 10px;
+  color: var(--billing-muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.dn-aihint svg { flex: 0 0 auto; margin-top: 1px; color: var(--dn-violet); }
+
+/* the value-only amount box replaces the grid entirely */
+.dn-bigamount {
+  max-width: 20rem;
+  font-size: 20px;
+  font-weight: 650;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --------------------------------------------------------- summary / impact */
+
+.dn-bottom { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--dn-gap); }
+
+.dn-sumline {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 7px 0;
+  font-size: 13px;
+  color: var(--billing-muted);
+}
+
+.dn-sumline strong { color: var(--billing-text); font-variant-numeric: tabular-nums; font-weight: 650; }
+.dn-sumline em { font-style: normal; font-size: 12px; color: var(--billing-muted); text-align: right; }
+
+.dn-sumline--total {
+  margin-top: 8px;
+  padding: 12px 14px;
+  border-radius: var(--billing-radius-sm);
+  background: var(--billing-mint);
+  color: var(--billing-text);
+  font-weight: 700;
+}
+
+.dn-sumline--total strong { font-size: 18px; }
+
+.dn-note {
+  margin-top: 12px;
+  padding: 9px 11px;
+  border-radius: var(--billing-radius-sm);
+  background: var(--dn-amber-soft);
+  color: #7a4a0c;
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+/* --------------------------------------------------------------- side panel */
+
+.dn-help { background: linear-gradient(180deg, #f3fbf1 0%, var(--billing-surface) 100%); }
+
+.dn-help ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
+
+.dn-help li {
+  position: relative;
+  padding: 5px 0 5px 26px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--billing-muted);
+}
+
+.dn-help li svg { position: absolute; left: 0; top: 6px; color: var(--billing-action); }
+
+.dn-quicklist { display: grid; gap: 2px; }
+
+.dn-quick {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  width: 100%;
+  padding: 9px;
+  border: 0;
+  border-radius: var(--billing-radius-sm);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  transition: background 160ms cubic-bezier(.2,.8,.2,1);
+}
+
+.dn-quick:hover:not(:disabled) { background: var(--billing-surface-2); }
+.dn-quick:disabled { cursor: not-allowed; opacity: 0.62; }
+
+.dn-quick__mark {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--billing-mint);
+  color: var(--billing-action);
+}
+
+.dn-quick__mark--ai { background: var(--dn-violet-soft); color: var(--dn-violet); }
+.dn-quick__mark--doc { background: var(--dn-blue-soft); color: var(--dn-blue); }
+.dn-quick strong { display: block; font-size: 12.5px; color: var(--billing-text); }
+.dn-quick small { display: block; margin-top: 2px; font-size: 11px; line-height: 1.45; color: var(--billing-muted); }
+
+.dn-check { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; color: var(--billing-muted); line-height: 1.45; }
+.dn-check input { margin: 1px 0 0; flex: 0 0 auto; accent-color: var(--billing-action); }
+
+.dn-drop {
+  display: grid;
+  gap: 4px;
+  padding: 18px 14px;
+  border: 1px dashed var(--billing-border-strong);
+  border-radius: var(--billing-radius-sm);
+  background: var(--billing-surface-2);
+  text-align: center;
+}
+
+.dn-drop strong { font-size: 11.5px; color: var(--billing-muted); }
+.dn-drop small { font-size: 10.5px; color: var(--billing-muted); }
+
+/* -------------------------------------------------------------- action bar */
+
+.dn-actionbar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+  padding: 12px 16px;
+  border: 1px solid var(--billing-border);
+  border-radius: var(--billing-radius);
+  background: var(--billing-surface);
+  box-shadow: var(--billing-shadow-lg);
+}
+
+.dn-actionbar__total { display: grid; gap: 1px; }
+.dn-actionbar__total span { font-size: 11.5px; color: var(--billing-muted); }
+.dn-actionbar__total strong { font-size: 17px; font-variant-numeric: tabular-nums; }
+.dn-actionbar__buttons { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* ------------------------------------------------------------------ success */
+
+.dn-success { display: grid; gap: 18px; justify-items: center; padding: 34px 20px; text-align: center; }
+
+.dn-success__mark {
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--billing-mint);
+  color: var(--billing-action);
+}
+
+.dn-success h2 { margin: 0; font-size: 20px; letter-spacing: -0.015em; }
+.dn-success p { margin: 0; max-width: 46ch; color: var(--billing-muted); line-height: 1.55; }
+.dn-success__actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+
+/* ---------------------------------------------------------------- shortcuts */
+
+.dn-shortcuts { display: grid; gap: 8px; margin: 0; }
+.dn-shortcuts div { display: flex; align-items: center; justify-content: space-between; gap: 16px; font-size: 12.5px; }
+.dn-shortcuts dt { color: var(--billing-muted); }
+
+.dn-kbd {
+  padding: 2px 7px;
+  border: 1px solid var(--billing-border-strong);
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  background: var(--billing-surface-2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------------------- responsive */
+
+@media (max-width: 80rem) {
+  .dn-layout { grid-template-columns: minmax(0, 1fr) 300px; }
+  .dn-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 64rem) {
+  .dn-layout { grid-template-columns: minmax(0, 1fr); }
+  .dn-aside { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+  .dn-bottom { grid-template-columns: minmax(0, 1fr); }
+  .dn-head { flex-direction: column; }
+  .dn-head__actions { justify-content: flex-start; }
+}
+
+@media (max-width: 48rem) {
+  .dn-page { --dn-gap: 12px; }
+  .dn-step { min-width: 142px; }
+  .dn-grid, .dn-returntype, .dn-aside { grid-template-columns: minmax(0, 1fr); }
+  .dn-head__title h1 { font-size: 22px; }
+  .dn-head__actions { width: 100%; }
+  .dn-actionbar { flex-direction: column; align-items: stretch; }
+  .dn-actionbar__buttons > * { flex: 1 1 auto; justify-content: center; }
+
+  /* The line-item table becomes one card per line: a nine-column grid at
+     360px is a table nobody can use, and horizontal scrolling hides the
+     amount, which is the column that matters. */
+  .dn-tablewrap { overflow: visible; }
+  .dn-table { min-width: 0; display: block; }
+  .dn-table thead { display: none; }
+  .dn-table tbody, .dn-table tr, .dn-table td { display: block; }
+
+  .dn-table tr {
+    position: relative;
+    margin-bottom: 10px;
+    padding: 10px 10px 4px;
+    border: 1px solid var(--billing-border);
+    border-radius: var(--billing-radius-sm);
+    background: var(--billing-surface);
+  }
+
+  .dn-table tr:hover { background: var(--billing-surface); }
+  .dn-table td { padding: 5px 0; border: 0; }
+  .dn-table td.dn-num { text-align: left; }
+
+  .dn-table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 4px;
+    font-size: 11px;
+    font-weight: 650;
+    color: var(--billing-muted);
+  }
+
+  /* Row number and delete sit on one line at the top of the card. */
+  .dn-table td.dn-cell--no { position: absolute; top: 12px; left: 10px; padding: 0; }
+  .dn-table td.dn-cell--action { position: absolute; top: 6px; right: 6px; padding: 0; }
+  .dn-table td.dn-cell--item { padding-top: 22px; }
+  .dn-amount { justify-content: flex-start; }
+}

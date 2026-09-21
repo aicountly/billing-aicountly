@@ -203,6 +203,13 @@ final class DuesService
                 $byParty[$accountId]['oldest_overdue_days'] = max($byParty[$accountId]['oldest_overdue_days'], abs($days));
             }
 
+            // What the bill was raised for, and what has come in against it —
+            // but ONLY when Books actually said so. Both stay null otherwise:
+            // a received amount derived from the balance alone would be a
+            // guess, and the screen prints null as "not known" rather than as
+            // zero, because zero means the customer has paid nothing.
+            $gross = self::amount($row, ['bill_amount', 'invoice_amount', 'total_amount', 'bill_value', 'grand_total']);
+
             $bills[] = [
                 'account_id'   => $accountId,
                 'account_name' => $accountName,
@@ -210,6 +217,8 @@ final class DuesService
                 'bill_date'    => $row['bill_date'] ?? $row['voucher_date'] ?? null,
                 'due_date'     => $due?->format('Y-m-d'),
                 'balance'      => round($balance, 2),
+                'bill_amount'  => $gross === null ? null : round($gross, 2),
+                'received'     => $gross === null ? null : round(max(0.0, $gross - $balance), 2),
                 'days_overdue' => $days !== null && $days < 0 ? abs($days) : 0,
                 'voucher_id'   => $row['voucher_id'] ?? $row['vch_txn_id'] ?? null,
                 'voucher_uuid' => $row['voucher_uuid'] ?? $row['vch_uuid'] ?? null,
@@ -242,6 +251,32 @@ final class DuesService
             'bills'    => $bills,
             'note'     => 'Read from Smart Books just now. Billing keeps no balance of its own, so this never disagrees with the accounts.',
         ]];
+    }
+
+    /**
+     * The first of these keys Books actually sent, as a number.
+     *
+     * A key present but empty, or holding something that is not a number, is
+     * treated as absent rather than as zero: this decides whether a column on
+     * the screen reads "not known" or "\u20b90.00", and those are different claims.
+     *
+     * @param array<string, mixed> $row
+     * @param list<string>         $keys
+     */
+    private static function amount(array $row, array $keys): ?float
+    {
+        foreach ($keys as $key) {
+            if (!array_key_exists($key, $row) || $row[$key] === null || $row[$key] === '') {
+                continue;
+            }
+            if (!is_numeric($row[$key])) {
+                continue;
+            }
+
+            return (float) $row[$key];
+        }
+
+        return null;
     }
 
     /**

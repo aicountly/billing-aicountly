@@ -18,8 +18,8 @@
  * return. When the whole set cannot be read, the export is refused and says so.
  */
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ChevronLeft, Download, Link2, Printer, Radio } from 'lucide-react'
 import { api, ApiError } from '../../services/api'
 import { useApi } from '../../hooks/useApi'
@@ -66,12 +66,41 @@ function ReportScreen({ reportKey }: { reportKey: string }) {
   const { scope, can } = useBilling()
   const prefs = useReportPreferences(scope?.cmp_id)
 
-  const [period, setPeriod] = useState<PeriodKey>(() =>
-    isPeriodKey(prefs.defaultPeriod) ? prefs.defaultPeriod : 'month',
-  )
+  /**
+   * The period lives in the URL, not in this component.
+   *
+   * So that a card linking in can say which period it was showing, and so that
+   * what ends up in the address bar is a link somebody can send to their
+   * accountant. Absent, it falls back to the default set in Report settings.
+   */
+  const [params, setParams] = useSearchParams()
+  const requested = params.get('period')
+  const period: PeriodKey = isPeriodKey(requested ?? '')
+    ? (requested as PeriodKey)
+    : isPeriodKey(prefs.defaultPeriod)
+      ? (prefs.defaultPeriod as PeriodKey)
+      : 'month'
+
   const [downloading, setDownloading] = useState(false)
   const [message, setMessage] = useState<{ tone: 'success' | 'warning' | 'danger'; title: string; text: string } | null>(
     null,
+  )
+
+  const choosePeriod = useCallback(
+    (next: PeriodKey) => {
+      setParams(
+        (current) => {
+          const updated = new URLSearchParams(current)
+          updated.set('period', next)
+          return updated
+        },
+        // Replace rather than push: flipping between periods should not make
+        // Back walk through every one of them before leaving the screen.
+        { replace: true },
+      )
+      setMessage(null)
+    },
+    [setParams],
   )
 
   // The catalogue, for what this report is called and where its figures come
@@ -130,7 +159,7 @@ function ReportScreen({ reportKey }: { reportKey: string }) {
   }
 
   async function copyLink() {
-    const url = `${window.location.origin}/reports/${reportKey}`
+    const url = `${window.location.origin}/reports/${reportKey}?period=${period}`
     try {
       await navigator.clipboard.writeText(url)
       setMessage({ tone: 'success', title: 'Link copied', text: url })
@@ -184,7 +213,7 @@ function ReportScreen({ reportKey }: { reportKey: string }) {
                   type="button"
                   className="billing-segmented__option"
                   aria-pressed={period === option.key}
-                  onClick={() => setPeriod(option.key)}
+                  onClick={() => choosePeriod(option.key)}
                 >
                   {option.label}
                 </button>

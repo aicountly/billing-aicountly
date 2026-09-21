@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Aicountly\Api\Controllers;
 
 use Aicountly\Api\Clients\BooksClient;
+use Aicountly\Api\Domain\CreditNoteContext;
 use Aicountly\Api\Domain\Period;
 use Aicountly\Api\Domain\RegisterReader;
 use Aicountly\Api\Domain\StatutoryService;
@@ -100,11 +101,17 @@ final class TransactionsController extends Controller
             Http::error(503, 'books_unavailable', 'Could not reach Smart Books for the original documents. Please retry.');
         }
 
+        // How much of each one is still unpaid. A missing column, never a
+        // failed request: picking the invoice to credit does not depend on it.
+        $context = new CreditNoteContext($ctx, $books);
+        $outstanding = $context->outstanding($partyId, $against === 'purchase' ? 'creditor' : 'debtor');
+
         $documents = [];
         foreach (RegisterReader::documents($reading, 500) as $document) {
             if ($document['party_id'] !== null && $document['party_id'] !== $partyId) {
                 continue;
             }
+            $document['outstanding'] = self::outstandingFor($document, $outstanding);
             $documents[] = $document;
         }
 
@@ -114,11 +121,88 @@ final class TransactionsController extends Controller
             'to'        => $period->to,
             'documents' => array_slice($documents, 0, 50),
             'complete'  => $reading['complete'],
+            'outstanding_available' => $outstanding['available'],
             'source'    => 'books',
             'note'      => $reading['complete']
                 ? 'Read from Smart Books just now.'
                 : 'Read from Smart Books just now. More documents exist in this range than could be read at once — narrow the dates if the one you want is missing.',
         ]);
+    }
+
+    /**
+     * One original document, WITH the lines that were billed on it.
+     *
+     * This is what lets a credit note start from the invoice rather than from
+     * an empty table: the items, quantities and rates come back as Books has
+     * them, and the screen proposes returning what was sold. Books is still
+     * the authority on what may actually be credited — the quantities here
+     * describe the invoice, they are not a permission to credit them.
+     */
+    public static function originalDocument(string $voucherId): void
+    {
+        [$auth, $ctx] = self::enter();
+
+        $against = Http::param('kind') === 'purchase' ? 'purchase' : 'sale';
+        Permissions::assert($ctx, $auth, $against === 'purchase' ? 'debit_note.create' : 'credit_note.create');
+
+        $id = (int) $voucherId;
+        if ($id <= 0) {
+            Http::validationFailed('That is not a document reference.', ['field' => 'voucher_id']);
+        }
+
+        $books = (new BooksClient())->withSession($auth->sesKey());
+        $invoice = (new CreditNoteContext($ctx, $books))->invoice($id);
+
+        if (!$invoice['available']) {
+            Http::error(503, 'books_unavailable', (string) $invoice['reason']);
+        }
+
+        Http::data($invoice);
+    }
+
+    /**
+     * Credit notes raised this month, against the window before it.
+     *
+     * Books' own register, counted live. Unavailable rather than zero when it
+     * cannot be proved: "no credit notes this month" and "we could not read
+     * the register" are different facts and only one of them is good news.
+     */
+    public static function creditNoteTrend(): void
+    {
+        [$auth, $ctx] = self::enter();
+        Permissions::assert($ctx, $auth, 'credit_note.create');
+
+        Http::data((new CreditNoteContext($ctx, (new BooksClient())->withSession($auth->sesKey())))->trend());
+    }
+
+    /**
+     * The unpaid balance on one register row.
+     *
+     * Matched on the voucher id first and the document number second, because
+     * the two reports do not always identify a bill the same way.
+     *
+     * @param array<string, mixed> $document
+     * @param array{available:bool, by_voucher:array<int,float>, by_number:array<string,float>} $outstanding
+     */
+    private static function outstandingFor(array $document, array $outstanding): ?float
+    {
+        if (!$outstanding['available']) {
+            return null;
+        }
+
+        $voucherId = $document['voucher_id'] ?? null;
+        if (is_int($voucherId) && isset($outstanding['by_voucher'][$voucherId])) {
+            return $outstanding['by_voucher'][$voucherId];
+        }
+
+        $number = $document['document_no'] ?? null;
+        if (is_string($number) && isset($outstanding['by_number'][$number])) {
+            return $outstanding['by_number'][$number];
+        }
+
+        // Books answered and this bill is not in the open list, which means it
+        // is settled. Nought here is a fact, not a missing reading.
+        return 0.0;
     }
 
     public static function statutoryStatus(string $id): void
