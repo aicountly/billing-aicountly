@@ -1013,3 +1013,90 @@ export const savedWithdrawal = {
   last_error: null,
   created_at: '2026-09-19T06:20:00Z',
 }
+
+/* -------------------------------------------------------------------------
+   Money → Money received.
+
+   The "in" half of the money fixtures: a customer's open bills, what that
+   customer owes, and receipts already recorded. Keyed to Vaibhav Traders
+   (701) from the customer pool above, so picking that name in the harness
+   leads to the bills and the balance below. Invented, as all of these are.
+   ------------------------------------------------------------------------- */
+
+export const openBillsIn = {
+  account_id: 701,
+  source: 'books',
+  bills: [
+    { bill_no: 'INV-0214', bill_date: '2026-07-18', due_date: '2026-08-02', balance: 48000, voucher_id: 3214, voucher_uuid: 'vch-r14' },
+    { bill_no: 'INV-0241', bill_date: '2026-08-21', due_date: '2026-09-05', balance: 36500, voucher_id: 3241, voucher_uuid: 'vch-r41' },
+    { bill_no: 'INV-0266', bill_date: '2026-09-09', due_date: '2026-09-24', balance: 40000, voucher_id: 3266, voucher_uuid: 'vch-r66' },
+  ],
+}
+
+/** `v1/receivables?account_id=701` — this one customer's dues, aged in Billing. */
+export const customerDues = {
+  title: 'Money to collect',
+  as_on: '2026-09-21',
+  source: 'books',
+  total: 124500,
+  overdue: 84500,
+  due_today: 0,
+  due_this_week: 40000,
+  ageing: { current: 40000, '1_30': 36500, '31_60': 48000, '61_90': 0, '90_plus': 0, no_due_date: 0 },
+  ageing_reconciles: true,
+  parties: [
+    { account_id: 701, account_name: 'Vaibhav Traders', total: 124500, overdue: 84500, bill_count: 3, oldest_overdue_days: 50 },
+  ],
+  bills: [],
+  note: 'Read from Smart Books just now.',
+}
+
+/**
+ * `v1/money/recent?direction=in`.
+ *
+ * Rows carry both halves the endpoint joins: the register's document and,
+ * where Billing recorded it, the mode, reference and account the user typed.
+ * One row has `recorded_here: false` and empty detail cells, because that is
+ * what a receipt entered in Books looks like here.
+ */
+export const moneyRecentIn = {
+  direction: 'in',
+  period: {
+    key: 'month',
+    label: 'September 2026',
+    from: '2026-09-01',
+    to: '2026-09-21',
+    previous_from: '2026-08-11',
+    previous_to: '2026-08-31',
+    previous_label: 'the previous 21 days',
+  },
+  available: true,
+  reason: null,
+  complete: true,
+  source: 'books',
+  note: 'Read from Smart Books as this screen opened. Billing keeps no copy.',
+  summary: {
+    available: true,
+    reason: null,
+    total: 352500,
+    count: 6,
+    average: 58750,
+    largest: { amount: 120000, party: 'Sunrise Electronics', party_id: 702, date: '2026-09-18', voucher_id: 3811 },
+    comparison: {
+      available: true,
+      percent: 9.2,
+      direction: 'up',
+      label: '+9.2% vs the previous 21 days',
+      tone: 'positive',
+      previous: 322800,
+    },
+  },
+  rows: [
+    { voucher_id: 3812, voucher_uuid: 'vch-r812', document_no: 'RCP-2026-0012', date: '2026-09-19', party: 'Vaibhav Traders', party_id: 701, amount: 50000, status: null, request_id: 812, kind: 'receipt', account_id: 9002, account_name: 'HDFC Current ••••1234', payment_mode: 'upi', reference_no: 'UTR987654321', narration: null, created_by: 'demo-owner', recorded_here: true },
+    { voucher_id: 3811, voucher_uuid: 'vch-r811', document_no: 'RCP-2026-0011', date: '2026-09-18', party: 'Sunrise Electronics', party_id: 702, amount: 120000, status: null, request_id: 811, kind: 'receipt', account_id: 9003, account_name: 'ICICI Current ••••8890', payment_mode: 'cheque', reference_no: 'CHQ789123', narration: null, created_by: 'demo-owner', recorded_here: true },
+    { voucher_id: 3810, voucher_uuid: 'vch-r810', document_no: 'RCP-2026-0010', date: '2026-09-17', party: 'Deepak General Store', party_id: 703, amount: 75000, status: null, request_id: 810, kind: 'receipt', account_id: 9001, account_name: 'Cash in hand', payment_mode: 'cash', reference_no: null, narration: null, created_by: 'demo-owner', recorded_here: true },
+    { voucher_id: 3809, voucher_uuid: 'vch-r809', document_no: 'RCP-2026-0009', date: '2026-09-16', party: 'Kaveri Retail LLP', party_id: 704, amount: 32500, status: null, request_id: null, kind: null, account_id: null, account_name: null, payment_mode: null, reference_no: null, narration: null, created_by: null, recorded_here: false },
+    { voucher_id: 3806, voucher_uuid: 'vch-r806', document_no: 'RCP-2026-0006', date: '2026-09-12', party: 'Vaibhav Traders', party_id: 701, amount: 25000, status: null, request_id: 806, kind: 'receipt', account_id: 9002, account_name: 'HDFC Current ••••1234', payment_mode: 'bank_transfer', reference_no: 'UTR123456789', narration: null, created_by: 'demo-owner', recorded_here: true },
+    { voucher_id: 3801, voucher_uuid: 'vch-r801', document_no: 'RCP-2026-0001', date: '2026-09-02', party: 'Vaibhav Traders', party_id: 701, amount: 50000, status: null, request_id: 801, kind: 'receipt', account_id: 9003, account_name: 'ICICI Current ••••8890', payment_mode: 'cheque', reference_no: 'CHQ123456', narration: null, created_by: 'demo-owner', recorded_here: true },
+  ],
+}

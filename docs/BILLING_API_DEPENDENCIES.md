@@ -127,6 +127,12 @@ nothing — not the file, not the answer — and the expense the user then saves
 the only thing that survives the request. One switch, `DocumentCapture`, answers
 for both screens, so they cannot disagree about what this deployment can read.
 
+Money received offers the same idea as **Scan receipt** and it is disabled for a
+second reason as well: what exists is `POST /api/v1/expenses/read-bill`, which
+reads a supplier's BILL. Reading a receipt is a different hint and a different
+set of fields, so the button stays off until there is a call behind it rather
+than borrowing one that would answer about the wrong document.
+
 The expected shape, following the house "deterministic first, AI only for
 what is left" rule:
 
@@ -181,6 +187,14 @@ The second is a client for it in `server-php/src/Clients/`, and one line in
 `DocumentCapture::storage()`. Until both exist that method answers `false`
 whatever the environment says, because configuring a service Billing cannot call
 would put a drop zone on screen that swallows a photo and loses it.
+
+**Money received is in the same position, with one difference.** A receipt is
+often backed by a UPI screenshot, a counterfoil or a bank advice, and the screen
+draws the section and says there is nowhere to keep one. It cannot fall back on
+recording *where* the proof is kept the way the expense screen does: the receipt
+payload Books accepts has no `attachment_ref` — see
+`TransactionService::settlementPayload()` — so that field would have to exist
+before there was anything to write a reference into.
 
 ## Partly available: what may still be credited
 

@@ -26,6 +26,7 @@ import Receivables from '../src/dashboards/Receivables'
 import Payables from '../src/dashboards/Payables'
 import CashCompliance from '../src/dashboards/CashCompliance'
 import { MoneyScreen } from '../src/pages/money/MoneyScreen'
+import MoneyReceived from '../src/pages/money-received'
 import ExpensePage from '../src/pages/expense/ExpensePage'
 import BankWithdrawalPage from '../src/pages/bank-withdrawal/BankWithdrawalPage'
 import SalesBillPage from '../src/pages/sale/SalesBillPage'
@@ -59,6 +60,8 @@ const FAILABLE: Array<[string, RegExp]> = [
   ['tax', /v1\/catalog\/tax-categories/],
   ['stock', /v1\/catalog\/stock/],
   ['open-bills', /v1\/open-bills/],
+  ['dues', /v1\/receivables/],
+  ['money-recent', /v1\/money\/recent/],
   ['bills', /v1\/original-documents(\?|$)/],
   ['bill-lines', /v1\/original-documents\/\d+/],
   ['warehouses', /v1\/catalog\/warehouses/],
@@ -78,7 +81,8 @@ const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
   payables: { path: '/dashboard/payables', element: <Payables /> },
   'cash-compliance': { path: '/dashboard/cash-compliance', element: <CashCompliance /> },
   'money-out': { path: '/money-out/new', element: <MoneyScreen direction="out" /> },
-  'money-in': { path: '/money-in/new', element: <MoneyScreen direction="in" /> },
+  'money-in': { path: '/money-in/new', element: <MoneyReceived /> },
+  'money-in-form': { path: '/money-in/new', element: <MoneyScreen direction="in" /> },
   expense: { path: '/more/expense', element: <ExpensePage /> },
   sale: { path: '/sales/new', element: <SalesBillPage /> },
   'credit-note': { path: '/more/credit-note', element: <CreditNotePage /> },
@@ -105,8 +109,7 @@ const RESPONSES: Array<[RegExp, unknown]> = [
   [/v1\/transactions\/(payment|receipt)/, fixtures.savedPayment],
   [/v1\/transactions\/sale/, fixtures.savedSale],
   [/v1\/money\/party-context/, fixtures.moneyPartyContext],
-  [/v1\/money\/recent/, fixtures.moneyRecent],
-  [/v1\/open-bills/, fixtures.openBills],
+  [/v1\/receivables/, fixtures.customerDues],
   [/v1\/original-documents\/\d+/, fixtures.originalDocument],
   [/v1\/original-documents/, fixtures.originalDocuments],
   [/v1\/credit-notes\/trend/, fixtures.creditNoteTrend],
@@ -185,6 +188,25 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Res
     )
     return new Response(JSON.stringify(item ? { data: item } : { error: { code: 'not_found', message: 'No such code.' } }), {
       status: item ? 200 : 404,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  // The money endpoints answer for the direction they were asked about: the
+  // receipt booth must not be shown a supplier's payments, and the payment
+  // booth must not be shown a customer's receipts.
+  if (/v1\/money\/recent/.test(url)) {
+    const direction = new URL(url, window.location.origin).searchParams.get('direction') ?? 'out'
+    return new Response(JSON.stringify({ data: direction === 'in' ? fixtures.moneyRecentIn : fixtures.moneyRecent }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  if (/v1\/open-bills/.test(url)) {
+    const side = new URL(url, window.location.origin).searchParams.get('side') ?? 'payable'
+    return new Response(JSON.stringify({ data: side === 'receivable' ? fixtures.openBillsIn : fixtures.openBills }), {
+      status: 200,
       headers: { 'Content-Type': 'application/json' },
     })
   }

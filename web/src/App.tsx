@@ -47,6 +47,15 @@ const MoneyScreen = lazy(() =>
 )
 
 /**
+ * Money received has its own screen: the receipt workspace.
+ *
+ * It carries its own stylesheet, its allocation table and its insight column,
+ * and it is reached by navigation rather than on first paint — so it is split
+ * out for the same reason the rest of these are.
+ */
+const MoneyReceived = lazy(() => import('./pages/money-received'))
+
+/**
  * The expense screen carries its own stylesheet and helper panel, and most
  * sessions never open it. Split for the same reason the dashboards are.
  */
@@ -184,9 +193,13 @@ function Shell() {
           <Route path=":id" element={<RequireScope><TransactionDetail /></RequireScope>} />
         </Route>
 
+        {/* Money received is the receipt workspace; money paid is the shared
+            money screen, in its "out" direction. Both post the same way they
+            always did — MoneyScreen still serves direction="in" if this route
+            is ever pointed back at it. */}
         <Route path="money-in">
-          <Route index element={<Suspense fallback={<Loading />}><RequireScope><MoneyScreen direction="in" /></RequireScope></Suspense>} />
-          <Route path="new" element={<Suspense fallback={<Loading />}><RequireScope><MoneyScreen direction="in" /></RequireScope></Suspense>} />
+          <Route index element={<Suspense fallback={<Loading />}><RequireScope><MoneyReceived /></RequireScope></Suspense>} />
+          <Route path="new" element={<Suspense fallback={<Loading />}><RequireScope><MoneyReceived /></RequireScope></Suspense>} />
           <Route path=":id" element={<RequireScope><TransactionDetail /></RequireScope>} />
         </Route>
 
