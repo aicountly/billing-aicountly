@@ -20,12 +20,14 @@ Env::load(__DIR__ . '/../.env');
 
 use Aicountly\Api\Domain\BankWithdrawalHistory;
 use Aicountly\Api\Domain\BillerDeskService;
+use Aicountly\Api\Domain\BriefingService;
 use Aicountly\Api\Domain\CollectionsService;
 use Aicountly\Api\Domain\ComplianceService;
 use Aicountly\Api\Domain\DocumentCapture;
 use Aicountly\Api\Domain\CreditNoteContext;
 use Aicountly\Api\Domain\DuesService;
 use Aicountly\Api\Domain\ExpenseHistory;
+use Aicountly\Api\Domain\ItemCatalog;
 use Aicountly\Api\Domain\Metric;
 use Aicountly\Api\Domain\MoneyActivityService;
 use Aicountly\Api\Domain\OverviewService;
@@ -843,6 +845,128 @@ check('an unreachable Books makes a card unavailable, never zero', function () u
     // The other three were perfectly readable and must survive it.
     $ready = array_filter($overview['metrics'], static fn (array $m) => $m['status'] === 'ready');
     assertTrue(count($ready) >= 2, 'one dead service does not blank the whole screen');
+});
+
+check('every overview card carries a one-line summary that states its time basis', function () use ($ctx, $auth) {
+    // The compact card shows this line instead of a three-line definition, so
+    // if it stopped saying "as at" the reader would lose the one thing that
+    // tells a balance apart from a movement.
+    resetDatabase();
+    $overview = (new OverviewService($ctx, $auth))->build(Period::resolve(['key' => 'month']));
+
+    foreach ($overview['metrics'] as $metric) {
+        if ($metric['status'] !== 'ready') {
+            continue;
+        }
+        assertTrue(isset($metric['summary']) && $metric['summary'] !== '', $metric['id'] . ' has a summary line');
+
+        $expected = $metric['basis'] === Metric::BASIS_AS_OF ? 'As at ' : '';
+        if ($expected !== '') {
+            assertTrue(
+                str_starts_with($metric['summary'], $expected),
+                $metric['id'] . ' says it is a balance: ' . $metric['summary'],
+            );
+        }
+    }
+});
+
+check('the briefing is counted from the same list the panel below it shows', function () use ($ctx, $auth) {
+    // The sentence at the top and the rows underneath are built from one array.
+    // Built from two reads they could disagree, and the one somebody acts on is
+    // whichever they read first.
+    resetDatabase();
+    $overview = (new OverviewService($ctx, $auth))->build(Period::resolve(['key' => 'month']));
+    $briefing = $overview['panels']['briefing'];
+
+    assertTrue($briefing['available'], 'the counted briefing is always available');
+    assertSame(
+        count($overview['panels']['actions']),
+        count($briefing['points']),
+        'one point per priority, no more and no fewer',
+    );
+
+    foreach ($briefing['points'] as $index => $point) {
+        assertSame($overview['panels']['actions'][$index]['id'], $point['id'], 'same record, same order');
+        assertSame($overview['panels']['actions'][$index]['action']['path'], $point['path'], 'and it goes where the row goes');
+        assertTrue($point['text'] !== '', 'each point says something');
+    }
+
+    assertTrue(str_contains($briefing['basis'], 'Not generated text'), 'the strip says it was counted');
+});
+
+check('a quiet day gets a quiet briefing rather than an invented one', function () use ($ctx, $auth) {
+    resetDatabase();
+    $period = Period::resolve(['key' => 'month']);
+
+    $empty = BriefingService::build($period, [], []);
+    assertSame('Nothing needs a decision right now.', $empty['headline'], 'no drama where there is none');
+    assertSame([], $empty['points'], 'and nothing to review');
+    assertSame(null, $empty['movement'], 'no movement sentence without a comparison');
+    assertTrue($empty['available'], 'which is not the same as unavailable');
+});
+
+check('the briefing draws no movement sentence when there is nothing to compare with', function () use ($ctx) {
+    // Metric::compare refuses a comparison against a zero base. The briefing
+    // must refuse the sentence for the same reason, rather than writing
+    // "up 100%" about a month that had no previous month.
+    $period = Period::resolve(['key' => 'month']);
+
+    $noBase = Metric::ready(
+        'sales',
+        'Sales this month',
+        1000.0,
+        Metric::BASIS_PERIOD,
+        'Invoices at full value.',
+        Metric::compare(1000.0, 0.0, 'last month', riseIsGood: true),
+    );
+
+    $briefing = BriefingService::build($period, [], [$noBase]);
+    assertSame(null, $briefing['movement'], 'no sentence about a change nobody can compute');
+
+    $withBase = Metric::ready(
+        'sales',
+        'Sales this month',
+        1100.0,
+        Metric::BASIS_PERIOD,
+        'Invoices at full value.',
+        Metric::compare(1100.0, 1000.0, 'last month', riseIsGood: true),
+    );
+
+    $second = BriefingService::build($period, [], [$withBase]);
+    assertTrue($second['movement'] !== null, 'and one when there is');
+    assertTrue(str_starts_with($second['movement']['text'], 'Sales '), 'naming what moved');
+});
+
+check('a biller gets no briefing clause about money they may not see', function () use ($ctx) {
+    // The briefing is built from the actions, and the actions are already
+    // permission-scoped — so this is really a check that nothing was added
+    // between the two that reads a wider list.
+    resetDatabase();
+    $biller = userWithProfile($ctx, 'user-biller', 'biller');
+
+    $overview = (new OverviewService($ctx, $biller))->build(Period::resolve(['key' => 'month']));
+    $briefing = $overview['panels']['briefing'];
+
+    $text = strtolower($briefing['headline'] . ' ' . implode(' ', array_column($briefing['points'], 'text')));
+    foreach (['supplier', 'to pay', 'payable'] as $forbidden) {
+        assertTrue(!str_contains($text, $forbidden), 'the briefing does not mention ' . $forbidden);
+    }
+    foreach ($briefing['points'] as $point) {
+        assertTrue(
+            !str_contains($point['path'], 'payables'),
+            'and never points at a dashboard this profile cannot open',
+        );
+    }
+});
+
+check('with no model configured the written summary is unavailable and says why', function () {
+    // The counted briefing must not depend on it. This is the third capability
+    // in docs/BILLING_API_DEPENDENCIES.md and behaves like the other two.
+    $status = BriefingService::assistantStatus();
+
+    assertSame(false, $status['available'], 'nothing is configured in a test run');
+    assertTrue($status['reason'] !== null && $status['reason'] !== '', 'and the screen is told why');
+    assertTrue(str_contains((string) $status['reason'], 'configured'), 'in words about configuration');
 });
 
 check('a receipt in the period is collections, and is not called revenue', function () use ($ctx, $auth) {
@@ -1683,6 +1807,86 @@ check('the party context answers for the party asked about and no other', functi
     $nobody = $service->partyContext('out', 999999);
     assertSame(0, $nobody['entries_in_window'], 'a supplier with nothing gets nothing');
     assertSame(null, $nobody['last'], 'and no last payment is invented for them');
+});
+
+echo "\nThe item catalogue\n";
+
+check('an item arrives in one shape whatever Inventory called its fields', function () {
+    $a = ItemCatalog::normalise([
+        'item_id' => 7, 'item_name' => 'Ballpoint Pens', 'item_sku' => 'PEN-001', 'hsn_sac' => '960810',
+        'mrp' => '12.00', 'item_group' => ['item_group_id' => 3, 'group_name' => 'Stationery'],
+        'available_qty' => 1250, 'reorder_level' => 50, 'is_active' => true,
+    ]);
+    $b = ItemCatalog::normalise([
+        'id' => 7, 'name' => 'Ballpoint Pens', 'sku' => 'PEN-001', 'hsn' => '960810',
+        'sale_rate' => 12, 'category' => 'Stationery', 'stock' => ['closing_qty' => 1250, 'min_qty' => 50],
+        'status' => 'ACTIVE',
+    ]);
+
+    foreach (['item_id', 'item_name', 'item_sku', 'hsn_sac', 'type', 'is_active'] as $field) {
+        assertSame($a[$field], $b[$field], "both spellings resolve {$field}");
+    }
+    assertSame(12.0, $a['rate'], 'rate from mrp');
+    assertSame(12.0, $b['rate'], 'rate from sale_rate');
+    assertSame('Stationery', $a['group']['name'], 'group from an object');
+    assertSame('Stationery', $b['group']['name'], 'group from a string');
+    assertSame(1250.0, $b['stock']['available'], 'quantity from a nested stock object');
+    assertSame('in', $b['stock']['state'], 'above its reorder level');
+});
+
+check('a quantity nobody could read is null, not nought', function () {
+    $row = ItemCatalog::normalise(['item_id' => 3, 'item_name' => 'Mystery']);
+
+    assertSame(null, $row['stock']['available'], 'no quantity');
+    assertSame('unknown', $row['stock']['state'], 'and it says so rather than reading as empty stock');
+    assertSame(null, $row['type'], 'nothing said what kind of item this is, so nothing is claimed');
+    assertSame(null, $row['is_active'], 'and nothing said whether it is in use');
+});
+
+check('a service has no stock, and low means below Inventory\'s own level', function () {
+    $service = ItemCatalog::normalise(['item_id' => 9, 'item_name' => 'AMC', 'is_service' => 1, 'sale_rate' => 5000]);
+    assertSame('service', $service['type'], 'a service');
+    assertSame('none', $service['stock']['state'], 'is not stocked at all');
+
+    $low = ItemCatalog::normalise(['item_id' => 11, 'item_name' => 'Chair', 'available_qty' => 8, 'reorder_level' => 10]);
+    assertSame('low', $low['stock']['state'], 'eight against a level of ten is low');
+
+    $out = ItemCatalog::normalise(['item_id' => 12, 'item_name' => 'Marker', 'available_qty' => 0, 'reorder_level' => 24]);
+    assertSame('out', $out['stock']['state'], 'none left is out, not low');
+});
+
+check('an amount Inventory sent is relayed as Inventory wrote it', function () {
+    $row = ItemCatalog::normalise(['item_id' => 1, 'item_name' => 'Pen', 'mrp' => '12.00']);
+    assertSame('12.00', $row['mrp'], 'the string is not re-formatted on the way through');
+
+    $derived = ItemCatalog::normalise(['item_id' => 2, 'item_name' => 'Pad', 'selling_rate' => 45]);
+    assertSame('45', $derived['mrp'], 'and is filled in only when there was none');
+});
+
+check('an item name that is a formula does not become one in the file', function () {
+    // Same rule and the same implementation as the report exports: the name
+    // comes from Inventory, and Inventory is somebody else.
+    $row = ItemCatalog::normalise(['item_id' => 1, 'item_name' => '=1+1', 'item_sku' => '+SUM(A1:A9)']);
+
+    assertSame("'=1+1", \Aicountly\Api\Domain\ReportService::cell($row['item_name']), 'the name is quoted');
+    assertSame("'+SUM(A1:A9)", \Aicountly\Api\Domain\ReportService::cell($row['item_sku']), 'and so is the code');
+});
+
+check('only filters the API understands are passed upstream', function () {
+    $ask = ItemCatalog::upstreamQuery([
+        'q' => '  pen  ', 'type' => 'service', 'status' => 'nonsense', 'stock_status' => 'low',
+        'group_id' => '4', 'sort' => 'rate', 'order' => 'DESC', 'limit' => 9999, 'offset' => 50,
+    ]);
+
+    assertSame('pen', $ask['q'], 'the search term is trimmed');
+    assertSame('service', $ask['type'], 'a known type goes through');
+    assertTrue(!isset($ask['status']), 'an unknown status is dropped rather than relayed');
+    assertSame(4, $ask['group_id'], 'the group id is an integer');
+    assertSame('desc', $ask['order'], 'the direction is normalised');
+    assertSame(\Aicountly\Api\Http::MAX_LIMIT, $ask['limit'], 'an unbounded page is clamped');
+
+    $unsortable = ItemCatalog::upstreamQuery(['sort' => 'whatever']);
+    assertTrue(!isset($unsortable['sort']), 'a column nobody can sort by is not asked for');
 });
 
 echo "\nTenant isolation\n";

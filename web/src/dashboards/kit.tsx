@@ -13,8 +13,8 @@
  */
 
 import type { ReactNode } from 'react'
-import { AlertCircle, AlertTriangle, ArrowDownRight, ArrowUpRight, Info, Minus } from 'lucide-react'
-import type { AgeingBucket, Metric, MetricBasis, SuggestedActionShape } from './types'
+import { AlertCircle, AlertTriangle, ArrowDownRight, ArrowRight, ArrowUpRight, Info, Minus, Sparkles } from 'lucide-react'
+import type { AgeingBucket, BriefingPanel, Metric, MetricBasis, SuggestedActionShape } from './types'
 import { money } from '../ui'
 
 // ---------------------------------------------------------------------------
@@ -66,13 +66,28 @@ export function MetricCard({
       )}
 
       <span className="billing-metric__description">
-        {status === 'unavailable' ? (metric.reason ?? 'This figure could not be read.') : (metric.detail ?? metric.definition)}
+        {status === 'unavailable'
+          ? (metric.reason ?? 'This figure could not be read.')
+          : (metric.summary ?? metric.detail ?? metric.definition)}
       </span>
 
-      <span className="billing-metric__foot">
-        <span className="billing-basis">{BASIS_WORDS[metric.basis] ?? metric.basis}</span>
-        {status === 'ready' && comparison && <Comparison comparison={comparison} />}
-      </span>
+      {/* The basis in words, for cards whose own line does not already carry
+          it. The overview's four do — "As at 19 Sep · …" — and a chip repeating
+          it underneath is a third line saying nothing new. */}
+      {(metric.summary === undefined || (status === 'ready' && comparison)) && (
+        <span className="billing-metric__foot">
+          {metric.summary === undefined && (
+            <span className="billing-basis">{BASIS_WORDS[metric.basis] ?? metric.basis}</span>
+          )}
+          {status === 'ready' && comparison && <Comparison comparison={comparison} />}
+        </span>
+      )}
+
+      {/* The full definition stays reachable even where the card is compact:
+          it is the title attribute for a pointer and this for a screen reader. */}
+      {metric.summary !== undefined && metric.definition !== '' && status !== 'loading' && (
+        <span className="billing-sr-only">{metric.definition}</span>
+      )}
     </>
   )
 
@@ -106,9 +121,12 @@ export function MetricCard({
  */
 function Comparison({ comparison }: { comparison: NonNullable<Metric['comparison']> }) {
   if (!comparison.available) {
+    // Said, not hidden — a card with no change shown and no reason reads as a
+    // card that decided not to tell you. Said shortly, though: the full
+    // explanation is the tooltip.
     return (
-      <span className="billing-trend" title={comparison.detail}>
-        <Minus size={13} aria-hidden /> {comparison.label}
+      <span className="billing-trend" title={comparison.detail ?? comparison.label}>
+        <Minus size={13} aria-hidden /> No comparison
       </span>
     )
   }
@@ -130,6 +148,7 @@ export function MetricRow({
   format,
   icons,
   onOpen,
+  openable,
 }: {
   metrics: Metric[]
   loading: boolean
@@ -137,6 +156,8 @@ export function MetricRow({
   format?: (metric: Metric) => 'money' | 'count'
   icons?: Record<string, ReactNode>
   onOpen?: (metric: Metric) => void
+  /** Defaults to "every ready card opens" — the behaviour before this existed. */
+  openable?: (metric: Metric) => boolean
 }) {
   const shown: Metric[] = loading && metrics.length === 0
     ? Array.from({ length: placeholders }, (_, index) => ({
@@ -164,7 +185,11 @@ export function MetricRow({
           loading={metric.status === 'loading'}
           format={format ? format(metric) : 'money'}
           icon={icons?.[metric.id]}
-          onOpen={onOpen && metric.status === 'ready' ? () => onOpen(metric) : undefined}
+          onOpen={
+            onOpen && metric.status === 'ready' && (openable === undefined || openable(metric))
+              ? () => onOpen(metric)
+              : undefined
+          }
         />
       ))}
     </section>
@@ -182,6 +207,7 @@ export function DashboardPanel({
   footnote,
   children,
   className = '',
+  id,
 }: {
   title: string
   description?: string
@@ -189,9 +215,19 @@ export function DashboardPanel({
   footnote?: ReactNode
   children: ReactNode
   className?: string
+  /**
+   * Set when something else on the page sends the reader here. The panel is
+   * then focusable, so "Review priorities" moves the keyboard as well as the
+   * scroll position — a jump that only scrolls leaves a keyboard user behind.
+   */
+  id?: string
 }) {
   return (
-    <section className={`billing-panel ${className}`.trim()}>
+    <section
+      className={`billing-panel ${className}`.trim()}
+      id={id}
+      tabIndex={id ? -1 : undefined}
+    >
       <div className="billing-panel__heading">
         <div>
           <h2>{title}</h2>
@@ -225,14 +261,91 @@ export function SuggestedAction({
           <p>{suggestion.reason}</p>
         </div>
       </div>
-      <button
-        type="button"
-        className="billing-button billing-button--soft billing-button--small"
-        onClick={() => onReview(suggestion)}
-      >
+      {/* A link rather than a filled button: there are several of these in a
+          column and four solid buttons down one side of a panel make every one
+          of them look like the main thing to do. The label still says what
+          happens, and it still only opens a screen — nothing is sent from here. */}
+      <button type="button" className="billing-suggestion__go" onClick={() => onReview(suggestion)}>
         {suggestion.action.label}
+        <ArrowRight size={15} aria-hidden />
       </button>
     </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// The briefing strip
+// ---------------------------------------------------------------------------
+
+/**
+ * "Your business briefing" — one counted sentence, across the top.
+ *
+ * THE COUNTED PART AND THE GENERATED PART ARE LABELLED SEPARATELY, because
+ * they are not the same claim. The sentence is arithmetic over the records
+ * this page just read and it says so; the written summary is a model's words
+ * and is fetched only when somebody asks for it, which in this deployment
+ * answers "not configured" and leaves everything else on the page working.
+ *
+ * There is no sparkle on the counted sentence for the same reason there is no
+ * confidence score on it: decorating arithmetic as intelligence is how people
+ * stop checking it.
+ */
+export function BriefingStrip({
+  briefing,
+  loading,
+  onReview,
+  assistant,
+}: {
+  briefing: BriefingPanel | null
+  loading: boolean
+  /** Opens the priority list. Never sends anything. */
+  onReview?: () => void
+  assistant?: ReactNode
+}) {
+  if (loading) {
+    return (
+      <div className="billing-briefing" aria-busy="true">
+        <span className="billing-sr-only">Reading your briefing</span>
+        <span className="billing-skeleton billing-skeleton--line" style={{ maxWidth: '34rem' }} />
+      </div>
+    )
+  }
+
+  if (!briefing || !briefing.available) return null
+
+  const quiet = briefing.points.length === 0
+
+  return (
+    <section className="billing-briefing" aria-label="Your business briefing">
+      <span className="billing-briefing__mark" aria-hidden="true">
+        <Sparkles size={17} />
+      </span>
+
+      <div className="billing-briefing__body">
+        <p className="billing-briefing__headline">
+          <strong>Your business briefing</strong>
+          <span className="billing-briefing__divider" aria-hidden="true" />
+          {briefing.headline}
+        </p>
+
+        {briefing.movement && (
+          <p className={`billing-briefing__movement billing-briefing__movement--${briefing.movement.tone}`}>
+            {briefing.movement.text}
+          </p>
+        )}
+
+        <div className="billing-briefing__foot">
+          <p className="billing-briefing__basis">{briefing.basis}</p>
+          {assistant}
+        </div>
+      </div>
+
+      {!quiet && onReview && (
+        <button type="button" className="billing-button billing-button--small" onClick={onReview}>
+          Review priorities
+        </button>
+      )}
+    </section>
   )
 }
 

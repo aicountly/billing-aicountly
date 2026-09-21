@@ -13,7 +13,7 @@
  * accepts. Nothing is held here that has nowhere to be saved.
  */
 
-import type { TaxRate } from './gst'
+import type { TaxRate } from './gst.ts'
 
 /**
  * Goods become `inventory_lines` and move stock; services become

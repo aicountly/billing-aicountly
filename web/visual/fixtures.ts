@@ -134,7 +134,8 @@ export const overview: OverviewDashboard = {
       value: 842500,
       status: 'ready',
       basis: 'period',
-      definition: 'Invoices dated 2026-09-01 to 2026-09-16, at their full value including tax.',
+      definition: 'Invoices dated 2026-09-01 to 2026-09-16, at their full value including tax. Credit notes are not netted off — they are counted separately.',
+      summary: '1 Sep–16 Sep · including tax, before credit notes',
       comparison: { available: true, percent: 12, direction: 'up', label: '+12.0% vs the previous 16 days', tone: 'positive', previous: 752000 },
       tone: 'neutral',
     },
@@ -148,6 +149,7 @@ export const overview: OverviewDashboard = {
       comparison: null,
       tone: 'warning',
       detail: '₹74,500.00 of it is overdue',
+      summary: 'As at 16 Sep · ₹74,500.00 overdue',
     },
     {
       id: 'to_pay',
@@ -159,6 +161,7 @@ export const overview: OverviewDashboard = {
       comparison: null,
       tone: 'warning',
       detail: '₹18,500.00 of it is overdue',
+      summary: 'As at 16 Sep · ₹48,000.00 due within 7 days',
     },
     {
       id: 'cash_bank',
@@ -170,6 +173,7 @@ export const overview: OverviewDashboard = {
       comparison: null,
       tone: 'neutral',
       detail: '2 account(s)',
+      summary: 'As at 16 Sep · 2 accounts',
     },
   ],
   panels: {
@@ -209,6 +213,18 @@ export const overview: OverviewDashboard = {
         action: { label: 'Review', path: '/dashboard/cash-compliance' },
       },
     ],
+    briefing: {
+      available: true,
+      headline: '3 overdue customer accounts and 2 supplier accounts due this week, with 1 more below need a look today.',
+      points: [
+        { id: 'overdue_receivables', text: '3 overdue customer accounts', tone: 'danger', count: 3, path: '/dashboard/receivables' },
+        { id: 'supplier_bills_due', text: '2 supplier accounts due this week', tone: 'warning', count: 2, path: '/dashboard/payables' },
+        { id: 'statutory_failed', text: '1 statutory document to fix', tone: 'warning', count: 1, path: '/dashboard/cash-compliance' },
+      ],
+      movement: { text: 'Sales +12.0% vs the previous 16 days', tone: 'positive', path: '/sales' },
+      basis: 'Counted from your own records, in Asia/Kolkata. Not generated text.',
+      generated_at: '2026-09-16T09:12:00Z',
+    },
     recent_documents: {
       available: true,
       reason: null,
@@ -749,6 +765,177 @@ export const savedExpense = {
 }
 
 // ---------------------------------------------------------------------------
+// The Items workspace
+// ---------------------------------------------------------------------------
+
+/**
+ * A catalogue with every shape the screen has to survive in it.
+ *
+ * Deliberately awkward: an item with no SKU, one with a name longer than the
+ * column, an amount in lakhs, a service with no stock, an item running low,
+ * one out of stock, one withdrawn, and one Inventory said nothing useful about
+ * at all. Photographing a screen where every row is tidy proves nothing.
+ */
+export const catalogItems = [
+  row(1, 'Ballpoint Pens', {
+    description: 'Smooth writing | Blue',
+    sku: 'PEN-001',
+    hsn: '960810',
+    type: 'stock',
+    group: [3, 'Stationery'],
+    rate: 12,
+    stock: [1250, 100],
+  }),
+  row(2, 'A4 Notebook', {
+    description: '200 Pages | Single Line',
+    sku: 'NB-002',
+    hsn: '482020',
+    type: 'stock',
+    group: [3, 'Stationery'],
+    rate: 45,
+    stock: [320, 60],
+  }),
+  row(3, 'Laptop — Dell Inspiron 15 3520 with 16GB RAM and 512GB NVMe storage', {
+    description: '15.6" | 16GB | 512GB SSD',
+    sku: 'LAP-001',
+    hsn: '847130',
+    type: 'stock',
+    group: [4, 'Computers'],
+    rate: 52000,
+    stock: [15, 5],
+  }),
+  row(4, 'Installation Service', {
+    description: 'On-site installation',
+    sku: 'SERV-001',
+    hsn: '998719',
+    type: 'service',
+    group: [7, 'Services'],
+    rate: 1500,
+  }),
+  row(5, 'Office Chair', {
+    description: 'Ergonomic | Adjustable',
+    sku: 'CHR-001',
+    hsn: '940130',
+    type: 'stock',
+    group: [5, 'Furniture'],
+    rate: 3800,
+    stock: [8, 10],
+  }),
+  row(6, 'Annual AMC', {
+    description: 'Comprehensive support',
+    sku: 'AMC-001',
+    hsn: '998719',
+    type: 'service',
+    group: [7, 'Services'],
+    rate: 5000,
+  }),
+  row(7, 'Whiteboard Marker', {
+    description: null,
+    sku: null,
+    hsn: '960910',
+    type: 'stock',
+    group: [3, 'Stationery'],
+    rate: 25,
+    stock: [0, 24],
+  }),
+  row(8, 'Industrial Air Compressor', {
+    description: '7.5 HP | Two stage',
+    sku: 'ACP-220',
+    hsn: '841430',
+    type: 'stock',
+    group: [6, 'Machinery'],
+    rate: 248500,
+    stock: [2, 1],
+  }),
+  row(9, 'Legacy Fax Rolls', {
+    description: 'Withdrawn from sale',
+    sku: 'FAX-010',
+    hsn: '481140',
+    type: 'stock',
+    group: [3, 'Stationery'],
+    rate: 90,
+    stock: [40, 10],
+    active: false,
+  }),
+  // Inventory answered, but said nothing about what this is or how many there
+  // are. The row still has to draw — as "—" and "Unavailable", never as 0.
+  row(10, 'Imported Gift Set', { description: null, sku: 'GFT-001', hsn: null, type: null, group: null, rate: null }),
+
+  // The three the credit note screen resolves by search and by scan. THE IDS
+  // MATTER: originalDocument's bill lines are items 401 and 402, and a booth
+  // where the bill being credited names an item the search cannot find is a
+  // booth that cannot photograph the line picker. One catalogue, because two
+  // would be two answers to "what does this company sell".
+  row(401, 'Wireless Mouse', { description: 'Wireless | Black', sku: 'M221-BLK', hsn: '8471', type: 'stock', group: [4, 'Computers'], rate: 850, stock: [64, 20] }),
+  row(402, 'USB-C Cable 1M', { description: '1 metre | Braided', sku: 'CB11-1M', hsn: '8544', type: 'stock', group: [4, 'Computers'], rate: 450, stock: [210, 50] }),
+  row(403, 'Laptop Stand', { description: 'Aluminium | Adjustable', sku: 'LS-ALU', hsn: '8473', type: 'stock', group: [4, 'Computers'], rate: 1299, stock: [18, 6] }),
+]
+
+/** One fixture row in the shape the API's normaliser produces. */
+function row(
+  id: number,
+  name: string,
+  options: {
+    description?: string | null
+    sku?: string | null
+    hsn?: string | null
+    type?: 'stock' | 'service' | null
+    group?: [number, string] | null
+    rate?: number | null
+    /** [available, reorder level] — omitted entirely means "Inventory did not say". */
+    stock?: [number, number]
+    active?: boolean
+  },
+) {
+  const isService = options.type === 'service'
+  const available = options.stock?.[0]
+  const threshold = options.stock?.[1] ?? null
+
+  let state: 'in' | 'low' | 'out' | 'none' | 'unknown' = 'unknown'
+  if (isService) state = 'none'
+  else if (available === undefined) state = 'unknown'
+  else if (available <= 0) state = 'out'
+  else if (threshold !== null && available <= threshold) state = 'low'
+  else state = 'in'
+
+  return {
+    item_id: id,
+    item_name: name,
+    item_sku: options.sku ?? null,
+    hsn_sac: options.hsn ?? null,
+    unit_id: 1,
+    mrp: options.rate === null || options.rate === undefined ? null : String(options.rate),
+    description: options.description ?? null,
+    barcode: null,
+    type: options.type === undefined ? 'stock' : options.type,
+    group: options.group ? { id: options.group[0], name: options.group[1] } : null,
+    unit_name: isService ? null : 'Nos',
+    rate: options.rate ?? null,
+    currency: 'INR',
+    is_active: options.active ?? (options.type === null ? null : true),
+    image_url: null,
+    stock: { available: isService ? null : (available ?? null), threshold: isService ? null : threshold, state },
+    source: 'inventory',
+  }
+}
+
+export const catalogItemStats = {
+  total: { value: 1248, available: true, reason: null },
+  stock: { value: 892, available: true, reason: null },
+  services: { value: 356, available: true, reason: null },
+  low_stock: { value: 24, available: true, reason: null },
+  inactive: { value: 62, available: true, reason: null },
+}
+
+export const catalogItemGroups = [
+  { group_id: 4, group_name: 'Computers' },
+  { group_id: 5, group_name: 'Furniture' },
+  { group_id: 6, group_name: 'Machinery' },
+  { group_id: 7, group_name: 'Services' },
+  { group_id: 3, group_name: 'Stationery' },
+]
+
+// ---------------------------------------------------------------------------
 // Sales → Credit note
 // ---------------------------------------------------------------------------
 
@@ -915,13 +1102,6 @@ export const creditNoteTrend = {
   source: 'books',
 }
 
-/** Items the credit note's own search and scan resolve against. */
-export const catalogItems = [
-  { item_id: 401, item_name: 'Wireless Mouse', item_sku: 'M221-BLK', unit_id: 1, hsn_sac: '8471', mrp: '850' },
-  { item_id: 402, item_name: 'USB-C Cable 1M', item_sku: 'CB11-1M', unit_id: 1, hsn_sac: '8544', mrp: '450' },
-  { item_id: 403, item_name: 'Laptop Stand', item_sku: 'LS-ALU', unit_id: 1, hsn_sac: '8473', mrp: '1299' },
-]
-
 /** What the API returns when the harness "issues" a credit note. */
 export const savedCreditNote = {
   request_id: 9210,
@@ -1017,14 +1197,101 @@ export const savedWithdrawal = {
   created_at: '2026-09-19T06:20:00Z',
 }
 
+/* -------------------------------------------------------------------------
+   Money → Money received.
+
+   The "in" half of the money fixtures: a customer's open bills, what that
+   customer owes, and receipts already recorded. Keyed to Vaibhav Traders
+   (701) from the customer pool above, so picking that name in the harness
+   leads to the bills and the balance below. Invented, as all of these are.
+   ------------------------------------------------------------------------- */
+
+export const openBillsIn = {
+  account_id: 701,
+  source: 'books',
+  bills: [
+    { bill_no: 'INV-0214', bill_date: '2026-07-18', due_date: '2026-08-02', balance: 48000, voucher_id: 3214, voucher_uuid: 'vch-r14' },
+    { bill_no: 'INV-0241', bill_date: '2026-08-21', due_date: '2026-09-05', balance: 36500, voucher_id: 3241, voucher_uuid: 'vch-r41' },
+    { bill_no: 'INV-0266', bill_date: '2026-09-09', due_date: '2026-09-24', balance: 40000, voucher_id: 3266, voucher_uuid: 'vch-r66' },
+  ],
+}
+
+/** `v1/receivables?account_id=701` — this one customer's dues, aged in Billing. */
+export const customerDues = {
+  title: 'Money to collect',
+  as_on: '2026-09-21',
+  source: 'books',
+  total: 124500,
+  overdue: 84500,
+  due_today: 0,
+  due_this_week: 40000,
+  ageing: { current: 40000, '1_30': 36500, '31_60': 48000, '61_90': 0, '90_plus': 0, no_due_date: 0 },
+  ageing_reconciles: true,
+  parties: [
+    { account_id: 701, account_name: 'Vaibhav Traders', total: 124500, overdue: 84500, bill_count: 3, oldest_overdue_days: 50 },
+  ],
+  bills: [],
+  note: 'Read from Smart Books just now.',
+}
+
+/**
+ * `v1/money/recent?direction=in`.
+ *
+ * Rows carry both halves the endpoint joins: the register's document and,
+ * where Billing recorded it, the mode, reference and account the user typed.
+ * One row has `recorded_here: false` and empty detail cells, because that is
+ * what a receipt entered in Books looks like here.
+ */
+export const moneyRecentIn = {
+  direction: 'in',
+  period: {
+    key: 'month',
+    label: 'September 2026',
+    from: '2026-09-01',
+    to: '2026-09-21',
+    previous_from: '2026-08-11',
+    previous_to: '2026-08-31',
+    previous_label: 'the previous 21 days',
+  },
+  available: true,
+  reason: null,
+  complete: true,
+  source: 'books',
+  note: 'Read from Smart Books as this screen opened. Billing keeps no copy.',
+  summary: {
+    available: true,
+    reason: null,
+    total: 352500,
+    count: 6,
+    average: 58750,
+    largest: { amount: 120000, party: 'Sunrise Electronics', party_id: 702, date: '2026-09-18', voucher_id: 3811 },
+    comparison: {
+      available: true,
+      percent: 9.2,
+      direction: 'up',
+      label: '+9.2% vs the previous 21 days',
+      tone: 'positive',
+      previous: 322800,
+    },
+  },
+  rows: [
+    { voucher_id: 3812, voucher_uuid: 'vch-r812', document_no: 'RCP-2026-0012', date: '2026-09-19', party: 'Vaibhav Traders', party_id: 701, amount: 50000, status: null, request_id: 812, kind: 'receipt', account_id: 9002, account_name: 'HDFC Current ••••1234', payment_mode: 'upi', reference_no: 'UTR987654321', narration: null, created_by: 'demo-owner', recorded_here: true },
+    { voucher_id: 3811, voucher_uuid: 'vch-r811', document_no: 'RCP-2026-0011', date: '2026-09-18', party: 'Sunrise Electronics', party_id: 702, amount: 120000, status: null, request_id: 811, kind: 'receipt', account_id: 9003, account_name: 'ICICI Current ••••8890', payment_mode: 'cheque', reference_no: 'CHQ789123', narration: null, created_by: 'demo-owner', recorded_here: true },
+    { voucher_id: 3810, voucher_uuid: 'vch-r810', document_no: 'RCP-2026-0010', date: '2026-09-17', party: 'Deepak General Store', party_id: 703, amount: 75000, status: null, request_id: 810, kind: 'receipt', account_id: 9001, account_name: 'Cash in hand', payment_mode: 'cash', reference_no: null, narration: null, created_by: 'demo-owner', recorded_here: true },
+    { voucher_id: 3809, voucher_uuid: 'vch-r809', document_no: 'RCP-2026-0009', date: '2026-09-16', party: 'Kaveri Retail LLP', party_id: 704, amount: 32500, status: null, request_id: null, kind: null, account_id: null, account_name: null, payment_mode: null, reference_no: null, narration: null, created_by: null, recorded_here: false },
+    { voucher_id: 3806, voucher_uuid: 'vch-r806', document_no: 'RCP-2026-0006', date: '2026-09-12', party: 'Vaibhav Traders', party_id: 701, amount: 25000, status: null, request_id: 806, kind: 'receipt', account_id: 9002, account_name: 'HDFC Current ••••1234', payment_mode: 'bank_transfer', reference_no: 'UTR123456789', narration: null, created_by: 'demo-owner', recorded_here: true },
+    { voucher_id: 3801, voucher_uuid: 'vch-r801', document_no: 'RCP-2026-0001', date: '2026-09-02', party: 'Vaibhav Traders', party_id: 701, amount: 50000, status: null, request_id: 801, kind: 'receipt', account_id: 9003, account_name: 'ICICI Current ••••8890', payment_mode: 'cheque', reference_no: 'CHQ123456', narration: null, created_by: 'demo-owner', recorded_here: true },
+  ],
+}
+
 /* ---------------------------------------------------------------------------
-   New purchase
+   Purchases → New purchase
 
    Only what nothing else in this file already covers. Items, parties,
    warehouses, tax categories, cash/bank accounts and stock all come from the
    fixtures above — the purchase screen reads the same masters the bill screen
-   does, and two copies of a master is how the two booths end up disagreeing
-   about what an item costs.
+   does, and two copies of a master is how two booths end up disagreeing about
+   what an item costs.
    --------------------------------------------------------------------------- */
 
 /** Inventory's UOM master, behind the Unit column on a purchase line. */
@@ -1035,7 +1302,7 @@ export const uoms = [
   { unit_id: 4, unit_symbol: 'Ream' },
 ]
 
-/** What one supplier is owed, as the payables report answers for an account. */
+/** What suppliers are owed, as the payables report answers for an account. */
 export const supplierPayables = {
   title: 'Money to pay',
   as_on: '2026-09-21',

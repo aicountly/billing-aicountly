@@ -9,7 +9,7 @@
  * server ignores is a promise to the user that it was saved.
  */
 
-import { isLineStarted, type PurchaseForm } from './model'
+import { isLineStarted, type PurchaseForm } from './model.ts'
 
 export interface PurchaseLinePayload {
   item_id: number | null
