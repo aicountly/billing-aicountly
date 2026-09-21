@@ -171,17 +171,17 @@ export function ConfirmDialog({
 
   return (
     <>
-      <div className="bd-dialog-backdrop" aria-hidden="true" onClick={onCancel} />
-      <div className="bd-dialog" role="alertdialog" aria-modal="true" aria-labelledby="bd-dialog-title" ref={panel}>
-        <h2 id="bd-dialog-title">{title}</h2>
-        <div className="bd-dialog__body">{children}</div>
-        <div className="bd-dialog__actions">
+      <div className="billing-deposit-dialog-backdrop" aria-hidden="true" onClick={onCancel} />
+      <div className="billing-deposit-dialog" role="alertdialog" aria-modal="true" aria-labelledby="billing-deposit-dialog-title" ref={panel}>
+        <h2 id="billing-deposit-dialog-title">{title}</h2>
+        <div className="billing-deposit-dialog__body">{children}</div>
+        <div className="billing-deposit-dialog__actions">
           <button type="button" className="billing-button" ref={safe} onClick={onCancel}>
             {cancelLabel}
           </button>
           <button
             type="button"
-            className={tone === 'danger' ? 'billing-button bd-button--danger' : 'billing-button billing-button--primary'}
+            className={tone === 'danger' ? 'billing-button billing-deposit-button--danger' : 'billing-button billing-button--primary'}
             onClick={onConfirm}
           >
             {confirmLabel}

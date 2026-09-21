@@ -17,21 +17,10 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Check, ChevronDown, Search } from 'lucide-react'
+import type { AccountOption } from '../services/cashBankAccounts'
 import { money } from '../ui'
 
-export interface PickableAccount {
-  id: number
-  name: string
-  /** Null when this profile may not see balances, so the kind cannot be read. */
-  kind: 'cash' | 'bank' | null
-  /** Null when unknown — never 0, which would read as an empty till. */
-  balance: number | null
-  /** Last four digits only. Books is never asked to hand over the rest. */
-  maskedNumber: string | null
-  bankName: string | null
-}
-
-export function AccountPicker({
+export function AccountSelect({
   id,
   label,
   required = false,
@@ -49,7 +38,7 @@ export function AccountPicker({
   label: string
   required?: boolean
   placeholder: string
-  accounts: PickableAccount[]
+  accounts: AccountOption[]
   value: number | null
   onChange: (accountId: number | null) => void
   loading?: boolean
@@ -74,9 +63,7 @@ export function AccountPicker({
     if (!query) return accounts
     return accounts.filter(
       (account) =>
-        account.name.toLowerCase().includes(query) ||
-        (account.bankName ?? '').toLowerCase().includes(query) ||
-        (account.maskedNumber ?? '').includes(query),
+        account.name.toLowerCase().includes(query) || (account.maskedNumber ?? '').includes(query),
     )
   }, [accounts, term])
 
@@ -96,7 +83,7 @@ export function AccountPicker({
     setTerm('')
   }
 
-  function pick(account: PickableAccount) {
+  function pick(account: AccountOption) {
     onChange(account.id)
     close()
     input.current?.focus()
@@ -147,11 +134,11 @@ export function AccountPicker({
   const describedBy = [error ? `${id}-error` : null, hint && !error ? `${id}-hint` : null].filter(Boolean).join(' ')
 
   return (
-    <div className="bd-field" ref={box}>
-      <label className="bd-label" htmlFor={id}>
+    <div className="billing-deposit-field" ref={box}>
+      <label className="billing-deposit-label" htmlFor={id}>
         {label}
         {required && (
-          <span className="bd-required" aria-hidden="true">
+          <span className="billing-deposit-required" aria-hidden="true">
             {' '}
             *
           </span>
@@ -159,13 +146,13 @@ export function AccountPicker({
         {required && <span className="billing-sr-only"> (required)</span>}
       </label>
 
-      <div className={`bd-combobox${error ? ' is-invalid' : ''}`}>
-        <Search size={15} className="bd-combobox__icon" aria-hidden />
+      <div className={`billing-deposit-combobox${error ? ' is-invalid' : ''}`}>
+        <Search size={15} className="billing-deposit-combobox__icon" aria-hidden />
         <input
           id={id}
           ref={input}
           type="text"
-          className="bd-combobox__input"
+          className="billing-deposit-combobox__input"
           role="combobox"
           autoComplete="off"
           aria-expanded={open}
@@ -187,13 +174,13 @@ export function AccountPicker({
           onFocus={() => setOpen(true)}
           onKeyDown={onKeyDown}
         />
-        <ChevronDown size={16} className="bd-combobox__chevron" aria-hidden />
+        <ChevronDown size={16} className="billing-deposit-combobox__chevron" aria-hidden />
       </div>
 
       {open && (
-        <div className="bd-options" id={listId} role="listbox" aria-label={label}>
+        <div className="billing-deposit-options" id={listId} role="listbox" aria-label={label}>
           {matches.length === 0 && (
-            <p className="bd-options__empty">{accounts.length === 0 ? emptyText : `Nothing matched “${term.trim()}”.`}</p>
+            <p className="billing-deposit-options__empty">{accounts.length === 0 ? emptyText : `Nothing matched “${term.trim()}”.`}</p>
           )}
           {matches.map((account, index) => (
             <button
@@ -202,7 +189,7 @@ export function AccountPicker({
               type="button"
               role="option"
               aria-selected={account.id === value}
-              className={`bd-option${index === highlighted ? ' is-active' : ''}`}
+              className={`billing-deposit-option${index === highlighted ? ' is-active' : ''}`}
               onMouseEnter={() => setHighlighted(index)}
               // Mouse down rather than click: a click fires after blur, and by
               // then the panel this option lives in has already closed.
@@ -211,29 +198,29 @@ export function AccountPicker({
                 pick(account)
               }}
             >
-              <span className="bd-option__main">
-                <span className="bd-option__name">{account.name}</span>
+              <span className="billing-deposit-option__main">
+                <span className="billing-deposit-option__name">{account.name}</span>
                 {/* No balance here: it has a column of its own on the right,
                     and saying it twice on one row reads as two figures. */}
-                <span className="bd-option__meta">{describe(account, false)}</span>
+                <span className="billing-deposit-option__meta">{describe(account, false)}</span>
               </span>
               {account.balance !== null && (
-                <span className="bd-option__balance num">{money(account.balance)}</span>
+                <span className="billing-deposit-option__balance num">{money(account.balance)}</span>
               )}
-              {account.id === value && <Check size={15} className="bd-option__tick" aria-hidden />}
+              {account.id === value && <Check size={15} className="billing-deposit-option__tick" aria-hidden />}
             </button>
           ))}
         </div>
       )}
 
-      {selected && !open && <p className="bd-field__selected">{describe(selected, true)}</p>}
+      {selected && !open && <p className="billing-deposit-field__selected">{describe(selected, true)}</p>}
       {hint && !error && (
-        <p className="bd-field__hint" id={`${id}-hint`}>
+        <p className="billing-deposit-field__hint" id={`${id}-hint`}>
           {hint}
         </p>
       )}
       {error && (
-        <p className="bd-field__error" id={`${id}-error`}>
+        <p className="billing-deposit-field__error" id={`${id}-error`}>
           {error}
         </p>
       )}
@@ -242,11 +229,11 @@ export function AccountPicker({
 }
 
 /** What tells one HDFC from another, in as few words as carry the difference. */
-function describe(account: PickableAccount, withBalance: boolean): string {
+function describe(account: AccountOption, withBalance: boolean): string {
   const parts: string[] = []
   if (account.kind === 'cash') parts.push('Cash account')
-  if (account.kind === 'bank') parts.push(account.bankName ?? 'Bank account')
-  if (account.maskedNumber) parts.push(`••••${account.maskedNumber}`)
+  if (account.kind === 'bank') parts.push('Bank account')
+  if (account.maskedNumber) parts.push(account.maskedNumber)
   if (withBalance && account.balance !== null) parts.push(`Balance ${money(account.balance)}`)
 
   return parts.join(' · ') || 'Ledger in Smart Books'

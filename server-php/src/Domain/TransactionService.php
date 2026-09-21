@@ -434,6 +434,7 @@ final class TransactionService
                 'unit_id'         => self::id($line['unit_id'] ?? null),
                 'mc_id'           => self::id($line['warehouse_id'] ?? null),
                 'batch_id'        => self::id($line['batch_id'] ?? null),
+                'batch_no'        => self::text($line['batch_no'] ?? null),
                 'qty'             => $qty,
                 'rate'            => $rate,
                 'discount_pc'     => $discountPc,
@@ -441,6 +442,12 @@ final class TransactionService
                 'tax_cat_id'      => self::id($line['tax_cat_id'] ?? null),
                 'hsn_sac'         => self::text($line['hsn_sac'] ?? null),
                 'description'     => self::text($line['description'] ?? null),
+                // Which line of the original this one credits, and what came
+                // back in what state. Both are recorded on the request whether
+                // or not the far end has a field for them: six months later
+                // "3 of the 5 on line 2, damaged" is the whole story.
+                'against_line_ref'  => self::text($line['against_line_ref'] ?? null),
+                'return_condition'  => self::text($line['return_condition'] ?? null),
             ];
         }
 
@@ -450,6 +457,18 @@ final class TransactionService
             'service_lines'   => $serviceLines,
             'payment_terms'   => self::text($input['payment_terms'] ?? null),
             'due_date'        => self::text($input['due_date'] ?? null),
+            // Facts about the document, carried to Books — NOT computations.
+            //
+            // The place of supply is what decides CGST + SGST against IGST, and
+            // it belongs to the supply rather than to the party: the same
+            // customer can be billed for goods delivered in another state. It
+            // is passed through because the person making the bill knows it;
+            // Books still decides the tax, and no tax figure is sent with it.
+            'place_of_supply' => self::text($input['place_of_supply'] ?? null),
+            // What prints under the items. Billing owns the company default
+            // (billing_settings.default_sale_terms); this is the copy on this
+            // document.
+            'terms'           => self::text($input['terms'] ?? null),
         ];
 
         if ($kind === 'purchase' || $kind === 'debit_note') {
@@ -463,6 +482,10 @@ final class TransactionService
         if ($settledTo !== null) {
             $payload['settlement_account_id'] = $settledTo;
             $payload['is_cash_transaction'] = true;
+            // The same field name a receipt carries, for the same reason: how
+            // the money arrived is a fact about the settlement, and the ledger
+            // alone does not always say it.
+            $payload['payment_mode'] = self::text($input['payment_mode'] ?? null) ?? 'cash';
         }
 
         if (($against = self::id($input['against_voucher_id'] ?? null)) !== null) {
@@ -481,6 +504,17 @@ final class TransactionService
             // A price adjustment returns no goods. Saying so explicitly keeps a
             // value-only credit from being read downstream as stock coming back.
             $payload['value_adjustment_only'] = (bool) ($input['value_adjustment_only'] ?? false);
+
+            // And it is enforced here rather than trusted from the form: a
+            // warehouse on a value-only note is the one field that could make
+            // Inventory move stock nobody said came back.
+            if ($payload['value_adjustment_only']) {
+                foreach ($payload['inventory_lines'] as $index => $inventoryLine) {
+                    $payload['inventory_lines'][$index] = [
+                        'mc_id' => null, 'batch_id' => null, 'batch_no' => null, 'return_condition' => null,
+                    ] + $inventoryLine;
+                }
+            }
         }
 
         return $payload;
@@ -633,6 +667,10 @@ final class TransactionService
             'payment_mode'    => $mode,
             'instrument_no'   => $instrumentNo,
             'instrument_date' => $mode === 'cheque' ? self::text($input['instrument_date'] ?? null) : null,
+            // Where the slip is kept, when this deployment can keep one. The
+            // same field an expense already carries, and the same rule: Billing
+            // holds the reference the document service gave back, never bytes.
+            'attachment_ref'  => self::text($input['attachment_ref'] ?? null),
             'contra_kind'     => $kind,
         ];
     }

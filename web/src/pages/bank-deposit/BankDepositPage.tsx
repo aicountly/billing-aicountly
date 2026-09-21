@@ -36,20 +36,29 @@ import {
   Landmark,
   Lightbulb,
   Loader2,
-  Paperclip,
   RotateCcw,
   X,
 } from 'lucide-react'
-import { api, ApiError } from '../services/api'
-import type { CashBank, CashBankAccount, CashBankMovement, CashBankMovements, TransactionRequest } from '../services/types'
-import { useApi } from '../hooks/useApi'
-import { useBilling } from '../context/BillingContext'
-import { fetchCompanyInfo } from '../services/manage'
-import { AccountPicker, type PickableAccount } from '../components/AccountPicker'
-import { ConfirmDialog, useNavigationGuard } from '../components/NavigationGuard'
-import { useToast } from '../ui/toast'
-import { date as formatDate, money, Notice } from '../ui'
-import '../styles/bank-deposit.css'
+import { api, ApiError } from '../../services/api'
+import type {
+  CashBank,
+  CashBankAccount,
+  DepositCapabilities,
+  DepositSummary,
+  RecentDeposit,
+  RecentDeposits,
+  StoredBill,
+  TransactionRequest,
+} from '../../services/types'
+import { useApi } from '../../hooks/useApi'
+import { useBilling } from '../../context/BillingContext'
+import { fetchCompanyInfo } from '../../services/manage'
+import { accountsFor, buildAccountOptions, type AccountOption } from '../../services/cashBankAccounts'
+import { AccountSelect } from '../../components/AccountSelect'
+import { ConfirmDialog, useNavigationGuard } from '../../components/NavigationGuard'
+import { SlipUploader } from './SlipUploader'
+import { date as formatDate, money, Notice, ToastStack, useToasts } from '../../ui'
+import '../../styles/billing-bank-deposit.css'
 
 type DepositType = 'cash' | 'cheque'
 type FieldKey = 'amount' | 'date' | 'from' | 'to' | 'chequeNo' | 'chequeDate'
@@ -65,6 +74,9 @@ interface FormState {
   reference: string
   notes: string
 }
+
+/** Four fits the card without the rail growing past the form beside it. */
+const RECENT_LIMIT = 4
 
 const NOTES_LIMIT = 500
 const REFERENCE_LIMIT = 120
@@ -84,8 +96,8 @@ function emptyForm(today: string): FormState {
   }
 }
 
-export default function BankDeposit() {
-  const toast = useToast()
+export default function BankDepositPage() {
+  const { toasts, push: toast, dismiss: dismissToast } = useToasts()
   const { scope, can } = useBilling()
   const [params] = useSearchParams()
   const resumeId = params.get('draft')
@@ -101,6 +113,14 @@ export default function BankDeposit() {
   const [failure, setFailure] = useState<{ message: string; retryId: number | null } | null>(null)
   const [tipDismissed, setTipDismissed] = useState(() => readTipDismissed())
   const [resetAsked, setResetAsked] = useState(false)
+  /**
+   * The slip, once the document service has taken it.
+   *
+   * Not part of the form draft, and deliberately: it is already on the server
+   * by the time it is here, so it is not "unsaved" and does not belong in what
+   * the discard prompt is asking about.
+   */
+  const [slip, setSlip] = useState<StoredBill | null>(null)
 
   // A ref as well as the state: two clicks inside one render pass would both
   // see `busy === null` and both post.
@@ -130,9 +150,35 @@ export default function BankDeposit() {
   )
 
   const recentQuery = useApi(
-    (signal) => api.one<CashBankMovements>('v1/cash-bank/movements', { kind: 'bank_deposit', limit: 5 }, signal),
+    (signal) => api.one<RecentDeposits>('v1/bank-deposits/recent', { limit: RECENT_LIMIT }, signal),
     [scope?.cmp_id, scope?.fy_id, scope?.bo_id],
     Boolean(scope) && mayRecord,
+  )
+
+  /**
+   * Whether a slip can be kept at all in this deployment.
+   *
+   * Configuration, not data — the same switch the expense screen reads for a
+   * bill, so "can this product hold a document" has one answer here.
+   */
+  const capabilitiesQuery = useApi(
+    (signal) => api.one<DepositCapabilities>('v1/bank-deposits/capabilities', undefined, signal),
+    [scope?.cmp_id],
+    Boolean(scope) && mayRecord,
+  )
+
+  /**
+   * What has gone into the chosen bank this month, from what Billing recorded.
+   *
+   * Asked for only once a bank is chosen, because before that there is nothing
+   * to summarise, and it is context beside Books' balance rather than a figure
+   * anybody should add to it.
+   */
+  const bankTotalQuery = useApi(
+    (signal) =>
+      api.one<DepositSummary>('v1/bank-deposits/summary', { bank_account_id: Number(form.toId) }, signal),
+    [scope?.cmp_id, scope?.fy_id, scope?.bo_id, form.toId],
+    Boolean(scope) && mayRecord && form.toId !== '',
   )
 
   // Manage owns the year's dates. They are read rather than assumed because
@@ -151,32 +197,18 @@ export default function BankDeposit() {
 
   // ------------------------------------------------------- accounts to pick
 
-  const accounts = useMemo<PickableAccount[]>(() => {
-    const live = new Map<number, { balance: number; kind: 'cash' | 'bank' }>()
-    for (const row of balancesQuery.data?.data.accounts ?? []) {
-      live.set(row.account_id, { balance: row.balance, kind: row.kind })
-    }
-
-    return (accountsQuery.data?.data ?? [])
-      .filter((row) => row.is_active === undefined || row.is_active === null || Boolean(row.is_active))
-      .map((row) => {
-        const known = live.get(row.acc_id)
-        return {
-          id: row.acc_id,
-          name: row.acc_name,
-          kind: known?.kind ?? classify(row),
-          balance: known?.balance ?? null,
-          maskedNumber: lastFour(row.bank_acc_no ?? row.account_number ?? null),
-          bankName: row.bank_name ?? null,
-        }
-      })
-  }, [accountsQuery.data, balancesQuery.data])
+  // The same builder the withdrawal screen uses, so the pair cannot disagree
+  // about which of a company's ledgers is a bank.
+  const accounts = useMemo<AccountOption[]>(
+    () => buildAccountOptions(accountsQuery.data?.data ?? [], balancesQuery.data?.data.accounts ?? null),
+    [accountsQuery.data, balancesQuery.data],
+  )
 
   // Money leaves a cash-like account and lands in a bank one. Where Books has
-  // not said which is which, the account stays in both lists — a picker that
-  // silently hides the account somebody wants is worse than a longer one.
-  const sources = useMemo(() => narrow(accounts, 'bank'), [accounts])
-  const destinations = useMemo(() => narrow(accounts, 'cash'), [accounts])
+  // not said which is which, nothing is hidden — a picker that silently drops
+  // the account somebody wants is worse than a longer one.
+  const sources = useMemo(() => accountsFor(accounts, 'cash', form.toId), [accounts, form.toId])
+  const destinations = useMemo(() => accountsFor(accounts, 'bank', form.fromId), [accounts, form.fromId])
 
   const fromAccount = accounts.find((account) => String(account.id) === form.fromId) ?? null
   const toAccount = accounts.find((account) => String(account.id) === form.toId) ?? null
@@ -295,9 +327,9 @@ export default function BankDeposit() {
    * certainly no scan of the ledger. It is a question, never a block: banking
    * the same amount from the same till twice in a day is unusual, not wrong.
    */
-  const possibleDuplicate = useMemo<CashBankMovement | null>(() => {
+  const possibleDuplicate = useMemo<RecentDeposit | null>(() => {
     if (amountValue === null || !form.fromId || !form.toId) return null
-    const rows = recentQuery.data?.data.movements ?? []
+    const rows = recentQuery.data?.data.rows ?? []
 
     return (
       rows.find(
@@ -305,8 +337,8 @@ export default function BankDeposit() {
           row.date === form.entryDate &&
           row.amount !== null &&
           Math.abs(row.amount - amountValue) < 0.005 &&
-          String(row.from_account_id ?? '') === form.fromId &&
-          String(row.to_account_id ?? '') === form.toId &&
+          String(row.cash_account_id ?? '') === form.fromId &&
+          String(row.bank_account_id ?? '') === form.toId &&
           row.request_id !== draftId,
       ) ?? null
     )
@@ -325,8 +357,10 @@ export default function BankDeposit() {
       instrument_date: form.depositType === 'cheque' && form.chequeDate ? form.chequeDate : undefined,
       reference_no: form.reference.trim() || undefined,
       notes: form.notes.trim() || undefined,
+      // The reference the document service gave back, never the file.
+      attachment_ref: slip?.reference,
     }),
-    [form],
+    [form, slip],
   )
 
   const save = useCallback(
@@ -377,6 +411,7 @@ export default function BankDeposit() {
         // has just been banked.
         setBaseline(form)
         toast({
+          tone: 'success',
           title: 'Bank deposit recorded successfully.',
           detail: posted.data.books_voucher_no
             ? `Smart Books entry ${posted.data.books_voucher_no}.`
@@ -402,7 +437,7 @@ export default function BankDeposit() {
     try {
       const posted = await api.post<TransactionRequest>(`v1/transactions/${requestId}/retry`, {})
       setBaseline(form)
-      toast({ title: 'Bank deposit recorded successfully.' })
+      toast({ tone: 'success', title: 'Bank deposit recorded successfully.' })
       guard.leave(`/bank-cash/${posted.data.request_id}`)
     } catch (error) {
       applyFailure(error, setErrors, setFailure, focusFirstInvalid)
@@ -419,6 +454,10 @@ export default function BankDeposit() {
     setErrors({})
     setFailure(null)
     setResetAsked(false)
+    // The slip is already on the document service. Clearing the form detaches
+    // it from this entry; it does not delete anything, and saying so is the
+    // dialog's job rather than a silent surprise.
+    setSlip(null)
     amountRef.current?.focus()
   }
 
@@ -480,12 +519,13 @@ export default function BankDeposit() {
   }
 
   const recent = recentQuery.data?.data
+  const bankTotal = bankTotalQuery.data?.data ?? null
   const accountsFailed = accountsQuery.error !== null
   const saving = busy !== null
 
   return (
-    <div className="bd-page">
-      <nav className="bd-breadcrumb" aria-label="Breadcrumb">
+    <div className="billing-deposit-page">
+      <nav className="billing-deposit-breadcrumb" aria-label="Breadcrumb">
         <Link to="/bank-cash">Money</Link>
         <ChevronRight size={14} aria-hidden />
         <Link to="/bank-cash">Bank deposit</Link>
@@ -493,11 +533,11 @@ export default function BankDeposit() {
         <span aria-current="page">{draftId === null ? 'New' : 'Draft'}</span>
       </nav>
 
-      <div className="bd-layout">
-        <main className="bd-main">
-          <section className="bd-hero">
-            <div className="bd-hero__left">
-              <span className="bd-hero__icon" aria-hidden="true">
+      <div className="billing-deposit-layout">
+        <main className="billing-deposit-main">
+          <section className="billing-deposit-hero">
+            <div className="billing-deposit-hero__left">
+              <span className="billing-deposit-hero__icon" aria-hidden="true">
                 <Landmark size={22} />
               </span>
               <div>
@@ -505,7 +545,7 @@ export default function BankDeposit() {
                 <p>Record cash or other receipts deposited into your bank account</p>
               </div>
             </div>
-            <p className="bd-flow" aria-label="Money received, then deposited to bank">
+            <p className="billing-deposit-flow" aria-label="Money received, then deposited to bank">
               <span>Received money</span>
               <ArrowRight size={14} aria-hidden />
               <span>Deposited to bank</span>
@@ -549,7 +589,7 @@ export default function BankDeposit() {
           )}
 
           <form
-            className="bd-card"
+            className="billing-deposit-card"
             noValidate
             onSubmit={(event) => {
               event.preventDefault()
@@ -557,31 +597,31 @@ export default function BankDeposit() {
             }}
           >
             {/* ---------------------------------------------------- section 1 */}
-            <section className="bd-section">
-              <header className="bd-section__head">
-                <span className="bd-step" aria-hidden="true">1</span>
+            <section className="billing-deposit-section">
+              <header className="billing-deposit-section__head">
+                <span className="billing-deposit-step" aria-hidden="true">1</span>
                 <div>
                   <h2>Deposit details</h2>
                   <p>Enter the basic information for this bank deposit</p>
                 </div>
-                <span className={`bd-state bd-state--${draftId === null ? 'new' : 'draft'}`}>
+                <span className={`billing-deposit-state billing-deposit-state--${draftId === null ? 'new' : 'draft'}`}>
                   {draftId === null ? 'Not saved' : 'Draft'}
                 </span>
               </header>
 
-              <div className="bd-grid bd-grid--top">
-                <div className="bd-field">
-                  <label className="bd-label" htmlFor="bd-amount">
+              <div className="billing-deposit-grid billing-deposit-grid--top">
+                <div className="billing-deposit-field">
+                  <label className="billing-deposit-label" htmlFor="billing-deposit-amount">
                     Deposit amount
-                    <span className="bd-required" aria-hidden="true"> *</span>
+                    <span className="billing-deposit-required" aria-hidden="true"> *</span>
                     <span className="billing-sr-only"> (required)</span>
                   </label>
-                  <div className={`bd-money${errors.amount ? ' is-invalid' : ''}`}>
-                    <span className="bd-money__prefix" aria-hidden="true">₹</span>
+                  <div className={`billing-deposit-money${errors.amount ? ' is-invalid' : ''}`}>
+                    <span className="billing-deposit-money__prefix" aria-hidden="true">₹</span>
                     <input
-                      id="bd-amount"
+                      id="billing-deposit-amount"
                       ref={amountRef}
-                      className="bd-money__input"
+                      className="billing-deposit-money__input"
                       type="text"
                       inputMode="decimal"
                       autoComplete="off"
@@ -589,7 +629,7 @@ export default function BankDeposit() {
                       placeholder="0.00"
                       value={form.amount}
                       aria-invalid={errors.amount ? true : undefined}
-                      aria-describedby={errors.amount ? 'bd-amount-error' : 'bd-amount-hint'}
+                      aria-describedby={errors.amount ? 'billing-deposit-amount-error' : 'billing-deposit-amount-hint'}
                       // Sanitised, not reformatted: inserting grouping commas
                       // while somebody is typing moves the caret out from under
                       // their finger.
@@ -597,55 +637,55 @@ export default function BankDeposit() {
                     />
                   </div>
                   {errors.amount ? (
-                    <p className="bd-field__error" id="bd-amount-error">{errors.amount}</p>
+                    <p className="billing-deposit-field__error" id="billing-deposit-amount-error">{errors.amount}</p>
                   ) : (
-                    <p className="bd-field__hint" id="bd-amount-hint">
+                    <p className="billing-deposit-field__hint" id="billing-deposit-amount-hint">
                       {amountValue !== null && amountValue > 0 ? money(amountValue) : 'Rupees and paise'}
                     </p>
                   )}
                 </div>
 
-                <div className="bd-field">
-                  <label className="bd-label" htmlFor="bd-date">
+                <div className="billing-deposit-field">
+                  <label className="billing-deposit-label" htmlFor="billing-deposit-date">
                     Date
-                    <span className="bd-required" aria-hidden="true"> *</span>
+                    <span className="billing-deposit-required" aria-hidden="true"> *</span>
                     <span className="billing-sr-only"> (required)</span>
                   </label>
                   <input
-                    id="bd-date"
+                    id="billing-deposit-date"
                     ref={dateRef}
-                    className={`bd-input${errors.date ? ' is-invalid' : ''}`}
+                    className={`billing-deposit-input${errors.date ? ' is-invalid' : ''}`}
                     type="date"
                     value={form.entryDate}
                     min={financialYear?.start || undefined}
                     max={financialYear?.end || undefined}
                     aria-invalid={errors.date ? true : undefined}
-                    aria-describedby={errors.date ? 'bd-date-error' : 'bd-date-hint'}
+                    aria-describedby={errors.date ? 'billing-deposit-date-error' : 'billing-deposit-date-hint'}
                     onChange={(event) => set('entryDate', event.target.value)}
                   />
                   {errors.date ? (
-                    <p className="bd-field__error" id="bd-date-error">{errors.date}</p>
+                    <p className="billing-deposit-field__error" id="billing-deposit-date-error">{errors.date}</p>
                   ) : (
-                    <p className="bd-field__hint" id="bd-date-hint">
+                    <p className="billing-deposit-field__hint" id="billing-deposit-date-hint">
                       {form.entryDate ? formatDate(form.entryDate) : 'Pick a date'}
                       {financialYear ? ` · ${financialYear.label}` : ''}
                     </p>
                   )}
                 </div>
 
-                <fieldset className="bd-field bd-field--type">
-                  <legend className="bd-label">Deposit type</legend>
-                  <div className="bd-segmented">
+                <fieldset className="billing-deposit-field billing-deposit-field--type">
+                  <legend className="billing-deposit-label">Deposit type</legend>
+                  <div className="billing-deposit-segmented">
                     {(['cash', 'cheque'] as const).map((option) => (
-                      <label key={option} className={`bd-segmented__item${form.depositType === option ? ' is-active' : ''}`}>
+                      <label key={option} className={`billing-deposit-segmented__item${form.depositType === option ? ' is-active' : ''}`}>
                         <input
                           type="radio"
-                          name="bd-deposit-type"
+                          name="billing-deposit-deposit-type"
                           value={option}
                           checked={form.depositType === option}
                           onChange={() => set('depositType', option)}
                         />
-                        <span className="bd-segmented__dot" aria-hidden="true" />
+                        <span className="billing-deposit-segmented__dot" aria-hidden="true" />
                         {option === 'cash' ? 'Cash deposit' : 'Cheque deposit'}
                       </label>
                     ))}
@@ -654,17 +694,17 @@ export default function BankDeposit() {
               </div>
 
               {form.depositType === 'cheque' && (
-                <div className="bd-grid bd-grid--2">
-                  <div className="bd-field">
-                    <label className="bd-label" htmlFor="bd-cheque-no">
+                <div className="billing-deposit-grid billing-deposit-grid--2">
+                  <div className="billing-deposit-field">
+                    <label className="billing-deposit-label" htmlFor="billing-deposit-cheque-no">
                       Cheque number
-                      <span className="bd-required" aria-hidden="true"> *</span>
+                      <span className="billing-deposit-required" aria-hidden="true"> *</span>
                       <span className="billing-sr-only"> (required)</span>
                     </label>
                     <input
-                      id="bd-cheque-no"
+                      id="billing-deposit-cheque-no"
                       ref={chequeRef}
-                      className={`bd-input${errors.chequeNo ? ' is-invalid' : ''}`}
+                      className={`billing-deposit-input${errors.chequeNo ? ' is-invalid' : ''}`}
                       type="text"
                       inputMode="numeric"
                       autoComplete="off"
@@ -672,59 +712,59 @@ export default function BankDeposit() {
                       placeholder="e.g. 004217"
                       value={form.chequeNo}
                       aria-invalid={errors.chequeNo ? true : undefined}
-                      aria-describedby={errors.chequeNo ? 'bd-cheque-no-error' : 'bd-cheque-no-hint'}
+                      aria-describedby={errors.chequeNo ? 'billing-deposit-cheque-no-error' : 'billing-deposit-cheque-no-hint'}
                       onChange={(event) => set('chequeNo', event.target.value)}
                     />
                     {errors.chequeNo ? (
-                      <p className="bd-field__error" id="bd-cheque-no-error">{errors.chequeNo}</p>
+                      <p className="billing-deposit-field__error" id="billing-deposit-cheque-no-error">{errors.chequeNo}</p>
                     ) : (
-                      <p className="bd-field__hint" id="bd-cheque-no-hint">
+                      <p className="billing-deposit-field__hint" id="billing-deposit-cheque-no-hint">
                         Without it the credit cannot be matched to the slip later.
                       </p>
                     )}
                   </div>
 
-                  <div className="bd-field">
-                    <label className="bd-label" htmlFor="bd-cheque-date">Cheque date</label>
+                  <div className="billing-deposit-field">
+                    <label className="billing-deposit-label" htmlFor="billing-deposit-cheque-date">Cheque date</label>
                     <input
-                      id="bd-cheque-date"
-                      className={`bd-input${errors.chequeDate ? ' is-invalid' : ''}`}
+                      id="billing-deposit-cheque-date"
+                      className={`billing-deposit-input${errors.chequeDate ? ' is-invalid' : ''}`}
                       type="date"
                       value={form.chequeDate}
                       aria-invalid={errors.chequeDate ? true : undefined}
-                      aria-describedby={errors.chequeDate ? 'bd-cheque-date-error' : undefined}
+                      aria-describedby={errors.chequeDate ? 'billing-deposit-cheque-date-error' : undefined}
                       onChange={(event) => set('chequeDate', event.target.value)}
                     />
                     {errors.chequeDate && (
-                      <p className="bd-field__error" id="bd-cheque-date-error">{errors.chequeDate}</p>
+                      <p className="billing-deposit-field__error" id="billing-deposit-cheque-date-error">{errors.chequeDate}</p>
                     )}
                   </div>
                 </div>
               )}
 
-              <div className="bd-grid bd-grid--2">
-                <AccountPicker
-                  id="bd-from"
+              <div className="billing-deposit-grid billing-deposit-grid--2">
+                <AccountSelect
+                  id="billing-deposit-from"
                   label="Cash taken from"
                   required
                   placeholder="Choose ledger / account"
                   accounts={sources}
                   value={form.fromId ? Number(form.fromId) : null}
-                  onChange={(id) => set('fromId', id === null ? '' : String(id))}
+                  onChange={(id: number | null) => set('fromId', id === null ? '' : String(id))}
                   loading={accountsQuery.loading}
                   error={errors.from}
                   inputRef={fromRef}
                   emptyText={accountsFailed ? 'Accounts could not be read.' : 'No cash accounts in Smart Books yet.'}
                 />
 
-                <AccountPicker
-                  id="bd-to"
+                <AccountSelect
+                  id="billing-deposit-to"
                   label="Paid into bank"
                   required
                   placeholder="Choose bank account"
                   accounts={destinations}
                   value={form.toId ? Number(form.toId) : null}
-                  onChange={(id) => set('toId', id === null ? '' : String(id))}
+                  onChange={(id: number | null) => set('toId', id === null ? '' : String(id))}
                   loading={accountsQuery.loading}
                   error={errors.to}
                   inputRef={toRef}
@@ -732,9 +772,9 @@ export default function BankDeposit() {
                 />
               </div>
 
-              <div className="bd-alerts" aria-live="polite">
+              <div className="billing-deposit-alerts" aria-live="polite">
                 {overdrawn && (
-                  <p className="bd-alert bd-alert--warning">
+                  <p className="billing-deposit-alert billing-deposit-alert--warning">
                     <AlertTriangle size={15} aria-hidden />
                     <span>
                       This is more than the {money(overdrawn.balance)} Smart Books currently shows in{' '}
@@ -743,12 +783,12 @@ export default function BankDeposit() {
                   </p>
                 )}
                 {possibleDuplicate && (
-                  <p className="bd-alert bd-alert--info">
+                  <p className="billing-deposit-alert billing-deposit-alert--info">
                     <Info size={15} aria-hidden />
                     <span>
                       <strong>Possibly already recorded.</strong> A deposit of {money(possibleDuplicate.amount ?? 0)} from{' '}
-                      {possibleDuplicate.from_account_name ?? 'the same account'} into{' '}
-                      {possibleDuplicate.to_account_name ?? 'the same bank'} was already recorded on{' '}
+                      {possibleDuplicate.cash_account_name ?? 'the same account'} into{' '}
+                      {possibleDuplicate.bank_account_name ?? 'the same bank'} was already recorded on{' '}
                       {formatDate(possibleDuplicate.date)}
                       {possibleDuplicate.voucher_no ? ` as ${possibleDuplicate.voucher_no}` : ''}. Check before saving a second one.
                     </span>
@@ -756,21 +796,21 @@ export default function BankDeposit() {
                 )}
               </div>
 
-              <div className="bd-grid bd-grid--2">
-                <div className="bd-field">
-                  <label className="bd-label" htmlFor="bd-reference">Reference</label>
+              <div className="billing-deposit-grid billing-deposit-grid--2">
+                <div className="billing-deposit-field">
+                  <label className="billing-deposit-label" htmlFor="billing-deposit-reference">Reference</label>
                   <input
-                    id="bd-reference"
-                    className="bd-input"
+                    id="billing-deposit-reference"
+                    className="billing-deposit-input"
                     type="text"
                     autoComplete="off"
                     maxLength={REFERENCE_LIMIT}
                     placeholder="Slip number, UTR, cheque number, narration…"
                     value={form.reference}
-                    aria-describedby="bd-reference-hint"
+                    aria-describedby="billing-deposit-reference-hint"
                     onChange={(event) => set('reference', event.target.value)}
                   />
-                  <p className="bd-field__hint" id="bd-reference-hint">
+                  <p className="billing-deposit-field__hint" id="billing-deposit-reference-hint">
                     Optional. It travels to Smart Books as this entry’s reference.
                   </p>
                 </div>
@@ -778,63 +818,55 @@ export default function BankDeposit() {
             </section>
 
             {/* ---------------------------------------------------- section 2 */}
-            <section className="bd-section">
-              <header className="bd-section__head">
-                <span className="bd-step" aria-hidden="true">2</span>
+            <section className="billing-deposit-section">
+              <header className="billing-deposit-section__head">
+                <span className="billing-deposit-step" aria-hidden="true">2</span>
                 <div>
                   <h2>Attachments</h2>
-                  <p>Deposit slip, cheque image or other supporting documents</p>
+                  <p>The stamped counterfoil, or a photo of it (optional)</p>
                 </div>
               </header>
 
-              {/* The house rule, from docs/BILLING_API_DEPENDENCIES.md: when a
-                  capability is missing the screen SAYS SO. A drop zone that
-                  quietly discarded the slip on save would be worse than this
-                  box, and storing the file in this app would put a document
-                  Billing does not own in a folder the deploy wipes. */}
-              <div className="billing-unavailable">
-                <Paperclip size={20} aria-hidden />
-                <strong className="billing-unavailable__title">Not available in this deployment</strong>
-                <p style={{ margin: 0, maxWidth: '62ch' }}>
-                  Billing has no document store of its own and none of the AICOUNTLY products here serves one yet, so a
-                  slip uploaded now would have nowhere to live. Record the slip or UTR number in{' '}
-                  <strong>Reference</strong> above — that is what the bank statement is matched on.
-                </p>
-                <p className="bd-dependency">
-                  Needs: a document-storage API. Documented in docs/BILLING_API_DEPENDENCIES.md.
-                </p>
-              </div>
+              <SlipUploader
+                value={slip}
+                onChange={(next) => {
+                  setSlip(next)
+                  setFailure(null)
+                }}
+                storage={capabilitiesQuery.data?.data.slip_storage ?? null}
+                loading={capabilitiesQuery.loading}
+              />
             </section>
 
             {/* ---------------------------------------------------- section 3 */}
-            <section className="bd-section">
-              <header className="bd-section__head">
-                <span className="bd-step" aria-hidden="true">3</span>
+            <section className="billing-deposit-section">
+              <header className="billing-deposit-section__head">
+                <span className="billing-deposit-step" aria-hidden="true">3</span>
                 <div>
                   <h2>Additional notes</h2>
                   <p>Anything the person reading this entry later should know</p>
                 </div>
               </header>
 
-              <div className="bd-field">
-                <label className="billing-sr-only" htmlFor="bd-notes">Notes about this deposit</label>
+              <div className="billing-deposit-field">
+                <label className="billing-sr-only" htmlFor="billing-deposit-notes">Notes about this deposit</label>
                 <textarea
-                  id="bd-notes"
-                  className="bd-textarea"
+                  id="billing-deposit-notes"
+                  className="billing-deposit-textarea"
                   rows={3}
                   maxLength={NOTES_LIMIT}
                   placeholder="Add any remarks about this deposit (optional)…"
                   value={form.notes}
-                  aria-describedby="bd-notes-count"
+                  aria-describedby="billing-deposit-notes-count"
                   onChange={(event) => set('notes', event.target.value)}
                 />
-                <p className="bd-counter" id="bd-notes-count">
+                <p className="billing-deposit-counter" id="billing-deposit-notes-count">
                   {form.notes.length} / {NOTES_LIMIT}
                 </p>
               </div>
             </section>
 
-            <footer className="bd-footer">
+            <footer className="billing-deposit-footer">
               <button
                 type="button"
                 className="billing-button billing-button--quiet"
@@ -844,7 +876,7 @@ export default function BankDeposit() {
                 <RotateCcw size={15} aria-hidden /> Reset
               </button>
 
-              <div className="bd-footer__right">
+              <div className="billing-deposit-footer__right">
                 <button type="button" className="billing-button" disabled={saving} onClick={() => void save('draft')}>
                   {busy === 'draft' ? <Loader2 size={15} className="spin" aria-hidden /> : null}
                   {busy === 'draft' ? 'Saving…' : draftId === null ? 'Save as draft' : 'Update draft'}
@@ -857,30 +889,30 @@ export default function BankDeposit() {
             </footer>
           </form>
 
-          <p className="bd-basis">
+          <p className="billing-deposit-basis">
             Saving records a contra entry in Smart Books — your bank account debited, your cash account credited. Billing
             keeps the reference and nothing else. <kbd>Ctrl</kbd>+<kbd>S</kbd> saves.
           </p>
         </main>
 
         {/* -------------------------------------------------------- the rail */}
-        <aside className="bd-rail" aria-label="This deposit, and recent ones">
-          <section className="bd-side">
-            <header className="bd-side__head">
+        <aside className="billing-deposit-rail" aria-label="This deposit, and recent ones">
+          <section className="billing-deposit-side">
+            <header className="billing-deposit-side__head">
               <h2>Deposit summary</h2>
             </header>
 
-            <div className="bd-total">
-              <span className="bd-total__icon" aria-hidden="true">
+            <div className="billing-deposit-total">
+              <span className="billing-deposit-total__icon" aria-hidden="true">
                 <Landmark size={20} />
               </span>
               <span>
-                <span className="bd-total__label">Deposit amount</span>
-                <strong className="bd-total__value num">{money(amountValue ?? 0)}</strong>
+                <span className="billing-deposit-total__label">Deposit amount</span>
+                <strong className="billing-deposit-total__value num">{money(amountValue ?? 0)}</strong>
               </span>
             </div>
 
-            <dl className="bd-summary">
+            <dl className="billing-deposit-summary">
               <div>
                 <dt>Date</dt>
                 <dd>{form.entryDate ? formatDate(form.entryDate) : 'Not set'}</dd>
@@ -891,35 +923,50 @@ export default function BankDeposit() {
               </div>
               <div>
                 <dt>Cash taken from</dt>
-                <dd>{fromAccount?.name ?? <span className="bd-summary__empty">Not selected</span>}</dd>
+                <dd>{fromAccount?.name ?? <span className="billing-deposit-summary__empty">Not selected</span>}</dd>
               </div>
               <div>
                 <dt>Paid into bank</dt>
-                <dd>{toAccount?.name ?? <span className="bd-summary__empty">Not selected</span>}</dd>
+                <dd>{toAccount?.name ?? <span className="billing-deposit-summary__empty">Not selected</span>}</dd>
               </div>
               <div>
                 <dt>Reference</dt>
-                <dd>{form.reference.trim() || <span className="bd-summary__empty">—</span>}</dd>
+                <dd>{form.reference.trim() || <span className="billing-deposit-summary__empty">—</span>}</dd>
               </div>
               {form.depositType === 'cheque' && (
                 <div>
                   <dt>Cheque</dt>
-                  <dd>{form.chequeNo.trim() || <span className="bd-summary__empty">—</span>}</dd>
+                  <dd>{form.chequeNo.trim() || <span className="billing-deposit-summary__empty">—</span>}</dd>
+                </div>
+              )}
+              {slip && (
+                <div>
+                  <dt>Slip</dt>
+                  <dd>{slip.filename ?? 'Attached'}</dd>
                 </div>
               )}
             </dl>
 
             {fromAccount?.balance !== null && fromAccount?.balance !== undefined && (
-              <p className="bd-side__note">
+              <p className="billing-deposit-side__note">
                 {fromAccount.name} holds {money(fromAccount.balance)} in Smart Books right now.
+              </p>
+            )}
+
+            {/* Context beside Books' balance, not a figure to add to it — which
+                is why the endpoint's own basis line travels with it. */}
+            {bankTotal && bankTotal.count > 0 && toAccount && (
+              <p className="billing-deposit-side__note">
+                {money(bankTotal.total)} banked into {toAccount.name} in the last {bankTotal.days} days, over{' '}
+                {bankTotal.count} {bankTotal.count === 1 ? 'deposit' : 'deposits'}. {bankTotal.basis}
               </p>
             )}
           </section>
 
-          <section className="bd-side">
-            <header className="bd-side__head">
+          <section className="billing-deposit-side">
+            <header className="billing-deposit-side__head">
               <h2>Recent deposits</h2>
-              <Link to="/bank-cash" className="bd-side__link">View all</Link>
+              <Link to="/bank-cash" className="billing-deposit-side__link">View all</Link>
             </header>
 
             {recentQuery.loading && (
@@ -931,58 +978,68 @@ export default function BankDeposit() {
               </div>
             )}
 
-            {!recentQuery.loading && (recentQuery.error || recent?.available === false) && (
-              <div className="bd-retry">
-                <p>{recentQuery.error ?? recent?.reason}</p>
+            {!recentQuery.loading && recentQuery.error && (
+              <div className="billing-deposit-retry">
+                <p>{recentQuery.error}</p>
                 <button type="button" className="billing-button billing-button--small" onClick={recentQuery.reload}>
                   Try again
                 </button>
               </div>
             )}
 
-            {!recentQuery.loading && recent?.available === true && recent.movements.length === 0 && (
-              <p className="bd-side__empty">No recent bank deposits.</p>
+            {!recentQuery.loading && !recentQuery.error && (recent?.rows.length ?? 0) === 0 && (
+              <p className="billing-deposit-side__empty">No recent bank deposits.</p>
             )}
 
-            {!recentQuery.loading && recent?.available === true && recent.movements.length > 0 && (
-              <ul className="bd-recent">
-                {recent.movements.map((movement) => (
-                  <li key={movement.request_id}>
-                    <Link to={`/bank-cash/${movement.request_id}`} className="bd-recent__row">
-                      <span className="bd-recent__icon" aria-hidden="true">
+            {!recentQuery.loading && !recentQuery.error && (recent?.rows.length ?? 0) > 0 && (
+              <ul className="billing-deposit-recent">
+                {(recent?.rows ?? []).map((row) => (
+                  <li key={row.request_id}>
+                    <Link to={`/bank-cash/${row.request_id}`} className="billing-deposit-recent__row">
+                      <span className="billing-deposit-recent__icon" aria-hidden="true">
                         <Landmark size={15} />
                       </span>
-                      <span className="bd-recent__body">
-                        <span className="bd-recent__top">
-                          <strong className="num">{movement.amount === null ? '—' : money(movement.amount)}</strong>
+                      <span className="billing-deposit-recent__body">
+                        <span className="billing-deposit-recent__top">
+                          <strong className="num">{row.amount === null ? '—' : money(row.amount)}</strong>
                           <span className="billing-badge billing-badge--info">
-                            {movement.payment_mode === 'cheque' ? 'Cheque deposit' : 'Cash deposit'}
+                            {row.payment_mode === 'cheque' ? 'Cheque deposit' : 'Cash deposit'}
                           </span>
                         </span>
-                        <span className="bd-recent__meta">
-                          {movement.to_account_name ?? movement.voucher_no ?? 'Bank account'}
+                        {/* The name is Books', read live. When Books did not
+                            answer it is absent rather than guessed, and the
+                            line under the list says why. */}
+                        <span className="billing-deposit-recent__meta">
+                          {row.bank_account_name ?? row.voucher_no ?? 'Bank account'}
                         </span>
                       </span>
-                      <span className="bd-recent__date">{formatDate(movement.date)}</span>
+                      <span className="billing-deposit-recent__date">{formatDate(row.date)}</span>
                     </Link>
                   </li>
                 ))}
               </ul>
             )}
 
-            {recent?.available === true && recent.note && <p className="bd-side__note">{recent.note}</p>}
+            {recent && recent.rows.length > 0 && !recent.names_available && (
+              <p className="billing-deposit-side__note">
+                Smart Books did not answer, so the account names are missing. The amounts and dates are this
+                product's own record and stand.
+              </p>
+            )}
+
+            {recent && <p className="billing-deposit-side__note">{recent.basis}</p>}
           </section>
 
           {!tipDismissed && (
-            <aside className="bd-tip">
-              <span className="bd-tip__icon" aria-hidden="true">
+            <aside className="billing-deposit-tip">
+              <span className="billing-deposit-tip__icon" aria-hidden="true">
                 <Lightbulb size={16} />
               </span>
               <div>
                 <strong>Quick tip</strong>
                 <p>Put the slip or UTR number in Reference — it is what the bank statement is matched on later.</p>
               </div>
-              <button type="button" className="bd-tip__close" aria-label="Hide this tip" onClick={dismissTip}>
+              <button type="button" className="billing-deposit-tip__close" aria-label="Hide this tip" onClick={dismissTip}>
                 <X size={14} aria-hidden />
               </button>
             </aside>
@@ -1011,8 +1068,13 @@ export default function BankDeposit() {
         onConfirm={reset}
         onCancel={() => setResetAsked(false)}
       >
-        <p>Everything typed here goes back to blank. Nothing already recorded in Smart Books is touched.</p>
+        <p>
+          Everything typed here goes back to blank{slip ? ', and the slip is detached from this entry' : ''}. Nothing
+          already recorded in Smart Books is touched.
+        </p>
       </ConfirmDialog>
+
+      <ToastStack toasts={toasts} onDismiss={dismissToast} />
     </div>
   )
 
@@ -1078,31 +1140,6 @@ function defaultDate(today: string, start?: string, end?: string): string {
   if (start && today < start) return start
   if (end && today > end) return end
   return today
-}
-
-/**
- * Cash or bank, from whatever Books called the group.
- *
- * Only used when `v1/cash-bank` could not say — that endpoint applies the same
- * test on the server, where it also decides who may see a balance at all.
- */
-function classify(row: CashBankAccount): 'cash' | 'bank' | null {
-  const group = `${row.group_name ?? ''} ${row.nature ?? ''} ${row.acc_group ?? ''}`.toLowerCase()
-  if (group.includes('cash')) return 'cash'
-  if (group.includes('bank')) return 'bank'
-  return null
-}
-
-/** Every account except the ones Books definitely called `excluded`. */
-function narrow(accounts: PickableAccount[], excluded: 'cash' | 'bank'): PickableAccount[] {
-  const kept = accounts.filter((account) => account.kind !== excluded)
-  return kept.length > 0 ? kept : accounts
-}
-
-function lastFour(value: string | null): string | null {
-  if (!value) return null
-  const digits = value.replace(/\D/g, '')
-  return digits.length >= 4 ? digits.slice(-4) : null
 }
 
 function readTipDismissed(): boolean {

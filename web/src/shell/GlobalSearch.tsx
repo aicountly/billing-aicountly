@@ -131,23 +131,21 @@ export function GlobalSearch() {
   }, [])
 
   /**
-   * Ctrl/Cmd+K puts the cursor here from anywhere in the app.
+   * Ctrl / ⌘ + K, because the box says so.
    *
-   * The browser's own Ctrl+K is a search too, so taking it costs the user
-   * nothing they were using on this page. It is the only global shortcut this
-   * shell claims, which is why it is bound here rather than in a registry.
+   * The browser's own binding is overridden deliberately: this is the search
+   * the person reading that placeholder is asking for, and the address bar is
+   * still one click away.
    */
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if (!(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey) return
-      if (event.code !== 'KeyK') return
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'k') return
       event.preventDefault()
       field.current?.focus()
       field.current?.select()
     }
-
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
   }, [])
 
   function choose(result: Result) {
@@ -174,7 +172,9 @@ export function GlobalSearch() {
         aria-expanded={open}
         aria-controls={listId}
         aria-autocomplete="list"
-        placeholder={maySeeItems ? 'Search customers, items…' : 'Search customers, suppliers…'}
+        placeholder={
+          maySeeItems ? 'Search customers, items, bills… (Ctrl + K)' : 'Search customers, suppliers… (Ctrl + K)'
+        }
         value={term}
         onChange={(e) => setTerm(e.target.value)}
         onFocus={() => results && setOpen(true)}
@@ -194,10 +194,6 @@ export function GlobalSearch() {
           }
         }}
       />
-      <span className="billing-search__hint" aria-hidden="true">
-        <kbd>Ctrl</kbd>
-        <kbd>K</kbd>
-      </span>
 
       {open && (
         <div className="billing-search__results" id={listId} role="listbox">

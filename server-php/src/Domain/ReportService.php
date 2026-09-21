@@ -34,19 +34,71 @@ use Aicountly\Api\Permissions;
 final class ReportService
 {
     /**
-     * @var array<string, array{label:string, permission:string, kind:string}>
+     * The catalogue, and everything the Reports screen needs to describe it.
+     *
+     * `categories` and `source` live here rather than in the browser because
+     * they are facts about the report, not about how it is drawn: which
+     * product owns the figures, and which shelves the report belongs on. The
+     * screen supplies the icon and the wording around them, nothing more.
+     *
+     * A report may sit on more than one shelf. A sales register is a sales
+     * report AND a register, and a user looking for it will accept either
+     * door; the first entry is its primary home.
+     *
+     * @var array<string, array{label:string, permission:string, kind:string,
+     *                          description:string, categories:list<string>, source:string}>
      */
     public const CATALOG = [
-        'sales_register'    => ['label' => 'Sales register',       'permission' => 'sale.view',       'kind' => 'register'],
-        'purchase_register' => ['label' => 'Purchase register',    'permission' => 'purchase.view',   'kind' => 'register'],
-        'credit_notes'      => ['label' => 'Credit note register', 'permission' => 'sale.view',       'kind' => 'register'],
-        'debit_notes'       => ['label' => 'Debit note register',  'permission' => 'purchase.view',   'kind' => 'register'],
-        'receipts'          => ['label' => 'Receipt register',     'permission' => 'receipt.create',  'kind' => 'register'],
-        'payments'          => ['label' => 'Payment register',     'permission' => 'payment.create',  'kind' => 'register'],
-        'receivables_ageing' => ['label' => 'Receivables ageing',  'permission' => 'receivable.view', 'kind' => 'ageing'],
-        'payables_ageing'   => ['label' => 'Payables ageing',      'permission' => 'payable.view',    'kind' => 'ageing'],
-        'cash_bank_summary' => ['label' => 'Cash and bank summary', 'permission' => 'cash.view',      'kind' => 'accounts'],
-        'document_exceptions' => ['label' => 'Document exceptions', 'permission' => 'compliance.view', 'kind' => 'exceptions'],
+        'sales_register' => [
+            'label' => 'Sales register', 'permission' => 'sale.view', 'kind' => 'register',
+            'description' => 'Every bill raised in the period, with party, amount and status.',
+            'categories' => ['sales', 'registers'], 'source' => 'books',
+        ],
+        'purchase_register' => [
+            'label' => 'Purchase register', 'permission' => 'purchase.view', 'kind' => 'register',
+            'description' => 'Every purchase recorded in the period, with supplier and amount.',
+            'categories' => ['purchases', 'registers'], 'source' => 'books',
+        ],
+        'credit_notes' => [
+            'label' => 'Credit note register', 'permission' => 'sale.view', 'kind' => 'register',
+            'description' => 'Credit notes raised against customers in the period.',
+            'categories' => ['sales', 'registers'], 'source' => 'books',
+        ],
+        'debit_notes' => [
+            'label' => 'Debit note register', 'permission' => 'purchase.view', 'kind' => 'register',
+            'description' => 'Debit notes raised against suppliers in the period.',
+            'categories' => ['purchases', 'registers'], 'source' => 'books',
+        ],
+        'receipts' => [
+            'label' => 'Receipt register', 'permission' => 'receipt.create', 'kind' => 'register',
+            'description' => 'Money received in the period, and who it came from.',
+            'categories' => ['money', 'registers'], 'source' => 'books',
+        ],
+        'payments' => [
+            'label' => 'Payment register', 'permission' => 'payment.create', 'kind' => 'register',
+            'description' => 'Money paid out in the period, and who it went to.',
+            'categories' => ['money', 'registers'], 'source' => 'books',
+        ],
+        'receivables_ageing' => [
+            'label' => 'Receivables ageing', 'permission' => 'receivable.view', 'kind' => 'ageing',
+            'description' => 'What customers owe, aged by how long it has been outstanding.',
+            'categories' => ['receivables-payables'], 'source' => 'books',
+        ],
+        'payables_ageing' => [
+            'label' => 'Payables ageing', 'permission' => 'payable.view', 'kind' => 'ageing',
+            'description' => 'What you owe suppliers, aged by how long it has been outstanding.',
+            'categories' => ['receivables-payables'], 'source' => 'books',
+        ],
+        'cash_bank_summary' => [
+            'label' => 'Cash and bank summary', 'permission' => 'cash.view', 'kind' => 'accounts',
+            'description' => 'The balance of every cash and bank account you may see.',
+            'categories' => ['money'], 'source' => 'books',
+        ],
+        'document_exceptions' => [
+            'label' => 'Document exceptions', 'permission' => 'compliance.view', 'kind' => 'exceptions',
+            'description' => 'Documents that did not reach Smart Books, or are waiting on a statutory step.',
+            'categories' => ['audit'], 'source' => 'books',
+        ],
     ];
 
     private const VOUCHER_TYPES = [
@@ -70,7 +122,8 @@ final class ReportService
      * Cash and bank is offered to anyone who may see either half, because the
      * summary shows only the accounts they are allowed to see.
      *
-     * @return list<array{key:string, label:string}>
+     * @return list<array{key:string, label:string, description:string,
+     *                     categories:list<string>, source:string, kind:string}>
      */
     public function available(): array
     {
@@ -79,7 +132,14 @@ final class ReportService
             $allowed = Permissions::allows($this->ctx, $this->auth, $report['permission'])
                 || ($key === 'cash_bank_summary' && Permissions::allows($this->ctx, $this->auth, 'bank.view'));
             if ($allowed) {
-                $out[] = ['key' => $key, 'label' => $report['label']];
+                $out[] = [
+                    'key'         => $key,
+                    'label'       => $report['label'],
+                    'description' => $report['description'],
+                    'categories'  => $report['categories'],
+                    'source'      => $report['source'],
+                    'kind'        => $report['kind'],
+                ];
             }
         }
 
@@ -305,7 +365,15 @@ final class ReportService
      * tabs and carriage returns are stripped first, because they are how the
      * prefix gets skipped past.
      */
-    private static function cell(mixed $value): string
+    /**
+     * One CSV cell, neutralised against spreadsheet formula injection.
+     *
+     * Public because the item catalogue exports through the same rule: a
+     * supplier's name that begins with `=` is a formula the moment somebody
+     * opens the file, and there must be exactly one place that decides what to
+     * do about it.
+     */
+    public static function cell(mixed $value): string
     {
         if ($value === null || is_bool($value)) {
             return $value === true ? 'yes' : ($value === false ? 'no' : '');

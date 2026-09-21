@@ -1,0 +1,843 @@
+/* ---------------------------------------------------------------------------
+   New Purchase — the workspace
+
+   Scoped to this screen. Everything here is drawn from the tokens already in
+   index.css (`--billing-*`), so the page cannot drift away from the rest of the
+   product the first time somebody changes the green. There are no new colour
+   variables and no second theme.
+
+   The shape is a dense two-column workspace: entry on the left, a running
+   summary on the right that stays put while the left column grows, and one
+   action bar pinned to the bottom. A purchase is typed, not read, so the
+   controls are tight, the numbers are tabular, and nothing animates that would
+   make the next keystroke wait.
+   --------------------------------------------------------------------------- */
+
+.purchase-page {
+  /* Mirrors .billing-main's own inline padding so the full-bleed strips below
+     can reach the edge of the content column without hard-coding a number in
+     three places. */
+  --purchase-gutter: 28px;
+  --purchase-control-h: 40px;
+
+  min-width: 0;
+}
+
+/* ------------------------------------------------------------------ header */
+
+.purchase-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-block: 22px 16px;
+}
+
+.purchase-header__title {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.purchase-header__title h1 {
+  margin: 0;
+  font-size: clamp(23px, 1.9vw, 30px);
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+  font-weight: 750;
+}
+
+.purchase-header__title p {
+  margin: 5px 0 0;
+  max-width: 62ch;
+  color: var(--billing-muted);
+  font-size: 13.5px;
+}
+
+.purchase-header__back {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  margin-top: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--billing-border);
+  border-radius: 10px;
+  background: var(--billing-surface);
+  color: var(--billing-text);
+  cursor: pointer;
+}
+
+.purchase-header__back:hover {
+  background: var(--billing-surface-2);
+  border-color: var(--billing-border-strong);
+}
+
+.purchase-header__note {
+  flex: 0 1 auto;
+  min-width: 260px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 15px;
+  border: 1px solid var(--billing-mint-strong);
+  border-radius: var(--billing-radius-sm);
+  background: linear-gradient(110deg, #f5fbf4 0%, #eef9ec 100%);
+  color: #14532d;
+}
+
+.purchase-header__note strong { font-size: 13px; line-height: 1.35; }
+.purchase-header__note span { display: block; margin-top: 2px; font-size: 11.5px; color: #3f6b4a; }
+
+/* ----------------------------------------------------------- context strip */
+
+.purchase-strip {
+  display: grid;
+  grid-template-columns:
+    minmax(140px, 0.95fr)
+    minmax(164px, 1.1fr)
+    minmax(166px, 1.1fr)
+    minmax(150px, 0.95fr)
+    minmax(128px, 0.8fr)
+    minmax(200px, 1.2fr);
+  margin-bottom: 16px;
+  border: 1px solid var(--billing-border);
+  border-radius: var(--billing-radius);
+  background: var(--billing-surface);
+  box-shadow: var(--billing-shadow);
+  overflow: hidden;
+}
+
+.purchase-strip__cell {
+  min-width: 0;
+  min-height: 70px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 12px;
+  border-right: 1px solid var(--billing-border);
+  text-align: left;
+}
+
+.purchase-strip__cell:last-child { border-right: 0; }
+
+.purchase-strip__icon {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: #f1f4f2;
+  color: var(--billing-muted);
+}
+
+.purchase-strip__icon--green { background: var(--billing-mint); color: var(--billing-action); }
+.purchase-strip__icon--blue { background: #eef4ff; color: #2b4f9e; }
+.purchase-strip__icon--amber { background: var(--billing-warning-bg); color: var(--billing-warning); }
+.purchase-strip__icon--slate { background: #eef1f4; color: #4a5b6b; }
+
+.purchase-strip__body { min-width: 0; }
+
+.purchase-strip__label {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 11px;
+  color: var(--billing-muted);
+}
+
+.purchase-strip__value {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  font-weight: 650;
+}
+
+.purchase-strip__value--muted { font-weight: 500; color: var(--billing-muted); }
+
+/* The helper. Distinct enough to find, quiet enough not to compete with Save. */
+.purchase-strip__helper {
+  width: 100%;
+  min-height: 70px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 0;
+  border-left: 1px solid var(--billing-border);
+  background: linear-gradient(110deg, #faf8ff, #f3efff);
+  color: #4a3a8c;
+  text-align: left;
+  cursor: pointer;
+}
+
+.purchase-strip__helper:hover { background: linear-gradient(110deg, #f6f2ff, #ebe4ff); }
+.purchase-strip__helper > span:nth-child(2) { flex: 1; min-width: 0; }
+.purchase-strip__helper strong { display: block; font-size: 12.5px; }
+.purchase-strip__helper small { display: block; margin-top: 2px; font-size: 10.5px; color: #6d5fa8; }
+
+/* ------------------------------------------------------------------ layout */
+
+.purchase-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(272px, 312px);
+  gap: 16px;
+  align-items: start;
+}
+
+.purchase-column {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.purchase-aside {
+  min-width: 0;
+  position: sticky;
+  /* Under the context bar, which is sticky at the top of every screen. */
+  top: 84px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.purchase-card {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--billing-border);
+  border-radius: var(--billing-radius);
+  background: var(--billing-surface);
+  box-shadow: var(--billing-shadow);
+}
+
+.purchase-card__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.purchase-card__head--split { justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+
+.purchase-card__mark {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: var(--billing-mint);
+  color: var(--billing-action);
+}
+
+.purchase-card__head h2 { margin: 0; font-size: 15px; font-weight: 700; }
+.purchase-card__head p { margin: 2px 0 0; font-size: 11.5px; color: var(--billing-muted); }
+.purchase-card__actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* ------------------------------------------------------------------ fields */
+
+.purchase-grid { display: grid; gap: 12px; }
+.purchase-grid--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.purchase-grid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.purchase-grid--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+.purchase-field { min-width: 0; display: flex; flex-direction: column; }
+
+/* Keeps a field in the last column of its row so a pair that belongs together
+   — payment terms and the due date they produce — stays together as the grid
+   reflows. Released once the grid is one column wide. */
+.purchase-grid--4 > .purchase-field--last { grid-column: 4; }
+.purchase-field--wide { grid-column: span 2; }
+
+.purchase-field__label {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--billing-muted);
+}
+
+.purchase-field__label em { font-style: normal; color: var(--billing-danger); }
+
+.purchase-input,
+.purchase-select {
+  width: 100%;
+  height: var(--purchase-control-h);
+  padding: 0 10px;
+  border: 1px solid var(--billing-border-strong);
+  border-radius: var(--billing-radius-sm);
+  background: var(--billing-surface);
+  color: var(--billing-text);
+  font-size: 13px;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.purchase-textarea {
+  width: 100%;
+  min-height: 78px;
+  padding: 10px;
+  border: 1px solid var(--billing-border-strong);
+  border-radius: var(--billing-radius-sm);
+  background: var(--billing-surface);
+  color: var(--billing-text);
+  font-size: 13px;
+  resize: vertical;
+}
+
+.purchase-input:hover:not(:disabled),
+.purchase-select:hover:not(:disabled),
+.purchase-textarea:hover:not(:disabled) { border-color: #acbdb1; }
+
+.purchase-input:focus,
+.purchase-select:focus,
+.purchase-textarea:focus {
+  border-color: var(--billing-action);
+  box-shadow: 0 0 0 3px rgb(24 122 18 / 10%);
+  outline: none;
+}
+
+.purchase-input:disabled,
+.purchase-select:disabled,
+.purchase-textarea:disabled {
+  background: var(--billing-surface-2);
+  color: var(--billing-muted);
+  cursor: not-allowed;
+}
+
+.purchase-input.is-invalid,
+.purchase-select.is-invalid { border-color: var(--billing-danger); }
+
+.purchase-input--money { text-align: right; font-variant-numeric: tabular-nums; }
+
+.purchase-field__error {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  font-size: 11.5px;
+  color: var(--billing-danger);
+}
+
+.purchase-field__hint { margin-top: 4px; font-size: 11.5px; color: var(--billing-muted); }
+
+/* A value this screen worked out rather than asked for. Deliberately not an
+   input: nothing here is editable, because the backend does not take it. */
+.purchase-derived {
+  min-height: var(--purchase-control-h);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px dashed var(--billing-border-strong);
+  border-radius: var(--billing-radius-sm);
+  background: var(--billing-surface-2);
+  color: var(--billing-text);
+  font-size: 13px;
+}
+
+.purchase-derived--empty { color: var(--billing-muted); }
+
+/* ----------------------------------------------------------------- buttons */
+
+.purchase-btn {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 14px;
+  border: 1px solid var(--billing-border-strong);
+  border-radius: 9px;
+  background: var(--billing-surface);
+  color: var(--billing-text);
+  font-size: 12.5px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+
+.purchase-btn:hover:not(:disabled) { background: var(--billing-surface-2); }
+
+.purchase-btn--primary {
+  border-color: var(--billing-action);
+  background: var(--billing-action);
+  color: #fff;
+}
+
+.purchase-btn--primary:hover:not(:disabled) { background: var(--billing-action-hover); border-color: var(--billing-action-hover); }
+
+.purchase-btn--outline {
+  border-color: var(--billing-action);
+  background: var(--billing-surface);
+  color: var(--billing-action);
+}
+
+.purchase-btn--outline:hover:not(:disabled) { background: var(--billing-mint); }
+
+.purchase-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.purchase-iconbtn {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--billing-muted);
+  cursor: pointer;
+}
+
+.purchase-iconbtn:hover:not(:disabled) { background: var(--billing-surface-2); color: var(--billing-text); }
+.purchase-iconbtn--danger:hover:not(:disabled) { background: var(--billing-danger-bg); color: var(--billing-danger); }
+.purchase-iconbtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ------------------------------------------------------------------- items */
+
+.purchase-table-scroll {
+  position: relative;
+  width: 100%;
+  overflow-x: auto;
+}
+
+.purchase-table {
+  width: 100%;
+  min-width: 800px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.purchase-table th {
+  padding: 7px 4px;
+  text-align: left;
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--billing-muted);
+  border-bottom: 1px solid var(--billing-border);
+  white-space: nowrap;
+}
+
+.purchase-table td {
+  padding: 6px 4px;
+  vertical-align: top;
+  font-size: 12.5px;
+  border-bottom: 1px solid var(--billing-border);
+}
+
+.purchase-table tbody tr:last-child td { border-bottom: 0; }
+
+.purchase-table th.is-num,
+.purchase-table td.is-num { text-align: right; }
+
+.purchase-table__index {
+  width: 22px;
+  padding-top: 15px;
+  color: var(--billing-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.purchase-table__amount {
+  padding-top: 15px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.purchase-table__amount--total { font-weight: 650; }
+
+.purchase-table__actions { width: 32px; padding-top: 10px; text-align: right; }
+
+.purchase-table .purchase-input,
+.purchase-table .purchase-select { height: 36px; font-size: 12.5px; padding-inline: 6px; }
+
+/* A native select keeps its own room for the arrow, so the text needs the
+   padding back or "GST" renders as "G…" in a 94px column. */
+.purchase-table .purchase-select { padding-inline: 4px; }
+
+.purchase-table__meta {
+  display: block;
+  margin-top: 3px;
+  font-size: 10.5px;
+  color: var(--billing-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.purchase-table__meta--stock { color: var(--billing-action); }
+
+/* Column widths. Set on the header so the body cells inherit one source. */
+.purchase-col-item { width: 21%; min-width: 140px; }
+.purchase-col-desc { width: 13%; min-width: 86px; }
+.purchase-col-qty { width: 56px; }
+.purchase-col-unit { width: 84px; }
+.purchase-col-rate { width: 84px; }
+.purchase-col-disc { width: 56px; }
+.purchase-col-gst { width: 94px; }
+.purchase-col-tax { width: 76px; }
+.purchase-col-total { width: 88px; }
+
+.purchase-items__empty {
+  padding: 18px 8px;
+  color: var(--billing-muted);
+  font-size: 12.5px;
+}
+
+/* --------------------------------------------------------- suggestion bar */
+
+.purchase-suggestions {
+  min-height: 46px;
+  margin-top: 12px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  border: 1px solid var(--billing-mint-strong);
+  border-radius: 10px;
+  background: #f4faf3;
+}
+
+.purchase-suggestions__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 2px;
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--billing-action);
+}
+
+.purchase-suggestions__note { font-size: 11px; color: var(--billing-muted); }
+
+.purchase-chip {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 11px;
+  border: 1px solid var(--billing-mint-strong);
+  border-radius: 999px;
+  background: var(--billing-surface);
+  color: var(--billing-muted);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.purchase-chip:hover:not(:disabled) { border-color: var(--billing-action); color: var(--billing-action); }
+.purchase-chip:disabled { opacity: 0.55; cursor: not-allowed; }
+.purchase-chip.is-on { border-color: var(--billing-action); background: var(--billing-mint); color: var(--billing-action); }
+
+/* ------------------------------------------------------------ lower cards */
+
+.purchase-secondary {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(250px, 0.7fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.purchase-check {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-bottom: 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.purchase-check input { margin-top: 2px; width: 16px; height: 16px; accent-color: var(--billing-action); }
+.purchase-check span span { display: block; margin-top: 2px; font-size: 11.5px; color: var(--billing-muted); }
+
+.purchase-dropzone {
+  min-height: 104px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 14px;
+  border: 1px dashed var(--billing-border-strong);
+  border-radius: 10px;
+  background: var(--billing-surface-2);
+  color: var(--billing-muted);
+  text-align: center;
+}
+
+.purchase-dropzone strong { font-size: 12.5px; color: var(--billing-text); }
+.purchase-dropzone span,
+.purchase-dropzone small { font-size: 11px; }
+
+.purchase-dropzone--disabled { cursor: not-allowed; }
+.purchase-dropzone--disabled strong { color: var(--billing-muted); }
+
+/* ----------------------------------------------------------------- summary */
+
+.purchase-summary__row {
+  min-height: 31px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12.5px;
+}
+
+.purchase-summary__row > span { color: var(--billing-muted); }
+.purchase-summary__row > strong { font-variant-numeric: tabular-nums; }
+
+.purchase-summary__row--strong > span,
+.purchase-summary__row--strong > strong { color: var(--billing-text); font-weight: 700; }
+
+.purchase-summary__rule { height: 1px; margin: 6px 0; background: var(--billing-border); }
+
+.purchase-summary__total {
+  min-height: 56px;
+  margin-top: 12px;
+  padding: 10px 13px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-radius: 10px;
+  background: linear-gradient(100deg, #edf8ec, #e4f4e2);
+  color: #124b21;
+}
+
+.purchase-summary__total span { font-size: 13px; font-weight: 700; }
+.purchase-summary__total strong { font-size: 22px; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+
+.purchase-summary__note {
+  margin: 10px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--billing-muted);
+}
+
+.purchase-summary__breakup {
+  margin-top: 8px;
+  border-top: 1px solid var(--billing-border);
+  padding-top: 8px;
+}
+
+.purchase-summary__breakup summary {
+  font-size: 11.5px;
+  color: var(--billing-action);
+  cursor: pointer;
+  list-style: none;
+}
+
+.purchase-summary__breakup summary::-webkit-details-marker { display: none; }
+
+.purchase-summary__breakup table { width: 100%; margin-top: 6px; border-collapse: collapse; font-size: 11.5px; }
+.purchase-summary__breakup th { text-align: left; padding: 3px 0; color: var(--billing-muted); font-weight: 600; }
+.purchase-summary__breakup td { padding: 3px 0; text-align: right; font-variant-numeric: tabular-nums; }
+.purchase-summary__breakup td:first-child { text-align: left; }
+
+/* ------------------------------------------------------------------ impact */
+
+.purchase-impact h2 { margin: 0 0 4px; font-size: 14px; font-weight: 700; }
+.purchase-impact > p { margin: 0 0 8px; font-size: 11.5px; color: var(--billing-muted); }
+
+.purchase-impact__row {
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 0;
+  border-top: 1px solid var(--billing-border);
+}
+
+.purchase-impact__row:first-of-type { border-top: 0; }
+.purchase-impact__row strong { display: block; font-size: 11.5px; }
+.purchase-impact__row span { display: block; margin-top: 2px; font-size: 10.5px; color: var(--billing-muted); }
+
+.purchase-pill {
+  flex: 0 0 auto;
+  min-width: 56px;
+  height: 25px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.purchase-pill--yes { background: var(--billing-mint); color: var(--billing-action); }
+.purchase-pill--no { background: var(--billing-surface-2); color: var(--billing-muted); }
+.purchase-pill--warn { background: var(--billing-warning-bg); color: var(--billing-warning); }
+
+/* -------------------------------------------------------------- action bar */
+
+.purchase-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 25;
+  /* Bleeds to the edge of the content column, whose gutter it mirrors. */
+  margin-inline: calc(-1 * var(--purchase-gutter));
+  margin-top: 16px;
+  /* .billing-main ends with 40px of padding; without this the bar stops short
+     of the bottom of the page once it is fully scrolled. */
+  margin-bottom: -40px;
+  padding: 10px var(--purchase-gutter);
+  min-height: 66px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--billing-border);
+  background: rgb(255 255 255 / 96%);
+  box-shadow: 0 -5px 18px rgb(18 32 24 / 5%);
+  backdrop-filter: blur(10px);
+}
+
+.purchase-actions__status {
+  margin-right: auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--billing-muted);
+}
+
+/* ------------------------------------------------------------------ drawer */
+
+.purchase-drawer__section { margin-bottom: 18px; }
+.purchase-drawer__section h3 { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--billing-muted); }
+
+.purchase-drawer__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 9px 0;
+  border-top: 1px solid var(--billing-border);
+  font-size: 12.5px;
+}
+
+.purchase-drawer__item:first-of-type { border-top: 0; }
+.purchase-drawer__item span { display: block; margin-top: 2px; font-size: 11.5px; color: var(--billing-muted); }
+.purchase-drawer__mark { flex: 0 0 auto; margin-top: 1px; }
+.purchase-drawer__mark--ok { color: var(--billing-action); }
+.purchase-drawer__mark--warn { color: var(--billing-warning); }
+.purchase-drawer__mark--info { color: #2b4f9e; }
+.purchase-drawer__note { margin: 0 0 14px; font-size: 11.5px; line-height: 1.55; color: var(--billing-muted); }
+
+.purchase-drawer__picks { display: flex; flex-direction: column; gap: 6px; }
+
+.purchase-drawer__pick {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 11px;
+  border: 1px solid var(--billing-border);
+  border-radius: 9px;
+  background: var(--billing-surface);
+  color: var(--billing-text);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.purchase-drawer__pick:hover { border-color: var(--billing-action); background: var(--billing-mint); }
+.purchase-drawer__pick small { color: var(--billing-muted); font-size: 11px; }
+
+/* ----------------------------------------------------------------- dialogs */
+
+.purchase-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgb(16 34 24 / 42%);
+}
+
+.purchase-dialog {
+  width: min(100%, 420px);
+  padding: 20px;
+  border-radius: var(--billing-radius);
+  background: var(--billing-surface);
+  box-shadow: var(--billing-shadow-lg);
+}
+
+.purchase-dialog h2 { margin: 0 0 6px; font-size: 16px; font-weight: 700; }
+.purchase-dialog p { margin: 0 0 16px; font-size: 13px; color: var(--billing-muted); }
+.purchase-dialog__actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* ------------------------------------------------------------- responsive */
+
+@media (max-width: 1280px) {
+  .purchase-grid--4 > .purchase-field--last { grid-column: 2; }
+  .purchase-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .purchase-strip__cell:nth-child(3n) { border-right: 0; }
+  .purchase-strip__cell:nth-child(-n + 3) { border-bottom: 1px solid var(--billing-border); }
+  .purchase-strip__helper { border-left: 0; }
+  .purchase-grid--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 1200px) {
+  .purchase-page { --purchase-gutter: 20px; }
+}
+
+@media (max-width: 1100px) {
+  .purchase-layout { grid-template-columns: minmax(0, 1fr); }
+  .purchase-aside { position: static; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 900px) {
+  .purchase-header { flex-direction: column; align-items: stretch; }
+  .purchase-header__note { min-width: 0; }
+}
+
+@media (max-width: 820px) {
+  .purchase-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .purchase-strip__cell:nth-child(3n) { border-right: 1px solid var(--billing-border); }
+  .purchase-strip__cell:nth-child(2n) { border-right: 0; }
+  .purchase-strip__cell { border-bottom: 1px solid var(--billing-border); }
+  .purchase-grid--4,
+  .purchase-grid--3,
+  .purchase-grid--2,
+  .purchase-secondary,
+  .purchase-aside { grid-template-columns: minmax(0, 1fr); }
+  .purchase-grid--4 > .purchase-field--last,
+  .purchase-field--wide { grid-column: auto; }
+  .purchase-card__head--split { flex-direction: column; align-items: stretch; }
+  .purchase-actions { justify-content: stretch; }
+  .purchase-actions .purchase-btn { flex: 1 1 140px; }
+  .purchase-actions__status { flex-basis: 100%; margin-right: 0; }
+}
+
+@media (max-width: 560px) {
+  .purchase-page { --purchase-gutter: 14px; }
+  .purchase-strip { grid-template-columns: minmax(0, 1fr); }
+  .purchase-strip__cell { border-right: 0; }
+}
+
+/* A phone raises every control to a 44px touch target (index.css), which would
+   otherwise fight the dense grid heights set above. */
+@media (max-width: 48rem) {
+  .purchase-input,
+  .purchase-select,
+  .purchase-textarea,
+  .purchase-btn { min-height: 44px; }
+  .purchase-table .purchase-input,
+  .purchase-table .purchase-select { height: 44px; }
+}

@@ -5,20 +5,17 @@ import { BillingProvider, useBilling } from './context/BillingContext'
 import { AppShell } from './shell/AppShell'
 import SignIn from './pages/SignIn'
 import Onboarding from './pages/Onboarding'
-import SaleEditor from './pages/SaleEditor'
-import { DuesScreen, PartyStatement } from './pages/Dues'
-import { BankCash, MoneyScreen } from './pages/MoneyMovement'
-import { Items, Parties } from './pages/Directory'
+import { PartyStatement } from './pages/Dues'
+import { BankCash } from './pages/MoneyMovement'
+import { Parties } from './pages/Directory'
 import {
   BankCashOverview,
-  Expense,
   Profiles,
   Recurring,
   TransactionDetail,
   Unfinished,
 } from './pages/Misc'
 import { Notice } from './ui'
-import { ToastProvider } from './ui/toast'
 import { initAnalytics, trackPageView } from './utils/analytics'
 import './App.css'
 
@@ -27,21 +24,98 @@ import './App.css'
  *
  * Each one pulls in the chart and panel code, and nobody opens all five: a
  * biller opens exactly one and a counter machine is usually the slowest device
- * in the building. Reports is split for the same reason.
+ * in the building. Reports is split for the same reason, and the report VIEWER
+ * is split again from the discovery screen: landing on Reports should not cost
+ * the table, the formatting and the export code of a report nobody has opened.
  */
 const Overview = lazy(() => import('./dashboards/Overview'))
 const BillerDesk = lazy(() => import('./dashboards/BillerDesk'))
 const Receivables = lazy(() => import('./dashboards/Receivables'))
 const Payables = lazy(() => import('./dashboards/Payables'))
 const CashCompliance = lazy(() => import('./dashboards/CashCompliance'))
-const Reports = lazy(() => import('./pages/Reports'))
+const Reports = lazy(() => import('./pages/reports'))
+const ReportView = lazy(() => import('./pages/reports/ReportView'))
 
 /**
- * Bank deposit is split out too. It is the only transaction screen with its own
- * stylesheet and its own pickers, and a counter machine opening the biller desk
- * should not download either.
+ * Money paid and money received, split for the same reason.
+ *
+ * The screen is a form, a period summary, a party's history and a recent list,
+ * and only one of the two directions is ever open. Left in the main bundle it
+ * costs every screen in the app, including the counter machine that never
+ * opens it.
  */
-const BankDeposit = lazy(() => import('./pages/BankDeposit'))
+const MoneyScreen = lazy(() =>
+  import('./pages/money/MoneyScreen').then((module) => ({ default: module.MoneyScreen })),
+)
+
+/**
+ * Money received has its own screen: the receipt workspace.
+ *
+ * It carries its own stylesheet, its allocation table and its insight column,
+ * and it is reached by navigation rather than on first paint — so it is split
+ * out for the same reason the rest of these are.
+ */
+const MoneyReceived = lazy(() => import('./pages/money-received'))
+
+/**
+ * The expense screen carries its own stylesheet and helper panel, and most
+ * sessions never open it. Split for the same reason the dashboards are.
+ */
+const ExpensePage = lazy(() => import('./pages/expense/ExpensePage'))
+
+/** The bank-withdrawal screen, for the same reason: its own stylesheet, its own panel. */
+const BankWithdrawalPage = lazy(() => import('./pages/bank-withdrawal/BankWithdrawalPage'))
+
+/**
+ * The Items workspace, split for the same reason.
+ *
+ * It carries its own stylesheet, a table, a filter popover and a detail panel,
+ * and a counter biller who never leaves the till should not pay for any of it
+ * on the screen they do use.
+ */
+const ItemsPage = lazy(() => import('./pages/items/ItemsPage'))
+
+/**
+ * The bill screen carries its own stylesheet too. It is split for the same
+ * reason — it is reached by navigation rather than on first paint, and the
+ * chunk is fetched once and then cached on the machine that opens it all day.
+ */
+const SalesBillPage = lazy(() => import('./pages/sale/SalesBillPage'))
+
+/**
+ * The credit note screen, split for the same reason again: its own
+ * stylesheet, its own table and its own readings of the bill being credited,
+ * and a counter that only makes bills never opens it.
+ */
+const CreditNotePage = lazy(() => import('./pages/credit-note/CreditNotePage'))
+
+/**
+ * The debit note editor is split out for the same reason: it is a screen most
+ * users open occasionally, and it pulls in the panel kit and its own stylesheet.
+ */
+const DebitNote = lazy(() => import('./pages/DebitNote'))
+
+/**
+ * Money to Collect and Money to Pay, split for the same reason: the screen
+ * carries its own charts and filter machinery, and a counter biller who only
+ * ever makes bills should not pay for them on first load.
+ */
+const Dues = lazy(() => import('./receivables/DuesScreen').then((module) => ({ default: module.DuesScreen })))
+
+/**
+ * New purchase is split out for the same reason.
+ *
+ * It carries the item grid, the GST preview and the supplier readings, and the
+ * person it is heaviest for — a counter biller on the slowest machine in the
+ * building — never opens it. Their bundle should not pay for it.
+ */
+const NewPurchase = lazy(() => import('./pages/purchase/NewPurchasePage'))
+
+/**
+ * Bank deposit, split out for the same reason as its mirror image above — its
+ * own stylesheet and its own context rail, which the counter never opens.
+ */
+const BankDeposit = lazy(() => import('./pages/bank-deposit/BankDepositPage'))
 
 initAnalytics()
 
@@ -144,27 +218,34 @@ function Shell() {
         <Route path="dashboard/payables" element={<Suspense fallback={<Loading />}><RequireScope><Payables /></RequireScope></Suspense>} />
         <Route path="dashboard/cash-compliance" element={<Suspense fallback={<Loading />}><RequireScope><CashCompliance /></RequireScope></Suspense>} />
 
+        {/* Sales, expense, the credit note and the debit note have each grown
+            their own screen. Purchases keeps the shared editor below, which
+            is now the only thing that still routes through it. */}
         <Route path="sales">
-          <Route index element={<RequireScope><SaleEditor /></RequireScope>} />
-          <Route path="new" element={<RequireScope><SaleEditor /></RequireScope>} />
+          <Route index element={<Suspense fallback={<Loading />}><RequireScope><SalesBillPage /></RequireScope></Suspense>} />
+          <Route path="new" element={<Suspense fallback={<Loading />}><RequireScope><SalesBillPage /></RequireScope></Suspense>} />
           <Route path=":id" element={<RequireScope><TransactionDetail /></RequireScope>} />
         </Route>
 
         <Route path="purchases">
-          <Route index element={<RequireScope><SaleEditor kind="purchase" /></RequireScope>} />
-          <Route path="new" element={<RequireScope><SaleEditor kind="purchase" /></RequireScope>} />
+          <Route index element={<Suspense fallback={<Loading />}><RequireScope><NewPurchase /></RequireScope></Suspense>} />
+          <Route path="new" element={<Suspense fallback={<Loading />}><RequireScope><NewPurchase /></RequireScope></Suspense>} />
           <Route path=":id" element={<RequireScope><TransactionDetail /></RequireScope>} />
         </Route>
 
+        {/* Money received is the receipt workspace; money paid is the shared
+            money screen, in its "out" direction. Both post the same way they
+            always did — MoneyScreen still serves direction="in" if this route
+            is ever pointed back at it. */}
         <Route path="money-in">
-          <Route index element={<RequireScope><MoneyScreen direction="in" /></RequireScope>} />
-          <Route path="new" element={<RequireScope><MoneyScreen direction="in" /></RequireScope>} />
+          <Route index element={<Suspense fallback={<Loading />}><RequireScope><MoneyReceived /></RequireScope></Suspense>} />
+          <Route path="new" element={<Suspense fallback={<Loading />}><RequireScope><MoneyReceived /></RequireScope></Suspense>} />
           <Route path=":id" element={<RequireScope><TransactionDetail /></RequireScope>} />
         </Route>
 
         <Route path="money-out">
-          <Route index element={<RequireScope><MoneyScreen direction="out" /></RequireScope>} />
-          <Route path="new" element={<RequireScope><MoneyScreen direction="out" /></RequireScope>} />
+          <Route index element={<Suspense fallback={<Loading />}><RequireScope><MoneyScreen direction="out" /></RequireScope></Suspense>} />
+          <Route path="new" element={<Suspense fallback={<Loading />}><RequireScope><MoneyScreen direction="out" /></RequireScope></Suspense>} />
           <Route path=":id" element={<RequireScope><TransactionDetail /></RequireScope>} />
         </Route>
 
@@ -178,30 +259,68 @@ function Shell() {
               </Suspense>
             }
           />
-          <Route path="withdrawal" element={<RequireScope><BankCash kind="bank_withdrawal" /></RequireScope>} />
+          <Route
+            path="withdrawal"
+            element={
+              <Suspense fallback={<Loading />}>
+                <RequireScope><BankWithdrawalPage /></RequireScope>
+              </Suspense>
+            }
+          />
           <Route path="transfer" element={<RequireScope><BankCash kind="bank_transfer" /></RequireScope>} />
-          {/* A saved deposit lands here, the same way a receipt lands on
-              /money-in/:id. Declared last so it cannot shadow the three above. */}
+          {/* A saved deposit, withdrawal or transfer, by its request id. The three
+              names above are static and so still win over this. */}
           <Route path=":id" element={<RequireScope><TransactionDetail /></RequireScope>} />
         </Route>
 
         {/* The bill-by-bill lists. The dashboards summarise them and link here. */}
-        <Route path="receivables" element={<RequireScope><DuesScreen side="receivable" /></RequireScope>} />
-        <Route path="payables" element={<RequireScope><DuesScreen side="payable" /></RequireScope>} />
+        <Route path="receivables" element={<Suspense fallback={<Loading />}><RequireScope><Dues side="receivable" /></RequireScope></Suspense>} />
+        <Route path="payables" element={<Suspense fallback={<Loading />}><RequireScope><Dues side="payable" /></RequireScope></Suspense>} />
 
         <Route path="parties">
           <Route index element={<RequireScope><Parties /></RequireScope>} />
           <Route path=":accountId" element={<RequireScope><PartyStatement /></RequireScope>} />
         </Route>
 
-        <Route path="items" element={<RequireScope><Items /></RequireScope>} />
-        <Route path="reports" element={<Suspense fallback={<Loading />}><RequireScope><Reports /></RequireScope></Suspense>} />
+        <Route
+          path="items"
+          element={<Suspense fallback={<Loading />}><RequireScope><ItemsPage /></RequireScope></Suspense>}
+        />
+
+        {/* Reports is two screens. The index is the discovery layer and reads
+            nothing but the catalogue; `:reportKey` is the report itself, read
+            live from the product that owns the figures when it is opened.
+
+            `/reports?report=<key>&period=<period>` is the shape the dashboards
+            and money screens link with, and it still works: the index redirects
+            it to the report, carrying the period. Those call sites were not
+            touched. */}
+        <Route path="reports">
+          <Route index element={<Suspense fallback={<Loading />}><RequireScope><Reports /></RequireScope></Suspense>} />
+          <Route path=":reportKey" element={<Suspense fallback={<Loading />}><RequireScope><ReportView /></RequireScope></Suspense>} />
+        </Route>
 
         <Route path="more">
           <Route index element={<RequireScope><More /></RequireScope>} />
-          <Route path="expense" element={<RequireScope><Expense /></RequireScope>} />
-          <Route path="credit-note" element={<RequireScope><SaleEditor kind="credit_note" /></RequireScope>} />
-          <Route path="debit-note" element={<RequireScope><SaleEditor kind="debit_note" /></RequireScope>} />
+          <Route path="expense">
+            <Route
+              index
+              element={<Suspense fallback={<Loading />}><RequireScope><ExpensePage /></RequireScope></Suspense>}
+            />
+            <Route path=":id" element={<RequireScope><TransactionDetail /></RequireScope>} />
+          </Route>
+          <Route
+            path="credit-note"
+            element={
+              <Suspense fallback={<Loading />}>
+                <RequireScope><CreditNotePage /></RequireScope>
+              </Suspense>
+            }
+          />
+          <Route
+            path="debit-note"
+            element={<Suspense fallback={<Loading />}><RequireScope><DebitNote /></RequireScope></Suspense>}
+          />
           <Route path="recurring" element={<RequireScope><Recurring /></RequireScope>} />
           <Route path="unfinished" element={<RequireScope><Unfinished /></RequireScope>} />
           <Route path="profiles" element={<RequireScope><Profiles /></RequireScope>} />
@@ -269,12 +388,10 @@ export default function App() {
 
   return (
     <BillingProvider>
-      <ToastProvider>
-        <BrowserRouter>
-          <PageViews />
-          <Gate />
-        </BrowserRouter>
-      </ToastProvider>
+      <BrowserRouter>
+        <PageViews />
+        <Gate />
+      </BrowserRouter>
     </BillingProvider>
   )
 }
