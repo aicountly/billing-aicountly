@@ -1310,6 +1310,46 @@ check('a period compares against the same number of days before it', function ()
 
 echo "\nReports and exports\n";
 
+check('the catalogue describes every report it offers', function () use ($ctx, $auth) {
+    resetDatabase();
+    $available = (new ReportService($ctx, $auth))->available();
+
+    assertTrue(count($available) > 0, 'an owner is offered reports');
+
+    // The Reports screen groups by these and says which product owns the
+    // figures. A report that reaches it without them lands on no shelf and
+    // claims no source, which is how a card ends up empty for no reason.
+    $shelves = [
+        'sales', 'purchases', 'receivables-payables', 'gst',
+        'items-stock', 'money', 'registers', 'management', 'audit',
+    ];
+
+    foreach ($available as $report) {
+        $where = $report['key'];
+        assertTrue(($report['description'] ?? '') !== '', "{$where} says what it is");
+        assertTrue(count($report['categories'] ?? []) > 0, "{$where} sits on a shelf");
+        assertTrue(
+            in_array($report['source'] ?? '', ['books', 'inventory', 'billing'], true),
+            "{$where} names the product that owns its figures",
+        );
+        foreach ($report['categories'] as $category) {
+            assertTrue(in_array($category, $shelves, true), "{$where} sits on a shelf the screen draws: {$category}");
+        }
+    }
+});
+
+check('the catalogue offers only what the profile may run', function () use ($ctx) {
+    resetDatabase();
+    $biller = userWithProfile($ctx, 'user-biller', 'biller');
+    $offered = array_column((new ReportService($ctx, $biller))->available(), 'key');
+
+    // The list and the run check the same permission, so a report missing from
+    // the list is also a URL that is refused — not merely a card not drawn.
+    assertTrue(in_array('sales_register', $offered, true), 'a biller is offered their own sales register');
+    assertTrue(!in_array('payables_ageing', $offered, true), 'and never the payables ageing');
+    assertTrue(!in_array('purchase_register', $offered, true), 'nor the purchase register');
+});
+
 check('an export carries the whole filtered set, or refuses', function () use ($ctx, $auth) {
     resetDatabase();
     $report = (new ReportService($ctx, $auth))->run('sales_register', Period::resolve(['from' => '2026-09-01', 'to' => '2026-09-30']));

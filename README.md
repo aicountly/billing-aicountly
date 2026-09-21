@@ -31,7 +31,8 @@ the address bar, and a reminder, a receipt or a statement one step away.
 
 Behind them: sales and purchases, credit and debit notes with their original
 document, receipts and payments with allocation, bank deposits and withdrawals,
-ten live reports with CSV export, and Billing profiles deciding who sees what.
+ten live reports with CSV export behind a searchable Reports screen, and
+Billing profiles deciding who sees what.
 
 See [docs/BILLING_IMPLEMENTATION_STATUS.md](docs/BILLING_IMPLEMENTATION_STATUS.md)
 for what each figure means, and
@@ -84,7 +85,8 @@ same-origin.
 components against fixtures so the screens can be checked at any width without a
 portal session or a company's data. `?screen=` picks one — the five dashboards,
 `money-in`, `money-out`, `expense`, `credit-note`, `bank-withdrawal`, `sale`,
-`items`, `purchase`, `dues` (Money to Collect) or `dues-payable` (Money to Pay) —
+`items`, `purchase`, `dues` (Money to Collect), `dues-payable` (Money to Pay),
+`reports` (the Reports discovery screen) or `report` (one report, open) —
 `?as=biller` narrows the profile, and `?fail=recent,categories` makes those
 endpoints answer 503, which is how the "one panel is down, the form still
 works" states get checked. `?fail=overview` and `?fail=briefing` are the
@@ -92,8 +94,8 @@ overview's two halves, so "the dashboard is down" and "only the written summary
 is down" can be checked apart from each other. The credit note screen adds
 `bills`, `bill-lines`, `warehouses`, `trend` and `issue` to that list, the
 bank-withdrawal screen adds `balance`, `withdrawals` and `withdrawal-summary`,
-and the Items screen adds `items`, `stats` and `groups`, so their degraded
-states are reachable too. `?at=` sets the screen's OWN query string
+the Items screen adds `items`, `stats` and `groups`, and the Reports screens
+add `reports` and `report`, so their degraded states are reachable too. `?at=` sets the screen's OWN query string
 (`?screen=items&at=stock_status%3Dlow`), which is the only way to photograph a
 screen that keeps its state in the address bar in its filtered, sorted or paged
 states. `vite build` takes `index.html` only, so none of it reaches the
@@ -130,6 +132,7 @@ template. There are two of them, and they work in opposite ways:
 | `VITE_APP_ENV` | `local`, `sandbox`, or `production` |
 | `VITE_PRODUCT_KEY` | Portal product key. Derived from the hostname when unset |
 | `VITE_PORTAL_LOGIN_URL` | Login portal override. Local development only |
+| `VITE_FEATURE_REPORT_*` | Reports controls with no endpoint behind them yet. See `.env.example` |
 
 Only `VITE_`-prefixed variables reach the browser bundle, and Vite inlines them
 at build time, so **treat every one of them as public**. Never put a secret,
