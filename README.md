@@ -34,20 +34,23 @@ document, receipts and payments with allocation, bank deposits and withdrawals,
 ten live reports with CSV export behind a searchable Reports screen, and
 Billing profiles deciding who sees what.
 
-<<<<<<< HEAD
-The party directory sits alongside them — every customer and supplier with what
-they owe beside the name, searchable, filterable and exportable. It is composed
-from Smart Books on each request and stores nothing: no party table, no balance,
-no sync. A figure Books does not carry is drawn as "—" with the reason on it,
-never as a zero.
-=======
+**Money to Pay** (`/payables`) is the payables workspace the fourth dashboard
+links into: the headline figures, the ageing, what falls due next and the
+category split, over a searchable, filterable, sortable, paged list of every
+outstanding supplier bill — all from one reading of Smart Books per request.
+
+**Parties** (`/parties`) is the directory beside them — every customer and
+supplier with what they owe next to the name, searchable, filterable and
+exportable. It is composed from Smart Books on each request and stores nothing:
+no party table, no balance, no sync. A figure Books does not carry is drawn as
+"—" with the reason on it, never as a zero.
+
 Behind those, `/settings` is a hub over twelve categories — company, documents,
 users, taxes, money, preferences, items, parties, automation, security,
 integrations and advanced. Each row says plainly whether the setting lives in
 Billing, in the product that owns it, or nowhere yet, and the setup checklist on
 it is worked out from your actual configuration rather than fixed. See
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#settings).
->>>>>>> origin/main
 
 See [docs/BILLING_IMPLEMENTATION_STATUS.md](docs/BILLING_IMPLEMENTATION_STATUS.md)
 for what each figure means, and
@@ -100,7 +103,8 @@ same-origin.
 components against fixtures so the screens can be checked at any width without a
 portal session or a company's data. `?screen=` picks one — the five dashboards,
 `money-in`, `money-out`, `expense`, `credit-note`, `bank-withdrawal`, `sale`,
-`items`, `purchase`, `settings`, `dues` (Money to Collect), `dues-payable` (Money to Pay),
+`items`, `purchase`, `settings`, `dues` (Money to Collect), `money-to-pay`
+(Money to Pay),
 `reports` (the Reports discovery screen) or `report` (one report, open) —
 `?as=biller` narrows the profile, and `?fail=recent,categories` makes those
 endpoints answer 503, which is how the "one panel is down, the form still
@@ -118,8 +122,8 @@ adds `&category=` for its twelve detail pages
 (`?screen=settings&category=taxes`). `vite build` takes `index.html` only, so
 none of it reaches the deployed bundle.
 
-The dues screens add two more: `?state=empty|error|slow` for the three states
-they must survive — nothing outstanding, Books unreachable, and the skeletons
+Money to Collect and Money to Pay add two more: `?state=empty|error|slow` for
+the three states they must survive — nothing outstanding, Books unreachable, and the skeletons
 in between — and `?router=browser`, which swaps the memory router for the real
 one so the filters that live in the address bar can be exercised through the
 browser's own back and forward buttons.

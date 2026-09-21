@@ -36,6 +36,7 @@ is not described five different ways in five components.
 |---|---|
 | `GET registers` | all five dashboards, every register report |
 | `GET reports/bill-by-bill` | receivables, payables, ageing, reminder candidates |
+| `GET reports/bill-by-bill?as_on=<a month ago>` | the change on Money to Pay's headline card — a second reading, on its own endpoint, so filtering the table does not re-read a month of history |
 | `GET reports/account-summary` | cash and bank cards, cash & compliance |
 | `GET reports/account-ledger` | party statement |
 | `GET masters/accounts` | the party directory, party and cash/bank pickers |
@@ -239,9 +240,38 @@ by the person confirming it.
 panel explains the missing capability, and the checklist step says so rather
 than pretending there is nothing to match.
 
+## Partly available: how a supplier bill is classified
+
+**Money to Pay draws "Payable by category" from this, and says so when it is
+absent.**
+
+`reports/bill-by-bill` does not promise a classification on a row. Where a
+deployment's Books puts one — `category`, `group_name`, `account_group`,
+`ledger_group`, `cost_centre` or the voucher type's name — Billing passes it
+through exactly as Books worded it, and the donut is that split. Where no row
+carries one, the card says there is no breakdown to draw.
+
+It is deliberately not filled in by another means. Splitting the total by
+supplier and labelling the result a category answers "who" while the card asks
+"what for", and guessing a category from a supplier's name files a laptop bought
+from Metro Stationery under stationery for ever.
+
+The contract that would make this whole rather than partial, owner **Smart
+Books**:
+
+```
+GET reports/bill-by-bill
+  → data[].category: string|null      # the expense head the bill was booked to
+```
+
+**Until then**, the card is drawn from whatever classification the deployment
+does carry, with an "Unclassified" slice for the rest, or an explanation.
+
 ## Not available: bill extraction
 
-**Dashboard 4 and the expense screen both show an unavailable state for this.**
+**Dashboard 4, the expense screen and Money to Pay's Import bills action all
+show an unavailable state for this.**
+
 
 Reading a bill out of a PDF or a photo needs a document-extraction service, and
 this deployment has none. Billing does not add an OCR stack, and it does not ask
@@ -280,8 +310,9 @@ Every extracted field must arrive reviewable, and nothing is posted until a
 person has approved it. The expense screen shows what was read, applies only the
 amount, bill date and bill number, and leaves the supplier for a person to pick
 — matching a name against a ledger is a choice with accounting consequences.
-**Until this exists**, all three screens offer the manual path, which records
-exactly the same thing: the debit note screen disables *Scan & add (AI)*,
+**Until this exists**, every one of those screens offers the manual path, which
+records exactly the same thing — Money to Pay's Import bills dialog says what is
+missing and opens the purchase form: the debit note screen disables *Scan & add (AI)*,
 *Use AI to fill the items* and *Import* and carries this reason on each, rather
 than looking live and doing nothing.
 
@@ -671,6 +702,7 @@ Owner: **Billing**, over Books' existing voucher endpoints — a read-through
 route that takes a Books voucher id, checks `sale.view`, and returns the voucher
 (or streams the invoice PDF) the way `v1/parties/{id}/statement` already does for
 a ledger.
+
 
 ## Not depended on: Aicountly Pay
 

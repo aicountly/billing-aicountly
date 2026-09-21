@@ -14,7 +14,13 @@ import type {
   PayablesDashboard,
   ReceivablesDashboard,
 } from '../src/dashboards/types'
-import type { BillingSession, Dues as DuesShape } from '../src/services/types'
+import type {
+  BillingSession,
+  Dues as DuesShape,
+  PayableBill,
+  PayablesComparison,
+  PayablesWorkspace,
+} from '../src/services/types'
 
 const PERIOD = {
   key: 'month',
@@ -1839,6 +1845,206 @@ export const salesRegisterReport = {
   period: { from: '2026-09-01', to: '2026-09-16' },
   note: 'Read from Smart Books just now. The total is the sum of every row shown.',
 }
+
+// ---------------------------------------------------------------------------
+// Money to Pay — the payables workspace at /payables
+// ---------------------------------------------------------------------------
+
+const WORKSPACE_TODAY = '2026-09-19'
+
+function workspaceBill(
+  rowKey: string,
+  accountId: number,
+  accountName: string,
+  billNo: string,
+  billDate: string,
+  dueDate: string | null,
+  balance: number,
+  extra: Partial<PayableBill> = {},
+): PayableBill {
+  const days = dueDate === null
+    ? null
+    : Math.round((new Date(dueDate).getTime() - new Date(WORKSPACE_TODAY).getTime()) / 86400000)
+  const status: PayableBill['status'] =
+    days === null ? 'no_due_date' : days < 0 ? 'overdue' : days === 0 ? 'due_today' : days <= 7 ? 'due_soon' : 'upcoming'
+  const bucketFor = (): PayableBill['age_bucket'] => {
+    if (days === null) return 'no_due_date'
+    if (days >= 0) return 'current'
+    const late = Math.abs(days)
+    if (late <= 30) return '1_30'
+    if (late <= 60) return '31_60'
+    if (late <= 90) return '61_90'
+    return '90_plus'
+  }
+
+  return {
+    row_key: rowKey,
+    account_id: accountId,
+    account_name: accountName,
+    bill_no: billNo,
+    reference: null,
+    document_no: null,
+    bill_date: billDate,
+    due_date: dueDate,
+    balance,
+    bill_amount: null,
+    received: null,
+    partially_paid: false,
+    days_overdue: days !== null && days < 0 ? Math.abs(days) : 0,
+    days_to_due: days !== null && days >= 0 ? days : null,
+    status,
+    age_bucket: bucketFor(),
+    category: null,
+    voucher_id: null,
+    voucher_uuid: null,
+    ...extra,
+  }
+}
+
+const WORKSPACE_BILLS: PayableBill[] = [
+  workspaceBill('1', 701, 'Office Solutions Pvt Ltd', 'BILL-2026-0918', '2026-09-18', '2026-09-25', 48750, {
+    reference: 'PO-4587', category: 'Stationery & office supplies',
+  }),
+  workspaceBill('2', 702, 'Airtel Business', 'BILL-2026-0915', '2026-09-15', '2026-09-20', 25000, {
+    reference: 'INV-7781', category: 'Telecom & internet',
+  }),
+  workspaceBill('3', 703, 'Metro Stationery', 'BILL-2026-0912', '2026-09-12', '2026-09-22', 12500, {
+    category: 'Stationery & office supplies',
+  }),
+  workspaceBill('4', 704, 'RK Distributors', 'BILL-2026-0905', '2026-09-05', '2026-09-28', 110000, {
+    reference: 'PO-4501', category: 'Raw materials',
+  }),
+  workspaceBill('5', 705, 'SoftwareHub', 'BILL-2026-0830', '2026-08-30', '2026-09-30', 28000, {
+    reference: 'SUB-3321', category: 'Software & subscriptions',
+  }),
+  workspaceBill('6', 704, 'RK Distributors', 'BILL-2026-0721', '2026-07-21', '2026-08-20', 96500, {
+    reference: 'PO-4410', category: 'Raw materials', bill_amount: 150000, received: 53500, partially_paid: true,
+  }),
+  workspaceBill('7', 706, 'Sunrise Packaging', 'BILL-2026-0602', '2026-06-02', '2026-06-17', 74200, {
+    category: 'Raw materials',
+  }),
+  workspaceBill('8', 703, 'Metro Stationery', 'BILL-2026-0418', '2026-04-18', '2026-05-18', 31400, {
+    category: 'Stationery & office supplies',
+  }),
+  workspaceBill('9', 707, 'Apex Logistics', 'BILL-2026-0311', '2026-03-11', null, 18900, {
+    category: 'Freight & logistics',
+  }),
+]
+
+export const payablesWorkspace: PayablesWorkspace = {
+  title: 'Money to pay',
+  as_on: WORKSPACE_TODAY,
+  source: 'books',
+  summary: {
+    total: 445250,
+    bill_count: 9,
+    supplier_count: 7,
+    overdue: 202100,
+    overdue_count: 3,
+    due_today: 0,
+    due_today_count: 0,
+    due_this_week: 73750,
+    due_this_week_count: 2,
+    due_soon_days: 7,
+  },
+  ageing_reconciles: true,
+  ageing_buckets: [
+    { key: 'current', label: 'Not yet due', tone: 'ok', amount: 224250, count: 5, share: 50.4 },
+    { key: '1_30', label: '1–30 days', tone: 'warning', amount: 96500, count: 1, share: 21.7 },
+    { key: '31_60', label: '31–60 days', tone: 'warning', amount: 0, count: 0, share: 0 },
+    { key: '61_90', label: '61–90 days', tone: 'danger', amount: 74200, count: 1, share: 16.7 },
+    { key: '90_plus', label: 'Over 90 days', tone: 'danger', amount: 31400, count: 1, share: 7.1 },
+    { key: 'no_due_date', label: 'No due date', tone: 'neutral', amount: 18900, count: 1, share: 4.2 },
+  ],
+  parties: [
+    { account_id: 704, account_name: 'RK Distributors', total: 206500, overdue: 96500, bill_count: 2, oldest_overdue_days: 30 },
+    { account_id: 706, account_name: 'Sunrise Packaging', total: 74200, overdue: 74200, bill_count: 1, oldest_overdue_days: 94 },
+    { account_id: 701, account_name: 'Office Solutions Pvt Ltd', total: 48750, overdue: 0, bill_count: 1, oldest_overdue_days: 0 },
+    { account_id: 703, account_name: 'Metro Stationery', total: 43900, overdue: 31400, bill_count: 2, oldest_overdue_days: 124 },
+    { account_id: 705, account_name: 'SoftwareHub', total: 28000, overdue: 0, bill_count: 1, oldest_overdue_days: 0 },
+    { account_id: 702, account_name: 'Airtel Business', total: 25000, overdue: 0, bill_count: 1, oldest_overdue_days: 0 },
+    { account_id: 707, account_name: 'Apex Logistics', total: 18900, overdue: 0, bill_count: 1, oldest_overdue_days: 0 },
+  ],
+  upcoming: {
+    days: 30,
+    from: WORKSPACE_TODAY,
+    to: '2026-10-19',
+    count: 5,
+    amount: 224250,
+    rows: [...WORKSPACE_BILLS.slice(0, 5)].sort((a, b) => (a.due_date ?? '').localeCompare(b.due_date ?? '')),
+  },
+  categories: {
+    available: true,
+    reason: null,
+    total: 445250,
+    rows: [
+      { key: 'Raw materials', label: 'Raw materials', amount: 280700, count: 3, share: 63 },
+      { key: 'Stationery & office supplies', label: 'Stationery & office supplies', amount: 92650, count: 3, share: 20.8 },
+      { key: 'Software & subscriptions', label: 'Software & subscriptions', amount: 28000, count: 1, share: 6.3 },
+      { key: 'Telecom & internet', label: 'Telecom & internet', amount: 25000, count: 1, share: 5.6 },
+      { key: 'Freight & logistics', label: 'Freight & logistics', amount: 18900, count: 1, share: 4.2 },
+    ],
+  },
+  calendar: [
+    { date: '2026-05-18', amount: 31400, count: 1, overdue: true },
+    { date: '2026-06-17', amount: 74200, count: 1, overdue: true },
+    { date: '2026-08-20', amount: 96500, count: 1, overdue: true },
+    { date: '2026-09-20', amount: 25000, count: 1, overdue: false },
+    { date: '2026-09-22', amount: 12500, count: 1, overdue: false },
+    { date: '2026-09-25', amount: 48750, count: 1, overdue: false },
+    { date: '2026-09-28', amount: 110000, count: 1, overdue: false },
+    { date: '2026-09-30', amount: 28000, count: 1, overdue: false },
+  ],
+  bills: WORKSPACE_BILLS,
+  pagination: { page: 1, page_size: 25, total: 9, pages: 1, from: 1, to: 9 },
+  filtered: { count: 9, amount: 445250, is_filtered: false },
+  import: {
+    available: false,
+    manual_path: '/purchases/new',
+    reason:
+      'Reading a bill from a PDF or photo needs a document-extraction service, and none is configured for this '
+      + 'deployment. Entering the bill by hand records exactly the same thing.',
+  },
+  note: 'Read from Smart Books just now. Billing keeps no balance of its own, so this never disagrees with the accounts.',
+}
+
+export const payablesComparison: { as_on: string; comparison: PayablesComparison } = {
+  as_on: WORKSPACE_TODAY,
+  comparison: {
+    available: true,
+    reason: null,
+    as_on: '2026-08-19',
+    label: 'last month',
+    total: 505000,
+    basis: 'What was still owed to suppliers as at 2026-08-19, read from Smart Books just now.',
+  },
+}
+
+/** A company that owes nothing. Not an outage — an empty state with figures of zero. */
+export const payablesNothingOwed: PayablesWorkspace = {
+  ...payablesWorkspace,
+  summary: {
+    total: 0, bill_count: 0, supplier_count: 0,
+    overdue: 0, overdue_count: 0,
+    due_today: 0, due_today_count: 0,
+    due_this_week: 0, due_this_week_count: 0,
+    due_soon_days: 7,
+  },
+  ageing_buckets: payablesWorkspace.ageing_buckets.map((bucket) => ({ ...bucket, amount: 0, count: 0, share: 0 })),
+  parties: [],
+  upcoming: { days: 30, from: WORKSPACE_TODAY, to: '2026-10-19', count: 0, amount: 0, rows: [] },
+  categories: {
+    available: false,
+    reason: 'Smart Books does not classify these bills in this deployment, so there is no breakdown to draw.',
+    total: 0,
+    rows: [],
+  },
+  calendar: [],
+  bills: [],
+  pagination: { page: 1, page_size: 25, total: 0, pages: 1, from: 0, to: 0 },
+  filtered: { count: 0, amount: 0, is_filtered: false },
+}
+
 // ---------------------------------------------------------------------------
 // Settings
 //
