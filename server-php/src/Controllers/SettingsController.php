@@ -7,7 +7,7 @@ namespace Aicountly\Api\Controllers;
 use Aicountly\Api\Audit;
 use Aicountly\Api\Dashboards;
 use Aicountly\Api\Db;
-use Aicountly\Api\Env;
+use Aicountly\Api\Domain\DocumentCapture;
 use Aicountly\Api\Http;
 use Aicountly\Api\Permissions;
 
@@ -70,21 +70,21 @@ final class SettingsController extends Controller
      * can print it instead of inventing its own wording. The contracts Billing
      * would need are written down in docs/BILLING_API_DEPENDENCIES.md.
      *
+     * The document ones are NOT decided here: `DocumentCapture` is the single
+     * switch the expense screen and the payables dashboard already read, and a
+     * second `DOCUMENT_EXTRACTION_BASE` check here would be a second answer to
+     * the same question, free to drift from the first one.
+     *
      * @return array<string, array{available:bool, reason:?string}>
      */
     private static function capabilities(): array
     {
-        $extraction = Env::get('DOCUMENT_EXTRACTION_BASE') !== '';
+        $extraction = DocumentCapture::extraction();
+        $storage = DocumentCapture::storage();
 
         return [
             // Reading a bill or a return document out of a PDF or a photo.
-            'document_extraction' => [
-                'available' => $extraction,
-                'reason'    => $extraction
-                    ? null
-                    : 'Reading a document automatically needs a document-extraction service, and none is configured '
-                        . 'for this deployment. Typing the lines in records exactly the same thing.',
-            ],
+            'document_extraction' => $extraction,
             // Keeping an unfinished document on the server. Billing posts to
             // Smart Books as soon as it saves, so there is nowhere to park one.
             'transaction_drafts' => [
@@ -94,9 +94,8 @@ final class SettingsController extends Controller
             ],
             // Files attached to a transaction.
             'transaction_attachments' => [
-                'available' => false,
-                'reason'    => 'Attaching a file to a document needs a storage service, and none is configured for '
-                    . 'this deployment.',
+                'available' => $storage['available'],
+                'reason'    => $storage['reason'],
             ],
             // The ledger and tax effect, before posting.
             'accounting_preview' => [

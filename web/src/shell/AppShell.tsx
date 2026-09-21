@@ -127,18 +127,16 @@ function Brand() {
 function Navigation({ menu }: { menu: MenuEntry[] }) {
   const location = useLocation()
 
-  /*
-   * These are Links, not NavLinks, on purpose.
+  /**
+   * A section that CLAIMS this path as one of its own beats a section that
+   * merely shares its prefix.
    *
-   * NavLink decides `aria-current` from its own prefix match, which is the
-   * wrong answer here twice over: /more/debit-note lights up Settings because
-   * the path starts with /more, and leaves Purchases dark even though that is
-   * the section the screen belongs to. The section is worked out below and the
-   * attribute is set from that.
+   * Some screens live under a path belonging to another section — the expense
+   * form is `/more/expense` and the debit note is `/more/debit-note`, and both
+   * belong to Purchases — and without this both Purchases and Settings light
+   * up, which tells the user they are in two places at once.
    */
-
-  /** The section that actually owns this path, when one of them claims it. */
-  const owner = menu.find((entry) =>
+  const claimed = menu.some((entry) =>
     (entry.children ?? []).some(
       (child) => location.pathname === child.path || location.pathname.startsWith(`${child.path}/`),
     ),
@@ -148,20 +146,21 @@ function Navigation({ menu }: { menu: MenuEntry[] }) {
     <nav aria-label="Sections" style={{ display: 'grid', gap: 2 }}>
       {menu.map((entry) => {
         const children = entry.children ?? []
+        const owns = children.some(
+          (child) => location.pathname === child.path || location.pathname.startsWith(`${child.path}/`),
+        )
         // A section expands when you are inside it. Expanding on click as well
         // would mean a section whose own page is one tap away needs two.
-        //
-        // The owning section wins outright. Several of these screens live under
-        // /more but are filed under the section they belong to — a debit note is
-        // at /more/debit-note and belongs to Purchases — and without this both
-        // Purchases and Settings would light up for the same page.
-        const inside = owner
-          ? owner.key === entry.key
-          : location.pathname === entry.path ||
-            (entry.path !== '/' && location.pathname.startsWith(`${entry.path}/`))
+        const inside =
+          location.pathname === entry.path ||
+          owns ||
+          (!claimed && entry.path !== '/' && location.pathname.startsWith(entry.path))
 
         return (
           <div key={entry.key}>
+            {/* Link, not NavLink: NavLink decides "current" by prefix and
+                swallows the aria-current prop, which is how one screen ends up
+                marked in two sections. What is current is worked out above. */}
             <Link to={entry.path} className="billing-nav__link" aria-current={inside ? 'page' : undefined}>
               {entry.label}
             </Link>
@@ -172,7 +171,14 @@ function Navigation({ menu }: { menu: MenuEntry[] }) {
                     key={child.path}
                     to={child.path}
                     className="billing-nav__child"
-                    aria-current={location.pathname === child.path ? 'page' : undefined}
+                    // Prefix rather than equality, so a screen's own detail
+                    // route (…/expense/12) keeps its entry lit instead of
+                    // leaving the section open with nothing marked inside it.
+                    aria-current={
+                      location.pathname === child.path || location.pathname.startsWith(`${child.path}/`)
+                        ? 'page'
+                        : undefined
+                    }
                   >
                     {child.label}
                   </Link>
