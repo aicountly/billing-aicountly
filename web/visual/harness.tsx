@@ -67,6 +67,10 @@ const FAILABLE: Array<[string, RegExp]> = [
   ['paid-from', /v1\/catalog\/cash-bank/],
   ['parties', /v1\/catalog\/parties/],
   ['capabilities', /v1\/expenses\/capabilities/],
+  // The overview's two halves, so "the dashboard is down" and "only the
+  // written summary is down" can both be photographed.
+  ['briefing', /v1\/dashboards\/overview\/briefing/],
+  ['overview', /v1\/dashboards\/overview(\?|$)/],
   ['items', /v1\/catalog\/items(\?|$)/],
   ['stats', /v1\/catalog\/items\/stats/],
   ['groups', /v1\/catalog\/item-groups/],
@@ -103,6 +107,18 @@ const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
 /** The fixture behind each endpoint the screens call. */
 const RESPONSES: Array<[RegExp, unknown]> = [
   [/v1\/session/, asBiller ? fixtures.billerSession : fixtures.ownerSession],
+  // Before the dashboard itself: `v1/dashboards/overview` matches the briefing
+  // URL too, and the first pattern in this list wins.
+  [/v1\/dashboards\/overview\/briefing/, {
+    data: {
+      available: false,
+      reason: 'No briefing model is configured for this deployment, so there is nothing to write the summary. '
+        + 'The counted briefing above is unaffected.',
+      narrative: null,
+      sources: [],
+      generated_at: null,
+    },
+  }],
   [/v1\/dashboards\/overview/, fixtures.overview],
   [/v1\/dashboards\/biller/, fixtures.biller],
   [/v1\/dashboards\/receivables/, fixtures.receivables],
@@ -248,7 +264,7 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Res
   if (/v1\/catalog\/items\/search/.test(url)) {
     const term = (new URL(url, window.location.origin).searchParams.get('q') ?? '').toLowerCase()
     const rows = everyItem().filter(
-      (row) => (row.item_name ?? '').toLowerCase().includes(term) || (row.item_sku ?? '').toLowerCase().includes(term),
+      (row) => String(row.item_name ?? '').toLowerCase().includes(term) || String(row.item_sku ?? '').toLowerCase().includes(term),
     )
     return new Response(JSON.stringify({ data: rows, meta: { total: rows.length, limit: 20, offset: 0 } }), {
       status: 200,
@@ -262,7 +278,7 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Res
   if (/v1\/catalog\/items\/barcode\//.test(url)) {
     const code = decodeURIComponent(url.split('/barcode/')[1]?.split('?')[0] ?? '').toLowerCase()
     const item = everyItem().find(
-      (row) => (row.barcode ?? '').toLowerCase() === code || (row.item_sku ?? '').toLowerCase() === code,
+      (row) => String(row.barcode ?? '').toLowerCase() === code || String(row.item_sku ?? '').toLowerCase() === code,
     )
     return new Response(JSON.stringify(item ? { data: item } : { error: { code: 'not_found', message: 'No such code.' } }), {
       status: item ? 200 : 404,

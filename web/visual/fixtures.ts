@@ -134,7 +134,8 @@ export const overview: OverviewDashboard = {
       value: 842500,
       status: 'ready',
       basis: 'period',
-      definition: 'Invoices dated 2026-09-01 to 2026-09-16, at their full value including tax.',
+      definition: 'Invoices dated 2026-09-01 to 2026-09-16, at their full value including tax. Credit notes are not netted off — they are counted separately.',
+      summary: '1 Sep–16 Sep · including tax, before credit notes',
       comparison: { available: true, percent: 12, direction: 'up', label: '+12.0% vs the previous 16 days', tone: 'positive', previous: 752000 },
       tone: 'neutral',
     },
@@ -148,6 +149,7 @@ export const overview: OverviewDashboard = {
       comparison: null,
       tone: 'warning',
       detail: '₹74,500.00 of it is overdue',
+      summary: 'As at 16 Sep · ₹74,500.00 overdue',
     },
     {
       id: 'to_pay',
@@ -159,6 +161,7 @@ export const overview: OverviewDashboard = {
       comparison: null,
       tone: 'warning',
       detail: '₹18,500.00 of it is overdue',
+      summary: 'As at 16 Sep · ₹48,000.00 due within 7 days',
     },
     {
       id: 'cash_bank',
@@ -170,6 +173,7 @@ export const overview: OverviewDashboard = {
       comparison: null,
       tone: 'neutral',
       detail: '2 account(s)',
+      summary: 'As at 16 Sep · 2 accounts',
     },
   ],
   panels: {
@@ -209,6 +213,18 @@ export const overview: OverviewDashboard = {
         action: { label: 'Review', path: '/dashboard/cash-compliance' },
       },
     ],
+    briefing: {
+      available: true,
+      headline: '3 overdue customer accounts and 2 supplier accounts due this week, with 1 more below need a look today.',
+      points: [
+        { id: 'overdue_receivables', text: '3 overdue customer accounts', tone: 'danger', count: 3, path: '/dashboard/receivables' },
+        { id: 'supplier_bills_due', text: '2 supplier accounts due this week', tone: 'warning', count: 2, path: '/dashboard/payables' },
+        { id: 'statutory_failed', text: '1 statutory document to fix', tone: 'warning', count: 1, path: '/dashboard/cash-compliance' },
+      ],
+      movement: { text: 'Sales +12.0% vs the previous 16 days', tone: 'positive', path: '/sales' },
+      basis: 'Counted from your own records, in Asia/Kolkata. Not generated text.',
+      generated_at: '2026-09-16T09:12:00Z',
+    },
     recent_documents: {
       available: true,
       reason: null,

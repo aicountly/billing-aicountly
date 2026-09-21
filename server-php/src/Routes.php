@@ -120,6 +120,9 @@ final class Routes
         // The five dashboards. Each checks its own permission before it reads
         // anything, so the tab bar and the URL agree about who may open what.
         $router->get('v1/dashboards/overview', [DashboardsController::class, 'overview']);
+        // The generated summary, asked for separately so the dashboard never
+        // waits on a model and never pays for one it was not asked for.
+        $router->get('v1/dashboards/overview/briefing', [DashboardsController::class, 'overviewBriefing']);
         $router->get('v1/dashboards/biller', [DashboardsController::class, 'biller']);
         $router->get('v1/dashboards/receivables', [DashboardsController::class, 'receivables']);
         $router->get('v1/dashboards/payables', [DashboardsController::class, 'payables']);
