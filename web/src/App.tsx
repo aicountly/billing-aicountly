@@ -56,6 +56,13 @@ const ExpensePage = lazy(() => import('./pages/expense/ExpensePage'))
 const BankWithdrawalPage = lazy(() => import('./pages/bank-withdrawal/BankWithdrawalPage'))
 
 /**
+ * The bill screen carries its own stylesheet too. It is split for the same
+ * reason — it is reached by navigation rather than on first paint, and the
+ * chunk is fetched once and then cached on the machine that opens it all day.
+ */
+const SalesBillPage = lazy(() => import('./pages/sale/SalesBillPage'))
+
+/**
  * The credit note screen, split for the same reason again: its own
  * stylesheet, its own table and its own readings of the bill being credited,
  * and a counter that only makes bills never opens it.
@@ -163,9 +170,11 @@ function Shell() {
         <Route path="dashboard/payables" element={<Suspense fallback={<Loading />}><RequireScope><Payables /></RequireScope></Suspense>} />
         <Route path="dashboard/cash-compliance" element={<Suspense fallback={<Loading />}><RequireScope><CashCompliance /></RequireScope></Suspense>} />
 
+        {/* Sales has its own screen. Purchases and the two notes keep the
+            shared editor below, which still handles all three. */}
         <Route path="sales">
-          <Route index element={<RequireScope><SaleEditor /></RequireScope>} />
-          <Route path="new" element={<RequireScope><SaleEditor /></RequireScope>} />
+          <Route index element={<Suspense fallback={<Loading />}><RequireScope><SalesBillPage /></RequireScope></Suspense>} />
+          <Route path="new" element={<Suspense fallback={<Loading />}><RequireScope><SalesBillPage /></RequireScope></Suspense>} />
           <Route path=":id" element={<RequireScope><TransactionDetail /></RequireScope>} />
         </Route>
 

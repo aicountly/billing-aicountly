@@ -258,6 +258,81 @@ check('Billing computes no tax — Books is sent the lines and decides', functio
     assertTrue(isset($draft['inventory_lines']), 'the lines are sent');
 });
 
+check('the bill carries the facts the biller knows — and still no tax figure', function () use ($ctx, $auth) {
+    resetDatabase();
+    (new TransactionService($ctx, $auth))->create('sale', saleInput([
+        'place_of_supply' => '27',
+        'terms'           => 'Goods once sold are not taken back.',
+        'due_date'        => '2026-10-14',
+        'lines'           => [
+            ['item_id' => 301, 'unit_id' => 1, 'qty' => 5, 'rate' => 120, 'tax_cat_id' => 7, 'hsn_sac' => '8479'],
+        ],
+    ]));
+
+    $draft = null;
+    foreach (stubRequests() as $request) {
+        if (str_contains($request['path'], '/vouchers/drafts') && !str_contains($request['path'], '/post')) {
+            $draft = $request['body']['payload'] ?? [];
+            break;
+        }
+    }
+
+    assertTrue($draft !== null, 'a draft was sent');
+    // A place of supply is a fact about the supply, not a computation: it is
+    // what decides CGST + SGST against IGST, and Books decides that with it.
+    assertSame('27', $draft['place_of_supply'], 'the place of supply reaches Books');
+    assertSame('Goods once sold are not taken back.', $draft['terms'], 'and the terms that print on it');
+    assertSame('2026-10-14', $draft['due_date'], 'and the due date');
+
+    $line = $draft['inventory_lines'][0] ?? [];
+    assertSame(7, $line['tax_cat_id'], 'the tax category Books should apply is sent');
+    assertSame('8479', $line['hsn_sac'], 'and the HSN read from Inventory');
+
+    // The point of the whole exercise: none of that is a tax AMOUNT.
+    foreach (['tax_amount', 'cgst', 'sgst', 'igst', 'total_amount', 'round_off'] as $forbidden) {
+        assertTrue(!array_key_exists($forbidden, $draft), "the payload must not carry {$forbidden}");
+    }
+});
+
+check('a cash sale tells Books which ledger took the money, and how', function () use ($ctx, $auth) {
+    resetDatabase();
+    (new TransactionService($ctx, $auth))->create('sale', saleInput([
+        'settled_to_account_id' => 9001,
+        'payment_mode'          => 'upi',
+    ]));
+
+    $draft = null;
+    foreach (stubRequests() as $request) {
+        if (str_contains($request['path'], '/vouchers/drafts') && !str_contains($request['path'], '/post')) {
+            $draft = $request['body']['payload'] ?? [];
+            break;
+        }
+    }
+
+    assertTrue($draft !== null, 'a draft was sent');
+    assertSame(9001, $draft['settlement_account_id'], 'the ledger that received the money');
+    assertTrue($draft['is_cash_transaction'] === true, 'and that it settled itself');
+    assertSame('upi', $draft['payment_mode'], 'and how it was paid');
+});
+
+check('a bill with nothing settled carries no payment mode at all', function () use ($ctx, $auth) {
+    resetDatabase();
+    (new TransactionService($ctx, $auth))->create('sale', saleInput(['payment_mode' => 'upi']));
+
+    $draft = null;
+    foreach (stubRequests() as $request) {
+        if (str_contains($request['path'], '/vouchers/drafts') && !str_contains($request['path'], '/post')) {
+            $draft = $request['body']['payload'] ?? [];
+            break;
+        }
+    }
+
+    // A payment mode on a bill nobody paid would be a fact about a payment that
+    // did not happen.
+    assertTrue(!array_key_exists('payment_mode', $draft ?? []), 'no payment mode without a settlement');
+    assertTrue(!array_key_exists('settlement_account_id', $draft ?? []), 'and no settlement ledger');
+});
+
 check('an unreachable Books leaves the entry retryable and says no duplicate exists', function () use ($ctx, $auth) {
     resetDatabase();
     stubFail('vouchers/drafts', 500);

@@ -46,6 +46,9 @@ final class Routes
         $router->get('v1/catalog/items/search', [CatalogController::class, 'searchItems']);
         $router->get('v1/catalog/items/favourites', [CatalogController::class, 'favourites']);
         $router->get('v1/catalog/items/barcode/{code}', [CatalogController::class, 'itemByBarcode']);
+        // Declared after the fixed paths above: the router takes the first
+        // match, so `{id}` must not be given the chance to swallow `search`.
+        $router->get('v1/catalog/items/{id}', [CatalogController::class, 'item']);
         $router->get('v1/catalog/stock', [CatalogController::class, 'stock']);
         $router->get('v1/catalog/low-stock', [CatalogController::class, 'lowStock']);
         $router->get('v1/catalog/warehouses', [CatalogController::class, 'warehouses']);

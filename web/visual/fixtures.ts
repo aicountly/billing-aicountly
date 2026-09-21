@@ -594,11 +594,90 @@ export const cashBankAccounts = [
 ]
 
 export const taxCategories = [
-  { tax_cat_id: 1, tax_cat_name: 'GST 18% — input credit' },
-  { tax_cat_id: 2, tax_cat_name: 'GST 12% — input credit' },
-  { tax_cat_id: 3, tax_cat_name: 'GST 5% — input credit' },
-  { tax_cat_id: 4, tax_cat_name: 'Exempt' },
+  // The rate is what Books returns alongside the name. The bill screen reads it
+  // to draw its GST estimate and leaves the estimate out when it is absent, so
+  // both halves of that are reachable in the booth.
+  { tax_cat_id: 1, tax_cat_name: 'GST 18%', tax_rate: 18 },
+  { tax_cat_id: 2, tax_cat_name: 'GST 12%', tax_rate: 12 },
+  { tax_cat_id: 3, tax_cat_name: 'GST 5%', tax_rate: 5 },
+  { tax_cat_id: 4, tax_cat_name: 'Exempt', tax_rate: 0 },
 ]
+
+/** Customers, as Books' account list describes them. 27 = Maharashtra, 03 = Punjab. */
+/** Items, as Inventory describes them. */
+export const saleItems = [
+  {
+    item_id: 301,
+    item_name: 'Premium Copier Paper A4 · 75 GSM',
+    item_sku: 'PW-001',
+    unit_id: 1,
+    unit_name: 'Ream',
+    hsn_sac: '4802',
+    barcode: '8901234567890',
+    mrp: '320',
+    sale_rate: 285,
+    tax_cat_id: 1,
+  },
+  {
+    item_id: 302,
+    item_name: 'Gel Pen · Blue (Box of 20)',
+    item_sku: 'PEN-BL-20',
+    unit_id: 2,
+    unit_name: 'Box',
+    hsn_sac: '9608',
+    barcode: '8901234567906',
+    mrp: '240',
+    sale_rate: 210,
+    tax_cat_id: 1,
+  },
+  {
+    item_id: 303,
+    item_name: 'Heavy Duty Stapler',
+    item_sku: 'STP-01',
+    unit_id: 3,
+    unit_name: 'Nos',
+    hsn_sac: '8472',
+    barcode: '8901234567913',
+    mrp: '520',
+    sale_rate: 450,
+    tax_cat_id: 2,
+  },
+  {
+    item_id: 304,
+    item_name: 'Annual Maintenance — Printers',
+    item_sku: 'AMC-PRN',
+    unit_id: 3,
+    unit_name: 'Nos',
+    hsn_sac: '998719',
+    mrp: '12000',
+    sale_rate: 12000,
+    tax_cat_id: 1,
+  },
+]
+
+/** What Inventory says is on the shelf, by item id. */
+export const availability: Record<number, { item_id: number; available_qty: number }> = {
+  301: { item_id: 301, available_qty: 42 },
+  302: { item_id: 302, available_qty: 4 },
+  303: { item_id: 303, available_qty: 0 },
+  304: { item_id: 304, available_qty: 0 },
+}
+
+/** What `POST v1/transactions/sale` hands back. */
+export const savedSale = {
+  request_id: 4410,
+  request_uuid: '8b1f2c60-1f7f-4d3d-9f1b-2f9a3d1c77aa',
+  kind: 'sale',
+  status: 'POSTED',
+  party_account_id: 501,
+  transaction_date: '2026-09-21',
+  payload: {},
+  books_voucher_id: 55231,
+  books_voucher_uuid: '0a2a9a1e-77aa-4f11-9d20-3c1b8a7d4410',
+  books_voucher_no: 'AIC-1025',
+  last_error: null,
+  created_at: '2026-09-21T09:15:00Z',
+}
 
 export const expenseCapabilities = {
   bill_storage: {
@@ -672,10 +751,19 @@ export const savedExpense = {
 
 /** Customers, for the credit note's party search. */
 export const customers = [
+  // The credit note screen's parties.
   { acc_id: 701, acc_name: 'Vaibhav Traders', gstin: '29AACCV1234K1Z9' },
   { acc_id: 702, acc_name: 'Sunrise Electronics', gstin: '29AASCS4411P1ZQ' },
   { acc_id: 703, acc_name: 'Deepak General Store', gstin: null },
   { acc_id: 704, acc_name: 'Kaveri Retail LLP', gstin: '29AAKKR7788D1ZB' },
+  // The bill screen's, which cover the three cases its GST readout has to
+  // tell apart: registered in this company's own state, registered in
+  // another, and no GSTIN at all.
+  { acc_id: 501, acc_name: 'Deshmukh Retail LLP', gstin: '27AABCD1234E1Z9' },
+  { acc_id: 502, acc_name: 'Ludhiana Cycle Works', gstin: '03AACFL5567P1ZB' },
+  { acc_id: 503, acc_name: 'Cash Sales — Counter', gstin: null },
+  { acc_id: 504, acc_name: 'Deshpande & Sons', gstin: '27AAGFD8890Q1ZK' },
+  { acc_id: 505, acc_name: 'Walk-in Customers', gstin: null },
 ]
 
 /** This customer's bills, as `v1/original-documents` returns them. */
