@@ -27,6 +27,7 @@ use Aicountly\Api\Domain\DocumentCapture;
 use Aicountly\Api\Domain\CreditNoteContext;
 use Aicountly\Api\Domain\DuesService;
 use Aicountly\Api\Domain\ExpenseHistory;
+use Aicountly\Api\Domain\ItemCatalog;
 use Aicountly\Api\Domain\Metric;
 use Aicountly\Api\Domain\MoneyActivityService;
 use Aicountly\Api\Domain\OverviewService;
@@ -1723,6 +1724,86 @@ check('the party context answers for the party asked about and no other', functi
     $nobody = $service->partyContext('out', 999999);
     assertSame(0, $nobody['entries_in_window'], 'a supplier with nothing gets nothing');
     assertSame(null, $nobody['last'], 'and no last payment is invented for them');
+});
+
+echo "\nThe item catalogue\n";
+
+check('an item arrives in one shape whatever Inventory called its fields', function () {
+    $a = ItemCatalog::normalise([
+        'item_id' => 7, 'item_name' => 'Ballpoint Pens', 'item_sku' => 'PEN-001', 'hsn_sac' => '960810',
+        'mrp' => '12.00', 'item_group' => ['item_group_id' => 3, 'group_name' => 'Stationery'],
+        'available_qty' => 1250, 'reorder_level' => 50, 'is_active' => true,
+    ]);
+    $b = ItemCatalog::normalise([
+        'id' => 7, 'name' => 'Ballpoint Pens', 'sku' => 'PEN-001', 'hsn' => '960810',
+        'sale_rate' => 12, 'category' => 'Stationery', 'stock' => ['closing_qty' => 1250, 'min_qty' => 50],
+        'status' => 'ACTIVE',
+    ]);
+
+    foreach (['item_id', 'item_name', 'item_sku', 'hsn_sac', 'type', 'is_active'] as $field) {
+        assertSame($a[$field], $b[$field], "both spellings resolve {$field}");
+    }
+    assertSame(12.0, $a['rate'], 'rate from mrp');
+    assertSame(12.0, $b['rate'], 'rate from sale_rate');
+    assertSame('Stationery', $a['group']['name'], 'group from an object');
+    assertSame('Stationery', $b['group']['name'], 'group from a string');
+    assertSame(1250.0, $b['stock']['available'], 'quantity from a nested stock object');
+    assertSame('in', $b['stock']['state'], 'above its reorder level');
+});
+
+check('a quantity nobody could read is null, not nought', function () {
+    $row = ItemCatalog::normalise(['item_id' => 3, 'item_name' => 'Mystery']);
+
+    assertSame(null, $row['stock']['available'], 'no quantity');
+    assertSame('unknown', $row['stock']['state'], 'and it says so rather than reading as empty stock');
+    assertSame(null, $row['type'], 'nothing said what kind of item this is, so nothing is claimed');
+    assertSame(null, $row['is_active'], 'and nothing said whether it is in use');
+});
+
+check('a service has no stock, and low means below Inventory\'s own level', function () {
+    $service = ItemCatalog::normalise(['item_id' => 9, 'item_name' => 'AMC', 'is_service' => 1, 'sale_rate' => 5000]);
+    assertSame('service', $service['type'], 'a service');
+    assertSame('none', $service['stock']['state'], 'is not stocked at all');
+
+    $low = ItemCatalog::normalise(['item_id' => 11, 'item_name' => 'Chair', 'available_qty' => 8, 'reorder_level' => 10]);
+    assertSame('low', $low['stock']['state'], 'eight against a level of ten is low');
+
+    $out = ItemCatalog::normalise(['item_id' => 12, 'item_name' => 'Marker', 'available_qty' => 0, 'reorder_level' => 24]);
+    assertSame('out', $out['stock']['state'], 'none left is out, not low');
+});
+
+check('an amount Inventory sent is relayed as Inventory wrote it', function () {
+    $row = ItemCatalog::normalise(['item_id' => 1, 'item_name' => 'Pen', 'mrp' => '12.00']);
+    assertSame('12.00', $row['mrp'], 'the string is not re-formatted on the way through');
+
+    $derived = ItemCatalog::normalise(['item_id' => 2, 'item_name' => 'Pad', 'selling_rate' => 45]);
+    assertSame('45', $derived['mrp'], 'and is filled in only when there was none');
+});
+
+check('an item name that is a formula does not become one in the file', function () {
+    // Same rule and the same implementation as the report exports: the name
+    // comes from Inventory, and Inventory is somebody else.
+    $row = ItemCatalog::normalise(['item_id' => 1, 'item_name' => '=1+1', 'item_sku' => '+SUM(A1:A9)']);
+
+    assertSame("'=1+1", \Aicountly\Api\Domain\ReportService::cell($row['item_name']), 'the name is quoted');
+    assertSame("'+SUM(A1:A9)", \Aicountly\Api\Domain\ReportService::cell($row['item_sku']), 'and so is the code');
+});
+
+check('only filters the API understands are passed upstream', function () {
+    $ask = ItemCatalog::upstreamQuery([
+        'q' => '  pen  ', 'type' => 'service', 'status' => 'nonsense', 'stock_status' => 'low',
+        'group_id' => '4', 'sort' => 'rate', 'order' => 'DESC', 'limit' => 9999, 'offset' => 50,
+    ]);
+
+    assertSame('pen', $ask['q'], 'the search term is trimmed');
+    assertSame('service', $ask['type'], 'a known type goes through');
+    assertTrue(!isset($ask['status']), 'an unknown status is dropped rather than relayed');
+    assertSame(4, $ask['group_id'], 'the group id is an integer');
+    assertSame('desc', $ask['order'], 'the direction is normalised');
+    assertSame(\Aicountly\Api\Http::MAX_LIMIT, $ask['limit'], 'an unbounded page is clamped');
+
+    $unsortable = ItemCatalog::upstreamQuery(['sort' => 'whatever']);
+    assertTrue(!isset($unsortable['sort']), 'a column nobody can sort by is not asked for');
 });
 
 echo "\nTenant isolation\n";

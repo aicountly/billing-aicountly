@@ -44,10 +44,17 @@ final class Routes
         // Read-through to the products that own the data.
         $router->get('v1/catalog/items', [CatalogController::class, 'items']);
         $router->get('v1/catalog/items/search', [CatalogController::class, 'searchItems']);
+        // The Items screen: the five counts above the list, the group filter,
+        // and the list as a file. All three are Inventory's data, read on the
+        // request — there is no item table in this product.
+        $router->get('v1/catalog/items/stats', [CatalogController::class, 'itemStats']);
+        $router->get('v1/catalog/items/export', [CatalogController::class, 'exportItems']);
+        $router->get('v1/catalog/item-groups', [CatalogController::class, 'itemGroups']);
         $router->get('v1/catalog/items/favourites', [CatalogController::class, 'favourites']);
         $router->get('v1/catalog/items/barcode/{code}', [CatalogController::class, 'itemByBarcode']);
-        // Declared after the fixed paths above: the router takes the first
-        // match, so `{id}` must not be given the chance to swallow `search`.
+        // LAST of the four-segment /catalog/items routes. The router takes the
+        // first match and `{id}` matches any segment, so declaring it above
+        // `search`, `stats`, `export` or `favourites` would swallow all four.
         $router->get('v1/catalog/items/{id}', [CatalogController::class, 'item']);
         $router->get('v1/catalog/stock', [CatalogController::class, 'stock']);
         $router->get('v1/catalog/low-stock', [CatalogController::class, 'lowStock']);

@@ -107,6 +107,44 @@ to walk out with the ledger. The file is the full filtered set; when the read
 could not be completed the export is refused rather than silently short. Every
 text cell is neutralised against spreadsheet formula injection.
 
+## The Items screen
+
+`/items` is the catalogue, read through to Aicountly Inventory on the request
+that draws it. **There is no items table in this product**, which is why the
+tabs, the search, the group filter, the sort and the pager all go upstream:
+Billing holds one page of rows and could only ever filter that.
+
+| Part | Where it comes from |
+|---|---|
+| Total / Stock / Service / Inactive | `GET items` with `limit=1`, read for `meta.total` |
+| Low stock | `GET reports/replenishment`, so "low" is Inventory's own reorder level |
+| The list | `GET items`, filtered, sorted and paged by Inventory |
+| The stock column | the list's own quantity, else one batched `GET stock-balances` per page |
+| The group filter | `GET item-groups` |
+
+Every narrowing is a query parameter and nothing else — the tabs **are**
+filters, so `?stock_status=low` and clicking Low Stock land in the same place,
+and a filtered list is a link somebody can send. The list/grid choice is the one
+thing kept out of the URL: it is a preference about how one person reads a
+screen, not a description of what the screen is showing.
+
+Three rules the screen holds to:
+
+* A quantity Inventory did not answer with reads **Unavailable**, never 0. A
+  service reads **—**. The difference between an empty shelf and an unanswered
+  question is the whole point of the column.
+* A type or status Inventory did not state is left blank rather than guessed.
+  An item wrongly badged "Service" is an item nobody checks the stock of.
+* A filter or an order that was asked for and plainly not applied is reported
+  above the list (`meta.upstream`), not papered over. A Low Stock tab that
+  quietly lists everything is the worst thing this screen could do.
+
+**Add item**, **Import** and **Item groups** open Inventory, carrying company,
+branch, year and a return URL — they are doors, not features Billing is
+missing. There is no Deactivate and no Delete on a row, because both would
+change Inventory's record. **Export** is CSV, built on the server from the full
+filtered set, and needs `export.data`, the same separate permission the reports
+use; every text cell goes through the same formula-injection guard.
 ## Money → Bank withdrawal
 
 `/bank-cash/withdrawal`, gated on `contra.create` — the same permission the save
@@ -178,6 +216,16 @@ approximated.
 
 ## Verification
 
+* `server-php/tests/run.sh` — 80 passing, 0 failing, against a real PostgreSQL
+  and a stub standing in for Books and Inventory. Among them the
+  release-blocking pair, which fail the build if a table or column ever starts
+  holding a voucher, ledger, balance, **item** or party.
+* `npm run build` in `web/` — `tsc -b` clean, seven lazy chunks.
+* Visual pass at 1920, 1600, 1440, 1366, 1280, 1024, 768 and 390 px across the
+  five dashboards and the Items workspace, via `web/visual.html` — a
+  development-only entry point that mounts the real components against
+  fixtures. `vite build` does not include it, and no fake record is written
+  anywhere.
 * `server-php/tests/run.sh` — 76 passing, 0 failing, against a real PostgreSQL
   and a stub standing in for Books and Inventory.
 * `npm run build` in `web/` — `tsc -b` clean, eight lazy chunks.
