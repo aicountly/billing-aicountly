@@ -335,6 +335,65 @@ Deliberate refusals on this screen:
 * **Editing or cancelling a posted withdrawal is not offered**, because the
   voucher is Books' and there is no Billing route that would do it.
 
+## Bank deposit
+
+`/bank-cash/deposit` — the counter's takings, into the bank, and the mirror of
+Bank withdrawal above. Permission: `contra.create`. It is a **contra voucher in
+Smart Books**: the chosen bank account debited, the chosen cash account
+credited. Billing sends the amount, the two account ids, the date, how the money
+travelled and the slip reference, and keeps the voucher reference Books gives
+back.
+
+Live reads on load, and none per row:
+
+| Call | Gives | Owner |
+|---|---|---|
+| `v1/catalog/cash-bank` | the ledgers to choose between | Books |
+| `v1/cash-bank` | their balances and cash/bank kind, if the profile may see them | Books |
+| `v1/bank-deposits/recent` | the last few deposits recorded here | Billing's requests, named live from Books |
+| `v1/bank-deposits/summary` | what went into the chosen bank in 30 days | Billing's requests |
+| `v1/bank-deposits/capabilities` | whether a slip can be kept at all | configuration |
+| `v1/manage/companyinfo` | the financial year's own start and end | Manage |
+
+`BankDepositHistory` is `BankWithdrawalHistory`'s mirror and exists on the same
+terms: the request row already exists, because it is what makes a retry safe,
+and the only thing this adds is reading the last few back. It is not a second
+cash book — a contra entered directly in Smart Books is not in it, and the panel
+says so. `buildAccountOptions` and `accountsFor` moved out of the withdrawal
+screen's folder into `services/cashBankAccounts.ts` when this screen became
+their second user, so the pair cannot disagree about which ledger is a bank.
+
+**Deposit type is real, not decoration.** Cash or cheque travels to Books as
+`payment_mode`, the same key a receipt already uses, and a cheque deposit
+without a cheque number is refused — on the server, because the person
+reconciling the statement in three weeks is the one who pays for a blank.
+
+**What the screen does with what it reads.** The summary updates as the form is
+typed. A deposit larger than the source account's balance draws a warning and
+does not block — the till, not Billing, decides whether there is cash in the
+drawer. A deposit matching one already on the recent list for the same day,
+amount and pair of accounts is flagged from the rows already on screen, with no
+extra request and no scan of the ledger.
+
+**The slip** goes to the configured document service through
+`POST v1/bank-deposits/slip`, and the contra carries the reference it hands back
+as `attachment_ref` — the same field an expense already carried, through the
+same checks, which moved to `DocumentCapture::takeUpload()` when a second screen
+started taking a file. With no document service configured the block says so and
+points at Reference, which is what a bank statement is matched on.
+
+**Drafts.** `Save as draft` writes the same `billing_transaction_requests` row
+the posted path writes, in status `DRAFT` — validated identically, never sent to
+Books. It is not a second store and it is not `localStorage`: a day's takings
+typed at the counter belong on the server, where the back office can see them.
+A draft is listed under *Entries not saved yet*, reopens into this screen, and
+posts on its original row and therefore its original idempotency key.
+
+Known follow-up: the account listbox exists twice — `components/AccountSelect`
+here, and a private one inside `WithdrawalFormCard`. The logic behind both is
+now shared; consolidating the markup is a change to a screen that shipped
+separately and belongs in its own PR.
+
 ## Permissions added
 
 | Permission | Grants |
@@ -364,7 +423,7 @@ approximated.
 
 ## Verification
 
-* `server-php/tests/run.sh` — 116 passing, 0 failing, against a real
+* `server-php/tests/run.sh` — 126 passing, 0 failing, against a real
   PostgreSQL and a stub standing in for Books and Inventory. Among them the
   release-blocking pair, which fail the build if a table or column ever starts
   holding a voucher, ledger, balance, item or party.

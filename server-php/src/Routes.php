@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Aicountly\Api;
 
+use Aicountly\Api\Controllers\BankDepositsController;
 use Aicountly\Api\Controllers\BankWithdrawalsController;
 use Aicountly\Api\Controllers\CatalogController;
 use Aicountly\Api\Controllers\DashboardController;
@@ -69,6 +70,9 @@ final class Routes
         // kind: sale | purchase | receipt | payment | credit_note | debit_note
         //     | expense | bank_deposit | bank_withdrawal | bank_transfer
         $router->post('v1/transactions/{kind}', [TransactionsController::class, 'create']);
+        // Typed but not sent. Same validation, same row, no voucher.
+        $router->post('v1/transactions/{kind}/draft', [TransactionsController::class, 'saveDraft']);
+        $router->put('v1/transactions/{id}/draft', [TransactionsController::class, 'updateDraft']);
         $router->get('v1/transactions/unfinished', [TransactionsController::class, 'unfinished']);
         // Around the expense form: what was recorded lately, and what this
         // deployment can do with a bill file. Recording one is still
@@ -82,6 +86,12 @@ final class Routes
         // Recording one is still POST v1/transactions/bank_withdrawal, above.
         $router->get('v1/bank-withdrawals/recent', [BankWithdrawalsController::class, 'recent']);
         $router->get('v1/bank-withdrawals/summary', [BankWithdrawalsController::class, 'summary']);
+        // And the same three around the bank-deposit form, its mirror image.
+        // Recording one is still POST v1/transactions/bank_deposit, above.
+        $router->get('v1/bank-deposits/recent', [BankDepositsController::class, 'recent']);
+        $router->get('v1/bank-deposits/summary', [BankDepositsController::class, 'summary']);
+        $router->get('v1/bank-deposits/capabilities', [BankDepositsController::class, 'capabilities']);
+        $router->post('v1/bank-deposits/slip', [BankDepositsController::class, 'storeSlip']);
         // Invoices a credit note (or bills a debit note) can be raised against,
         // and — for one of them — the lines that were billed on it, so the note
         // can start from what was sold instead of an empty table.

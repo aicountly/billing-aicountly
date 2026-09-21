@@ -203,8 +203,9 @@ export function Unfinished() {
       </div>
 
       <Notice tone="info">
-        These have not reached Smart Books. Retrying uses the same key as the first attempt, so a retry can never make a
-        second invoice — which is why nothing is retried behind your back.
+        These have not reached Smart Books — either they were saved as a draft, or an attempt did not get through.
+        Sending one uses the same key as the first attempt, so it can never make a second invoice, which is why nothing
+        is sent behind your back.
       </Notice>
 
       {error && <Notice tone="danger" title="That did not work">{error}</Notice>}
@@ -223,7 +224,21 @@ export function Unfinished() {
             {
               key: 'actions',
               header: '',
-              render: (row) => <Button disabled={busy} onClick={() => retry(row.request_id)}>Retry</Button>,
+              render: (row) => (
+                <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end' }}>
+                  {/* A draft is unfinished work, so it opens where it was
+                      typed. Anything that already tried and failed is sent
+                      again from here, on its original key. */}
+                  {row.status === 'DRAFT' && DRAFT_EDITORS[row.kind] && (
+                    <Link to={`${DRAFT_EDITORS[row.kind]}?draft=${row.request_id}`}>
+                      <Button>Open</Button>
+                    </Link>
+                  )}
+                  <Button disabled={busy} onClick={() => retry(row.request_id)}>
+                    {row.status === 'DRAFT' ? 'Send to Books' : 'Retry'}
+                  </Button>
+                </div>
+              ),
             },
           ]}
         />
@@ -416,6 +431,17 @@ export function Profiles() {
       </Card>
     </div>
   )
+}
+
+/**
+ * Which kinds have a screen that can reopen their own draft.
+ *
+ * Only Bank deposit does today. The rest are sent from this list as they were
+ * typed, which is what has always happened to an entry that failed — listing a
+ * path here that cannot prefill itself would be worse than not offering it.
+ */
+const DRAFT_EDITORS: Record<string, string | undefined> = {
+  bank_deposit: '/bank-cash/deposit',
 }
 
 function capitalise(kind: string): string {

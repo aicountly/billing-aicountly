@@ -1712,6 +1712,93 @@ export const salesRegisterReport = {
 }
 
 // ---------------------------------------------------------------------------
+// Money → Bank deposit
+//
+// The mirror of the withdrawal fixtures above, and it reuses the same accounts
+// and balances, because the two screens read exactly the same two endpoints for
+// them. Only the direction differs: cash out of a till, into a bank.
+// ---------------------------------------------------------------------------
+
+export const recentDeposits = {
+  rows: [
+    {
+      request_id: 9304, date: '2026-09-18', amount: 150000, cash_account_id: 101,
+      cash_account_name: 'Cash in hand', bank_account_id: 102, bank_account_name: 'HDFC Bank · 4471',
+      payment_mode: 'cash', reference_no: 'DEP/01984', note: "Saturday's takings",
+      voucher_id: 55239, voucher_no: 'CON/0045',
+    },
+    {
+      request_id: 9303, date: '2026-09-16', amount: 75000, cash_account_id: 101,
+      cash_account_name: 'Cash in hand', bank_account_id: 103, bank_account_name: 'ICICI Current · 9082',
+      payment_mode: 'cheque', reference_no: '004217', note: null,
+      voucher_id: 55220, voucher_no: 'CON/0042',
+    },
+    {
+      request_id: 9302, date: '2026-09-12', amount: 230500, cash_account_id: 104,
+      cash_account_name: 'Petty cash — counter', bank_account_id: 102, bank_account_name: 'HDFC Bank · 4471',
+      payment_mode: 'cash', reference_no: 'DEP/01952', note: null,
+      voucher_id: 55189, voucher_no: 'CON/0040',
+    },
+    {
+      request_id: 9301, date: '2026-09-08', amount: 95000, cash_account_id: 101,
+      cash_account_name: 'Cash in hand', bank_account_id: 103, bank_account_name: 'ICICI Current · 9082',
+      payment_mode: 'cheque', reference_no: '004198', note: null,
+      voucher_id: 55150, voucher_no: 'CON/0038',
+    },
+  ],
+  names_available: true,
+  basis:
+    "Deposits recorded from Billing in this company and year. Deposits entered directly in Smart Books are in Books' own contra register.",
+}
+
+export const depositSummary = {
+  bank_account_id: 102,
+  days: 30,
+  from: '2026-08-21',
+  to: '2026-09-19',
+  total: 476500,
+  count: 7,
+  basis: "Counted from the deposits recorded in Billing. The balance above is Smart Books' own.",
+}
+
+/** No document service — the shape the slip block explains itself from. */
+export const depositCapabilities = {
+  slip_storage: {
+    available: false,
+    reason:
+      'No document service is configured for this deployment, so the file itself cannot be kept here — record where the slip is.',
+    accepts: ['application/pdf', 'image/jpeg', 'image/png'],
+    max_bytes: 10485760,
+  },
+}
+
+/** …and with one, which is what `?docs=on` photographs. */
+export const depositCapabilitiesConfigured = {
+  slip_storage: {
+    available: true,
+    reason: null,
+    accepts: ['application/pdf', 'image/jpeg', 'image/png'],
+    max_bytes: 10485760,
+  },
+}
+
+/** What the API returns when the harness "saves" a deposit. */
+export const savedDeposit = {
+  request_id: 9305,
+  request_uuid: '8f2c1a10-0000-4000-8000-000000009305',
+  kind: 'bank_deposit',
+  status: 'POSTED',
+  party_account_id: null,
+  transaction_date: '2026-09-19',
+  payload: {},
+  books_voucher_id: 55301,
+  books_voucher_uuid: 'b1c2-55301',
+  books_voucher_no: 'CON/0046',
+  last_error: null,
+  created_at: '2026-09-19T11:04:00Z',
+  commands: [],
+}
+
 // Money to Pay — the payables workspace at /payables
 // ---------------------------------------------------------------------------
 

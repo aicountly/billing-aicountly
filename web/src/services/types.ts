@@ -118,7 +118,8 @@ export interface TransactionRequest {
   request_id: number
   request_uuid: string
   kind: string
-  status: 'PENDING' | 'POSTING' | 'POSTED' | 'FAILED' | 'CANCELLED'
+  /** DRAFT has never been sent to Books; the rest describe an attempt to. */
+  status: 'DRAFT' | 'PENDING' | 'POSTING' | 'POSTED' | 'FAILED' | 'CANCELLED'
   party_account_id: number | null
   transaction_date: string
   payload: Record<string, unknown> | string
@@ -796,6 +797,51 @@ export interface WithdrawalSummary {
   total: number
   count: number
   basis: string
+}
+
+/**
+ * A bank deposit this product recorded, as `v1/bank-deposits/recent` describes
+ * it. The mirror of RecentWithdrawal, and read on the same terms: the names
+ * are resolved live from Books on that request, and `null` means Books did not
+ * answer rather than that the account is missing.
+ */
+export interface RecentDeposit {
+  request_id: number
+  date: string
+  amount: number | null
+  cash_account_id: number | null
+  cash_account_name: string | null
+  bank_account_id: number | null
+  bank_account_name: string | null
+  /** `cash` or `cheque` — what the person said they handed over the counter. */
+  payment_mode: string | null
+  reference_no: string | null
+  note: string | null
+  voucher_id: number | null
+  voucher_no: string | null
+}
+
+export interface RecentDeposits {
+  rows: RecentDeposit[]
+  /** False when Books did not answer: the amounts still stand, the names do not. */
+  names_available: boolean
+  basis: string
+}
+
+/** What has gone into one bank account lately. Context beside a balance, not a balance. */
+export interface DepositSummary {
+  bank_account_id: number
+  days: number
+  from: string
+  to: string
+  total: number
+  count: number
+  basis: string
+}
+
+/** Whether a deposit slip can be kept in this deployment. */
+export interface DepositCapabilities {
+  slip_storage: DocumentCapability
 }
 
 /**
