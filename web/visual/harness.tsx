@@ -25,6 +25,7 @@ import Receivables from '../src/dashboards/Receivables'
 import Payables from '../src/dashboards/Payables'
 import CashCompliance from '../src/dashboards/CashCompliance'
 import ExpensePage from '../src/pages/expense/ExpensePage'
+import BankWithdrawalPage from '../src/pages/withdrawal/BankWithdrawalPage'
 import { saveSession, setAuthToken } from '../src/auth/tokens'
 import { setScope } from '../src/services/api'
 import * as fixtures from './fixtures'
@@ -45,10 +46,23 @@ const asBiller = params.get('as') === 'biller'
  */
 const failing = new Set((params.get('fail') ?? '').split(',').filter(Boolean))
 
+/**
+ * Endpoints to answer with an EMPTY list, as `?empty=paid-from`.
+ *
+ * The other half of the same idea. "The company has no cash ledgers yet" and
+ * "Books did not answer" are different states with different words on screen,
+ * and a booth that can only refuse can photograph one of them.
+ */
+const emptied = new Set((params.get('empty') ?? '').split(',').filter(Boolean))
+
 const FAILABLE: Array<[string, RegExp]> = [
   ['recent', /v1\/expenses\/recent/],
   ['categories', /v1\/catalog\/expense-accounts/],
   ['paid-from', /v1\/catalog\/cash-bank/],
+  // The withdrawal screen's two side panels, each of which has to be able to
+  // fail without taking the form down with it.
+  ['recent-withdrawals', /v1\/cash-bank\/recent/],
+  ['balance', /v1\/cash-bank\?/],
   ['parties', /v1\/catalog\/parties/],
   ['capabilities', /v1\/expenses\/capabilities/],
 ]
@@ -60,6 +74,7 @@ const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
   payables: { path: '/dashboard/payables', element: <Payables /> },
   'cash-compliance': { path: '/dashboard/cash-compliance', element: <CashCompliance /> },
   expense: { path: '/more/expense', element: <ExpensePage /> },
+  'bank-withdrawal': { path: '/bank-cash/withdrawal', element: <BankWithdrawalPage /> },
 }
 
 /** The fixture behind each endpoint the screens call. */
@@ -85,6 +100,11 @@ const RESPONSES: Array<[RegExp, unknown]> = [
   [/v1\/expenses\/recent/, fixtures.recentExpenses],
   [/v1\/transactions\/expense/, fixtures.savedExpense],
   [/v1\/expenses\/capabilities/, fixtures.expenseCapabilities],
+  // Order matters: the recent list is a longer path than the balances, and the
+  // balance pattern would otherwise swallow it.
+  [/v1\/cash-bank\/recent/, fixtures.recentWithdrawals],
+  [/v1\/cash-bank\?/, fixtures.cashBankBalances],
+  [/v1\/transactions\/bank_withdrawal/, fixtures.savedWithdrawal],
   [/v1\/manage\/companies/, { data: [{ cmp_id: 1, cmp_name: 'Sharma Enterprises' }], meta: { total: 1 } }],
   [/v1\/manage\/companyinfo/, {
     cmp_id: 1,
@@ -100,6 +120,12 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Res
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
 
   for (const [key, pattern] of FAILABLE) {
+    if (emptied.has(key) && pattern.test(url)) {
+      return new Response(JSON.stringify({ data: [], meta: { total: 0, limit: 0, offset: 0 } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
     if (failing.has(key) && pattern.test(url)) {
       return new Response(JSON.stringify({ error: { code: 'upstream_unavailable', message: 'Not answering, by request.' } }), {
         status: 503,

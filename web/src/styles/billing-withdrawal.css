@@ -1,0 +1,787 @@
+/* ---------------------------------------------------------------------------
+   Money → Bank withdrawal.
+
+   Layout and components for the withdrawal entry screen only. Every colour is a
+   token from index.css — the same ones the dashboards, the shell and the
+   expense screen use — so this screen cannot drift into a second green, and a
+   change to the palette reaches it without being repeated here.
+
+   There is no blue and no purple on this screen. The palette this product ships
+   is green, white and mint, and an "informational blue" strip here would be the
+   one place in the application using a colour nothing else uses. The info
+   surfaces below are the app's own `--billing-info*` tokens, which is what a
+   Notice with tone="info" already draws.
+
+   Namespaced `billing-withdrawal*` and nothing styles a bare element selector,
+   so adding it to the bundle cannot reach a screen that did not ask for it.
+   --------------------------------------------------------------------------- */
+
+.billing-withdrawal {
+  width: 100%;
+  min-width: 0;
+  padding-bottom: 8px;
+}
+
+/* ----------------------------------------------------------------- header */
+
+.billing-withdrawal__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin: 18px 0 18px;
+}
+
+.billing-withdrawal__title { display: flex; align-items: center; gap: 14px; min-width: 0; }
+
+.billing-withdrawal__mark {
+  width: 52px;
+  height: 52px;
+  flex: 0 0 52px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: var(--billing-mint);
+  border: 1px solid var(--billing-mint-strong);
+  color: var(--billing-action);
+}
+
+.billing-withdrawal__title h1 {
+  margin: 0;
+  font-size: clamp(22px, 2vw, 29px);
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+  font-weight: 750;
+}
+
+.billing-withdrawal__title p {
+  margin: 5px 0 0;
+  color: var(--billing-muted);
+  font-size: 14px;
+  max-width: 62ch;
+}
+
+/* The breadcrumb sits above the action on the right, as the trail to this
+   screen rather than a second heading. */
+.billing-withdrawal__headside {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.billing-withdrawal__crumbs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--billing-muted);
+}
+
+.billing-withdrawal__crumbs a { color: var(--billing-muted); font-weight: 600; }
+.billing-withdrawal__crumbs a:hover { color: var(--billing-action); }
+.billing-withdrawal__crumb-sep { color: var(--billing-border-strong); }
+.billing-withdrawal__crumb-current { color: var(--billing-action); font-weight: 650; }
+
+/* ----------------------------------------------------------------- layout */
+
+.billing-withdrawal__layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.8fr) minmax(320px, 0.9fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.billing-withdrawal__main,
+.billing-withdrawal__aside { min-width: 0; }
+
+.billing-withdrawal__aside { display: flex; flex-direction: column; gap: 14px; }
+
+.billing-withdrawal__notices { display: grid; gap: 12px; margin-bottom: 14px; }
+
+/* ------------------------------------------------------------- form shell */
+
+.billing-withdrawal-card {
+  min-width: 0;
+  overflow: hidden;
+  background: var(--billing-surface);
+  border: 1px solid var(--billing-border);
+  border-radius: var(--billing-radius);
+  box-shadow: var(--billing-shadow);
+}
+
+.billing-withdrawal-card__head { padding: 20px 20px 0; }
+
+.billing-withdrawal-card__head h2 {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.3;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+
+.billing-withdrawal-card__head p {
+  margin: 4px 0 0;
+  color: var(--billing-muted);
+  font-size: 13px;
+}
+
+.billing-withdrawal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  padding: 20px;
+}
+
+.billing-withdrawal-grid__full { grid-column: 1 / -1; }
+
+/* ----------------------------------------------------------------- fields */
+
+.billing-withdrawal-field { min-width: 0; display: grid; gap: 6px; align-content: start; }
+
+.billing-withdrawal-field__label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 20px;
+}
+
+.billing-withdrawal-field__label label {
+  color: #33423a;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.billing-withdrawal-field__required { color: var(--billing-danger); margin-left: 4px; }
+
+.billing-withdrawal-field__error {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  margin: 0;
+  color: var(--billing-danger);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.billing-withdrawal-field__error svg { flex-shrink: 0; margin-top: 2px; }
+
+.billing-withdrawal-field__hint {
+  margin: 0;
+  color: var(--billing-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.billing-withdrawal-field__count { color: var(--billing-muted); font-size: 12px; text-align: right; }
+
+.billing-withdrawal-control {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--billing-border-strong);
+  border-radius: 10px;
+  background: var(--billing-surface);
+  color: var(--billing-text);
+  font: inherit;
+  transition: border-color 150ms ease;
+}
+
+.billing-withdrawal-control::placeholder { color: #98a8a0; }
+
+/* The focus RING is the app's own `:focus-visible` outline, from index.css —
+   suppressing it here would give this one screen a weaker indicator than every
+   other. All that is added is the border turning green with it. */
+.billing-withdrawal-control:focus { border-color: var(--billing-action); }
+
+.billing-withdrawal-control:disabled {
+  background: var(--billing-surface-2);
+  color: var(--billing-muted);
+  cursor: not-allowed;
+}
+
+textarea.billing-withdrawal-control { min-height: 78px; resize: vertical; line-height: 1.5; }
+
+/* An input that carries a prefix — the currency, or a leading icon. */
+.billing-withdrawal-affix {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--billing-border-strong);
+  border-radius: 10px;
+  background: var(--billing-surface);
+  transition: border-color 150ms ease;
+}
+
+.billing-withdrawal-affix:focus-within { border-color: var(--billing-action); }
+
+.billing-withdrawal-affix__prefix {
+  display: grid;
+  place-items: center;
+  min-width: 44px;
+  padding: 0 10px;
+  border-right: 1px solid var(--billing-border);
+  background: var(--billing-surface-2);
+  color: #4a5b52;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.billing-withdrawal-affix .billing-withdrawal-control { border: 0; border-radius: 0; background: transparent; }
+.billing-withdrawal-affix .billing-withdrawal-control:focus { box-shadow: none; }
+
+.billing-withdrawal-affix--invalid,
+.billing-withdrawal-control--invalid { border-color: var(--billing-danger); }
+
+.billing-withdrawal-amount { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.billing-withdrawal-inline-action {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--billing-action);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.billing-withdrawal-inline-action:hover { text-decoration: underline; }
+
+/* ---------------------------------------------------------- the info strip */
+
+.billing-withdrawal-strip {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 20px;
+  padding: 13px 14px;
+  border: 1px solid var(--billing-mint-strong);
+  border-radius: 12px;
+  background: var(--billing-info-bg);
+  color: var(--billing-info);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.billing-withdrawal-strip svg { flex-shrink: 0; margin-top: 2px; }
+.billing-withdrawal-strip strong { font-weight: 700; }
+
+/* --------------------------------------------------------------- actions */
+
+.billing-withdrawal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 20px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--billing-border);
+  background: var(--billing-surface);
+}
+
+.billing-withdrawal-actions__right { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+
+/* ------------------------------------------------------------ side cards */
+
+.billing-withdrawal-aside-card {
+  min-width: 0;
+  padding: 17px;
+  background: var(--billing-surface);
+  border: 1px solid var(--billing-border);
+  border-radius: var(--billing-radius);
+  box-shadow: var(--billing-shadow);
+}
+
+.billing-withdrawal-aside-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 13px;
+}
+
+.billing-withdrawal-aside-card__heading { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.billing-withdrawal-aside-card__heading svg { color: var(--billing-action); flex-shrink: 0; }
+
+.billing-withdrawal-aside-card__head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.billing-withdrawal-balance-card {
+  background: linear-gradient(180deg, var(--billing-mint), var(--billing-surface) 62%);
+  border-color: var(--billing-mint-strong);
+}
+
+/* ------------------------------------------------------------- balance */
+
+.billing-withdrawal-balance {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--billing-border);
+  border-radius: 12px;
+  background: var(--billing-surface);
+}
+
+.billing-withdrawal-balance__who { display: flex; align-items: center; gap: 11px; min-width: 0; }
+
+.billing-withdrawal-balance__mark {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--billing-mint);
+  color: var(--billing-action);
+}
+
+.billing-withdrawal-balance__name {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.billing-withdrawal-balance__sub { margin: 3px 0 0; color: var(--billing-muted); font-size: 12px; }
+
+.billing-withdrawal-balance__figure { text-align: right; flex-shrink: 0; }
+
+.billing-withdrawal-balance__amount {
+  font-size: 20px;
+  line-height: 1.2;
+  font-weight: 750;
+  color: var(--billing-action);
+  font-variant-numeric: tabular-nums;
+}
+
+/* An account already overdrawn is not an error, but it should not be read as a
+   healthy balance either. */
+.billing-withdrawal-balance__amount--negative { color: var(--billing-danger); }
+
+.billing-withdrawal-balance__caption { margin-top: 3px; color: var(--billing-muted); font-size: 12px; }
+
+/* The estimate after this withdrawal — arithmetic on screen, never written. */
+.billing-withdrawal-preview {
+  display: grid;
+  gap: 7px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--billing-border);
+  border-radius: 12px;
+  background: var(--billing-surface);
+}
+
+.billing-withdrawal-preview__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  font-size: 12px;
+  color: var(--billing-muted);
+}
+
+.billing-withdrawal-preview__row b {
+  color: var(--billing-text);
+  font-size: 13px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.billing-withdrawal-preview__row--total {
+  padding-top: 7px;
+  border-top: 1px dashed var(--billing-border-strong);
+}
+
+.billing-withdrawal-preview__row--total b { font-size: 15px; font-weight: 750; }
+.billing-withdrawal-preview__short b { color: var(--billing-danger); }
+
+.billing-withdrawal-preview__warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  color: var(--billing-warning);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.billing-withdrawal-preview__warn svg { flex-shrink: 0; margin-top: 2px; }
+
+.billing-withdrawal-stats {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  margin-top: 12px;
+  padding: 11px 12px;
+  border-radius: 10px;
+  background: var(--billing-mint);
+}
+
+.billing-withdrawal-stats__label { color: var(--billing-muted); font-size: 11px; }
+
+.billing-withdrawal-stats__value {
+  margin-top: 2px;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.billing-withdrawal-stats__count { text-align: right; }
+
+/* ------------------------------------------------------ recent withdrawals */
+
+.billing-withdrawal-recent { display: flex; flex-direction: column; }
+
+.billing-withdrawal-recent__row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 62px;
+  padding: 9px 6px;
+  border-top: 1px solid var(--billing-border);
+  border-radius: 9px;
+}
+
+.billing-withdrawal-recent__row:first-child { border-top: 0; }
+.billing-withdrawal-recent__row:hover { background: var(--billing-surface-2); }
+
+.billing-withdrawal-recent__date {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  min-height: 42px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  background: var(--billing-surface-2);
+  border: 1px solid var(--billing-border);
+}
+
+.billing-withdrawal-recent__day { font-size: 13px; font-weight: 700; line-height: 1.1; }
+.billing-withdrawal-recent__month { margin-top: 1px; color: var(--billing-muted); font-size: 10px; }
+
+.billing-withdrawal-recent__main { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+
+.billing-withdrawal-recent__amount {
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.billing-withdrawal-recent__meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--billing-muted);
+  font-size: 11px;
+}
+
+.billing-withdrawal-recent__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 8rem;
+  min-height: 24px;
+  padding: 0 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: 999px;
+  background: var(--billing-mint);
+  color: var(--billing-action);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.billing-withdrawal-recent__more {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--billing-muted);
+  cursor: pointer;
+}
+
+.billing-withdrawal-recent__more:hover { background: var(--billing-mint); color: var(--billing-action); }
+.billing-withdrawal-recent__wrap { position: relative; }
+
+.billing-withdrawal-menu {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 13rem;
+  padding: 5px;
+  background: var(--billing-surface);
+  border: 1px solid var(--billing-border);
+  border-radius: 12px;
+  box-shadow: var(--billing-shadow-lg);
+}
+
+.billing-withdrawal-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.billing-withdrawal-menu__item:hover { background: var(--billing-surface-2); }
+
+.billing-withdrawal-menu__note {
+  padding: 8px 10px 6px;
+  color: var(--billing-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+/* ----------------------------------------------------------- quick actions */
+
+.billing-withdrawal-quick {
+  border-color: var(--billing-mint-strong);
+  background: linear-gradient(135deg, var(--billing-mint), var(--billing-surface) 70%);
+}
+
+.billing-withdrawal-quick__buttons { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+
+.billing-withdrawal-quick__button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 62px;
+  min-width: 0;
+  padding: 9px 6px;
+  border: 1px solid var(--billing-mint-strong);
+  border-radius: 10px;
+  background: var(--billing-surface);
+  color: var(--billing-action);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.25;
+  text-align: center;
+  cursor: pointer;
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+
+.billing-withdrawal-quick__button:hover:not(:disabled) { background: var(--billing-mint); }
+.billing-withdrawal-quick__button:disabled { opacity: 0.55; cursor: not-allowed; }
+.billing-withdrawal-quick__label { display: block; overflow-wrap: anywhere; }
+
+/* ---------------------------------------------------------------- states */
+
+.billing-withdrawal-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 0;
+  color: var(--billing-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.billing-withdrawal-note svg { flex-shrink: 0; margin-top: 2px; }
+
+.billing-withdrawal-retry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--billing-border);
+  border-radius: 10px;
+  background: var(--billing-surface-2);
+  color: var(--billing-muted);
+  font-size: 12px;
+}
+
+.billing-withdrawal-empty {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 18px 10px 14px;
+  text-align: center;
+}
+
+.billing-withdrawal-empty__mark {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: var(--billing-surface-2);
+  color: var(--billing-muted);
+}
+
+.billing-withdrawal-empty strong { font-size: 13px; }
+.billing-withdrawal-empty p { margin: 0; color: var(--billing-muted); font-size: 12px; line-height: 1.5; }
+
+.billing-withdrawal-skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 62px;
+  border-top: 1px solid var(--billing-border);
+}
+
+.billing-withdrawal-skeleton-row:first-child { border-top: 0; }
+
+.billing-withdrawal-footnote {
+  margin: 12px 0 0;
+  padding-top: 11px;
+  border-top: 1px solid var(--billing-border);
+  color: var(--billing-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* ---------------------------------------------------------------- dialog */
+
+.billing-withdrawal-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgb(16 34 24 / 42%);
+}
+
+.billing-withdrawal-dialog {
+  width: min(100%, 27rem);
+  max-height: 86vh;
+  overflow-y: auto;
+  padding: 20px;
+  background: var(--billing-surface);
+  border-radius: var(--billing-radius);
+  box-shadow: var(--billing-shadow-lg);
+}
+
+.billing-withdrawal-dialog__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.billing-withdrawal-dialog__head h2 { margin: 0; font-size: 17px; font-weight: 700; }
+
+.billing-withdrawal-dialog__close {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--billing-muted);
+  cursor: pointer;
+}
+
+.billing-withdrawal-dialog__close:hover { background: var(--billing-surface-2); color: var(--billing-text); }
+
+.billing-withdrawal-keys { display: grid; gap: 8px; margin: 0; }
+
+.billing-withdrawal-keys__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--billing-border);
+}
+
+.billing-withdrawal-keys__row:last-child { border-bottom: 0; }
+.billing-withdrawal-keys__row dd { margin: 0; }
+
+.billing-withdrawal-kbd {
+  display: inline-block;
+  padding: 3px 7px;
+  border: 1px solid var(--billing-border-strong);
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  background: var(--billing-surface-2);
+  color: #33423a;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------ responsive */
+
+@media (max-width: 1240px) {
+  .billing-withdrawal__layout { grid-template-columns: minmax(0, 1.5fr) minmax(300px, 0.9fr); }
+}
+
+/* Tablet: the form first, the three cards under it two abreast rather than
+   squeezed into a strip nobody can read. */
+@media (max-width: 1050px) {
+  .billing-withdrawal__layout { grid-template-columns: minmax(0, 1fr); }
+  /* `start`, or the shorter card stretches to the taller one's height and ends
+     in a panel that is mostly empty space. */
+  .billing-withdrawal__aside {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+  .billing-withdrawal-quick { grid-column: 1 / -1; }
+}
+
+@media (max-width: 760px) {
+  .billing-withdrawal__head { flex-direction: column; align-items: stretch; }
+  .billing-withdrawal__headside { align-items: flex-start; }
+  .billing-withdrawal-grid { grid-template-columns: minmax(0, 1fr); }
+  .billing-withdrawal-grid__full { grid-column: auto; }
+  .billing-withdrawal__aside { display: flex; }
+  .billing-withdrawal-actions { flex-direction: column-reverse; align-items: stretch; }
+  /* Reversed so the primary action is the top button of the stack rather than
+     the middle one: on a phone the thumb starts at the top of the group. */
+  .billing-withdrawal-actions__right { flex-direction: column-reverse; align-items: stretch; }
+  .billing-withdrawal-actions .billing-button { width: 100%; justify-content: center; }
+}
+
+@media (max-width: 480px) {
+  .billing-withdrawal-card__head,
+  .billing-withdrawal-grid,
+  .billing-withdrawal-actions { padding-inline: 15px; }
+  .billing-withdrawal-strip { margin-inline: 15px; }
+  .billing-withdrawal-balance { flex-direction: column; align-items: stretch; gap: 10px; }
+  .billing-withdrawal-balance__figure { text-align: left; }
+  .billing-withdrawal-quick__buttons { grid-template-columns: minmax(0, 1fr); }
+  .billing-withdrawal-quick__button { flex-direction: row; justify-content: flex-start; gap: 9px; min-height: 44px; }
+  .billing-withdrawal-recent__badge { display: none; }
+}

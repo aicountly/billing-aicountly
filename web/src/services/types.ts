@@ -266,6 +266,46 @@ export interface RecentExpenses {
   basis: string
 }
 
+/**
+ * One cash/bank movement this product recorded, as `v1/cash-bank/recent`
+ * describes it.
+ *
+ * The account names are resolved live from Books on that request; `null` means
+ * Books did not answer, not that the account is missing.
+ */
+export interface RecentBankMovement {
+  request_id: number
+  date: string
+  amount: number | null
+  /** The account the money left — the bank, on a withdrawal. */
+  from_id: number | null
+  from_name: string | null
+  /** The account it landed in — the cash ledger, on a withdrawal. */
+  to_id: number | null
+  to_name: string | null
+  reference: string | null
+  note: string | null
+  voucher_id: number | null
+  voucher_no: string | null
+}
+
+/** How much has moved in the window, and how many times. */
+export interface BankMovementSummary {
+  /** The account the figures were narrowed to, or null for every account. */
+  account_id: number | null
+  days: number
+  total: number
+  count: number
+}
+
+export interface RecentBankMovements {
+  rows: RecentBankMovement[]
+  summary: BankMovementSummary
+  /** False when Books did not answer: the amounts still stand, the names do not. */
+  names_available: boolean
+  basis: string
+}
+
 /** One thing a deployment either can or cannot do, with the reason when it cannot. */
 export interface DocumentCapability {
   available: boolean

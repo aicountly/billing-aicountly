@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Aicountly\Api;
 
+use Aicountly\Api\Controllers\BankCashController;
 use Aicountly\Api\Controllers\CatalogController;
 use Aicountly\Api\Controllers\DashboardController;
 use Aicountly\Api\Controllers\DashboardsController;
@@ -75,6 +76,10 @@ final class Routes
         $router->get('v1/payables', [DuesController::class, 'payables']);
         $router->get('v1/parties/{accountId}/statement', [DuesController::class, 'statement']);
         $router->get('v1/cash-bank', [DuesController::class, 'cashAndBank']);
+        // Around the bank deposit and withdrawal forms: what was moved lately.
+        // The balances are the line above; recording one is still
+        // POST v1/transactions/bank_withdrawal.
+        $router->get('v1/cash-bank/recent', [BankCashController::class, 'recent']);
         $router->get('v1/open-bills', [DuesController::class, 'openBills']);
 
         // Recurring bills and payment reminders — business automation, not sync.

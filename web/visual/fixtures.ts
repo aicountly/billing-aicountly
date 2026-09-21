@@ -70,7 +70,17 @@ export const ownerSession: BillingSession = {
         { label: 'Expense', path: '/more/expense' },
       ],
     },
-    { key: 'money', label: 'Money', path: '/money-in', children: [] },
+    {
+      key: 'money',
+      label: 'Money',
+      path: '/money-in',
+      children: [
+        { label: 'Money received', path: '/money-in/new' },
+        { label: 'Money paid', path: '/money-out/new' },
+        { label: 'Bank deposit', path: '/bank-cash/deposit' },
+        { label: 'Bank withdrawal', path: '/bank-cash/withdrawal' },
+      ],
+    },
     { key: 'receivables', label: 'Money to Collect', path: '/receivables', children: [] },
     { key: 'payables', label: 'Money to Pay', path: '/payables', children: [] },
     { key: 'parties', label: 'Parties', path: '/parties', children: [] },
@@ -461,9 +471,73 @@ export const expenseAccounts = [
 
 export const cashBankAccounts = [
   { acc_id: 101, acc_name: 'Cash in hand' },
-  { acc_id: 102, acc_name: 'HDFC Bank · 4471' },
-  { acc_id: 103, acc_name: 'ICICI Current · 9082' },
+  { acc_id: 102, acc_name: 'HDFC Bank', account_no: '502000123456' },
+  { acc_id: 103, acc_name: 'ICICI Current', account_no: '123456789012' },
+  { acc_id: 104, acc_name: 'Petty cash' },
 ]
+
+/**
+ * What `v1/cash-bank` answers — the balances, and the only thing that says
+ * which of the ledgers above is a bank and which is cash.
+ */
+export const cashBankBalances = {
+  available: true,
+  cash: 64200,
+  bank: 1443500,
+  accounts: [
+    { account_id: 101, account_name: 'Cash in hand', balance: 58700, kind: 'cash' },
+    { account_id: 102, account_name: 'HDFC Bank', balance: 1248500, kind: 'bank' },
+    { account_id: 103, account_name: 'ICICI Current', balance: 195000, kind: 'bank' },
+    { account_id: 104, account_name: 'Petty cash', balance: 5500, kind: 'cash' },
+  ],
+  source: 'books',
+}
+
+/** What `v1/cash-bank/recent?kind=bank_withdrawal` answers. */
+export const recentWithdrawals = {
+  rows: [
+    {
+      request_id: 7204, date: '2026-09-18', amount: 25000, from_id: 102, from_name: 'HDFC Bank',
+      to_id: 101, to_name: 'Cash in hand', reference: 'CHQ002341', note: 'Counter float',
+      voucher_id: 55290, voucher_no: 'CON/0142',
+    },
+    {
+      request_id: 7203, date: '2026-09-16', amount: 10000, from_id: 103, from_name: 'ICICI Current',
+      to_id: 104, to_name: 'Petty cash', reference: 'UTR987654321', note: null,
+      voucher_id: 55271, voucher_no: 'CON/0141',
+    },
+    {
+      request_id: 7202, date: '2026-09-12', amount: 50000, from_id: 102, from_name: 'HDFC Bank',
+      to_id: 101, to_name: 'Cash in hand', reference: 'CHQ002333', note: 'Wages',
+      voucher_id: 55230, voucher_no: 'CON/0139',
+    },
+    {
+      request_id: 7201, date: '2026-09-05', amount: 15000, from_id: 102, from_name: 'HDFC Bank',
+      to_id: 101, to_name: 'Cash in hand', reference: 'Slip no. 4456', note: null,
+      voucher_id: 55180, voucher_no: 'CON/0136',
+    },
+  ],
+  summary: { account_id: null, days: 30, total: 235000, count: 12 },
+  names_available: true,
+  basis:
+    'Withdrawals recorded from Billing in this company and year. '
+    + "Entries made directly in Smart Books are in Books' own register.",
+}
+
+export const savedWithdrawal = {
+  request_id: 7205,
+  request_uuid: '8f2c1a10-0000-4000-8000-000000007205',
+  kind: 'bank_withdrawal',
+  status: 'POSTED',
+  party_account_id: null,
+  transaction_date: '2026-09-19',
+  payload: {},
+  books_voucher_id: 55301,
+  books_voucher_uuid: 'v-55301',
+  books_voucher_no: 'CON/0143',
+  last_error: null,
+  created_at: '2026-09-19T07:20:00Z',
+}
 
 export const taxCategories = [
   { tax_cat_id: 1, tax_cat_name: 'GST 18% — input credit' },

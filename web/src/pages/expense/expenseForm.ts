@@ -6,6 +6,7 @@
  * is written down in one place next to the rules that let it be sent.
  */
 
+import { parseAmount } from '../../utils/amount'
 import type { CatalogParty } from '../../services/types'
 
 export interface ExpenseDraft {
@@ -80,25 +81,13 @@ export function isDirty(draft: ExpenseDraft, baseline: ExpenseDraft): boolean {
 }
 
 /**
- * The amount as a number, or null when it is not one.
+ * Reading and grouping the typed amount.
  *
- * Grouping separators are stripped rather than rejected: the field shows
- * 1,23,456.78 after it loses focus, and a person who clicks back into it and
- * presses Save should not be told that what we wrote there is invalid.
+ * Shared with the bank withdrawal form, so both screens agree about what counts
+ * as a number. Re-exported here because this module is what the expense
+ * components already import them from.
  */
-export function parseAmount(text: string): number | null {
-  const cleaned = text.replace(/[\s,]/g, '')
-  if (cleaned === '') return null
-
-  const value = Number(cleaned)
-
-  return Number.isFinite(value) ? value : null
-}
-
-/** Indian digit grouping while typing — the same grouping money() prints. */
-export function groupAmount(value: number): string {
-  return new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)
-}
+export { groupAmount, parseAmount } from '../../utils/amount'
 
 export interface FinancialYearWindow {
   from: string | null
@@ -167,29 +156,9 @@ export function toExpenseRequest(draft: ExpenseDraft): Record<string, unknown> {
 }
 
 /**
- * Read an id out of a row whose key spelling we do not control.
+ * Reading values out of a row whose key spelling we do not control.
  *
- * Books' lists have grown several shapes; the server parses them the same way
- * (see BooksReadings) and the tax categories are the one list no screen had a
- * typed shape for yet.
+ * Shared with the bank withdrawal screen. Re-exported here because this module
+ * is what the expense components already import them from.
  */
-export function readId(row: Record<string, unknown>, keys: string[]): number | null {
-  for (const key of keys) {
-    const value = row[key]
-    if (typeof value === 'number' && Number.isFinite(value) && value !== 0) return value
-    if (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value)) && Number(value) !== 0) {
-      return Number(value)
-    }
-  }
-
-  return null
-}
-
-export function readText(row: Record<string, unknown>, keys: string[]): string | null {
-  for (const key of keys) {
-    const value = row[key]
-    if (typeof value === 'string' && value.trim() !== '') return value.trim()
-  }
-
-  return null
-}
+export { readId, readText } from '../../utils/rows'

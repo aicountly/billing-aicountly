@@ -18,6 +18,7 @@ require __DIR__ . '/../src/Autoload.php';
 
 Env::load(__DIR__ . '/../.env');
 
+use Aicountly\Api\Domain\BankCashHistory;
 use Aicountly\Api\Domain\BillerDeskService;
 use Aicountly\Api\Domain\CollectionsService;
 use Aicountly\Api\Domain\ComplianceService;
@@ -1204,6 +1205,181 @@ check('a bill file cannot be kept here, and the screen is told why', function ()
     $extraction = DocumentCapture::extraction();
     assertTrue($extraction['available'] === false, 'and no service reads one either');
     assertTrue(str_contains((string) $extraction['reason'], 'document-extraction'), 'named, so it can be turned on');
+});
+
+echo "\nThe bank withdrawal screen\n";
+
+/** One withdrawal, with only the fields the screen actually sends. */
+function withdrawal(array $over = []): array
+{
+    return $over + [
+        'amount'          => 25000,
+        'from_account_id' => 102,
+        'to_account_id'   => 101,
+        'date'            => gmdate('Y-m-d'),
+    ];
+}
+
+check('recent withdrawals are this company\'s own posted ones, newest first, named live', function () use ($ctx, $auth) {
+    resetDatabase();
+    $service = new TransactionService($ctx, $auth);
+    $service->create('bank_withdrawal', withdrawal(['amount' => 15000, 'date' => '2026-09-05', 'instrument_no' => 'Slip no. 4456']));
+    $service->create('bank_withdrawal', withdrawal(['amount' => 25000, 'date' => '2026-09-18', 'instrument_no' => 'CHQ002341']));
+
+    $recent = (new BankCashHistory($ctx, $auth))->recent('bank_withdrawal', 4);
+
+    assertSame(2, count($recent['rows']), 'both withdrawals come back');
+    assertSame('2026-09-18', $recent['rows'][0]['date'], 'newest first');
+    assertSame(25000.0, $recent['rows'][0]['amount'], 'the amount is what was recorded');
+    assertSame('CHQ002341', $recent['rows'][0]['reference'], 'and the cheque number with it');
+    // The NAMES are Books', read on this request. Billing stores the ids only.
+    assertTrue($recent['names_available'], 'Books answered, so the ledgers are named');
+    assertSame('HDFC Current', $recent['rows'][0]['from_name'], 'the bank it left is named from Books');
+    assertSame('Cash in hand', $recent['rows'][0]['to_name'], 'so is the cash account it went into');
+});
+
+check('a deposit is not a withdrawal, and an unposted one is not history', function () use ($ctx, $auth) {
+    resetDatabase();
+    (new TransactionService($ctx, $auth))->create('bank_deposit', ['amount' => 9000, 'from_account_id' => 101, 'to_account_id' => 102, 'date' => gmdate('Y-m-d')]);
+
+    stubFail('vouchers/drafts', 500);
+    try {
+        (new TransactionService($ctx, $auth))->create('bank_withdrawal', withdrawal());
+    } catch (\Throwable) {
+        // The point of the case: it did not reach Books.
+    }
+    stubRecover();
+
+    $rows = (new BankCashHistory($ctx, $auth))->recent('bank_withdrawal', 4)['rows'];
+    assertSame([], $rows, 'neither one shows as a recorded withdrawal');
+    assertSame(1, count((new BankCashHistory($ctx, $auth))->recent('bank_deposit', 4)['rows']), 'the deposit is in its own list');
+});
+
+check('the thirty-day figures count only the account the screen is showing', function () use ($ctx, $auth) {
+    resetDatabase();
+    $service = new TransactionService($ctx, $auth);
+    $service->create('bank_withdrawal', withdrawal(['amount' => 25000, 'from_account_id' => 102]));
+    $service->create('bank_withdrawal', withdrawal(['amount' => 50000, 'from_account_id' => 102]));
+    $service->create('bank_withdrawal', withdrawal(['amount' => 10000, 'from_account_id' => 103]));
+
+    $all = (new BankCashHistory($ctx, $auth))->recent('bank_withdrawal', 4);
+    assertSame(85000.0, $all['summary']['total'], 'every account, with no account asked for');
+    assertSame(3, $all['summary']['count'], 'and every entry counted');
+
+    $hdfc = (new BankCashHistory($ctx, $auth))->recent('bank_withdrawal', 4, 102);
+    assertSame(75000.0, $hdfc['summary']['total'], 'only what left the chosen bank');
+    assertSame(2, $hdfc['summary']['count'], 'and only those entries');
+    assertSame(102, $hdfc['summary']['account_id'], 'the figure says which account it is about');
+    // The ROWS are deliberately not narrowed: "what did I record lately" is the
+    // more useful list, and each row names its own account.
+    assertSame(3, count($hdfc['rows']), 'the list itself still shows the recent ones');
+});
+
+check('the thirty-day figures stop at thirty days', function () use ($ctx, $auth) {
+    resetDatabase();
+    $service = new TransactionService($ctx, $auth);
+    $service->create('bank_withdrawal', withdrawal(['amount' => 4000, 'date' => gmdate('Y-m-d', strtotime('-3 days'))]));
+    $service->create('bank_withdrawal', withdrawal(['amount' => 7000, 'date' => gmdate('Y-m-d', strtotime('-45 days'))]));
+
+    $summary = (new BankCashHistory($ctx, $auth))->recent('bank_withdrawal', 4)['summary'];
+
+    assertSame(30, $summary['days'], 'the window is the one the screen names');
+    assertSame(4000.0, $summary['total'], 'the older withdrawal is outside it');
+    assertSame(1, $summary['count'], 'and is not counted either');
+});
+
+check('Books being unreachable costs the names, not the list', function () use ($ctx, $auth) {
+    resetDatabase();
+    (new TransactionService($ctx, $auth))->create('bank_withdrawal', withdrawal(['amount' => 12000]));
+
+    stubFail('masters/accounts', 503);
+    $recent = (new BankCashHistory($ctx, $auth))->recent('bank_withdrawal', 4);
+    stubRecover();
+
+    assertSame(1, count($recent['rows']), 'the withdrawal is still listed');
+    assertSame(12000.0, $recent['rows'][0]['amount'], 'with its amount');
+    assertTrue($recent['names_available'] === false, 'and the screen is told the names are missing');
+    assertSame(null, $recent['rows'][0]['from_name'], 'rather than being given a guess');
+});
+
+check('another company\'s withdrawals are not in this one\'s list', function () use ($auth) {
+    resetDatabase();
+    $mine = freshContext(55);
+    $theirs = freshContext(77);
+
+    (new TransactionService($mine, $auth))->create('bank_withdrawal', withdrawal(['amount' => 100]));
+    (new TransactionService($theirs, $auth))->create('bank_withdrawal', withdrawal(['amount' => 200]));
+
+    $recent = (new BankCashHistory($mine, $auth))->recent('bank_withdrawal', 4);
+    assertSame(1, count($recent['rows']), 'only this company\'s');
+    assertSame(100.0, $recent['rows'][0]['amount'], 'and it is the right one');
+    assertSame(100.0, $recent['summary']['total'], 'the figures are scoped the same way');
+});
+
+check('the withdrawal carries the reference and the note it was given', function () use ($ctx, $auth) {
+    resetDatabase();
+    $saved = (new TransactionService($ctx, $auth))->create('bank_withdrawal', withdrawal([
+        'amount'        => 50000.5,
+        'instrument_no' => 'CHQ002341',
+        'narration'     => 'Cash withdrawn for branch expenses',
+    ]));
+
+    $payload = Db::jsonColumn(Db::scalar(
+        'SELECT payload FROM billing_transaction_requests WHERE request_id = :id',
+        ['id' => $saved['request_id']],
+    ));
+
+    assertSame(102, $payload['from_account_id'], 'the bank it comes out of');
+    assertSame(101, $payload['to_account_id'], 'the cash account it goes into');
+    assertSame(50000.5, $payload['amount'], 'the amount as a number, not a formatted string');
+    assertSame('CHQ002341', $payload['instrument_no'], 'the cheque number');
+    assertSame('Cash withdrawn for branch expenses', $payload['narration'], 'and the note the old form had no box for');
+    // Billing sends the two accounts. Which is debited and which is credited is
+    // Books' decision, and there is no journal line anywhere in this payload.
+    assertTrue(!isset($payload['debit_account_id']) && !isset($payload['lines']), 'no accounting entry is built here');
+});
+
+check('a withdrawal has to move money, and between two different accounts', function () use ($ctx, $auth) {
+    resetDatabase();
+    $service = new TransactionService($ctx, $auth);
+
+    assertThrows(
+        static fn () => $service->create('bank_withdrawal', withdrawal(['amount' => 0])),
+        'Enter the amount',
+        'a withdrawal of nothing',
+    );
+    assertThrows(
+        static fn () => $service->create('bank_withdrawal', withdrawal(['amount' => -500])),
+        'Enter the amount',
+        'a withdrawal of less than nothing',
+    );
+    assertThrows(
+        static fn () => $service->create('bank_withdrawal', withdrawal(['to_account_id' => 102])),
+        'two different accounts',
+        'a withdrawal into the account it came from',
+    );
+    assertThrows(
+        static fn () => $service->create('bank_withdrawal', ['amount' => 500, 'to_account_id' => 101, 'date' => gmdate('Y-m-d')]),
+        'which bank the money came from',
+        'a withdrawal from nowhere',
+    );
+});
+
+check('a biller cannot record a withdrawal or read the list behind it', function () use ($ctx) {
+    resetDatabase();
+    $biller = userWithProfile($ctx, 'counter-ravi', 'biller');
+
+    assertTrue(!Permissions::allows($ctx, $biller, 'contra.create'), 'the counter profile does not move money between cash and bank');
+    assertThrows(
+        static fn () => (new TransactionService($ctx, $biller))->create('bank_withdrawal', withdrawal()),
+        'cannot',
+        'a biller recording a bank withdrawal',
+    );
+
+    // The screen's list is gated on the same permission, so a profile that
+    // cannot record one is not handed the history of them either.
+    $cashier = userWithProfile($ctx, 'till-meena', 'cashier');
+    assertTrue(Permissions::allows($ctx, $cashier, 'contra.create'), 'the cashier profile does');
 });
 
 echo "\nData ownership (release-blocking)\n";
