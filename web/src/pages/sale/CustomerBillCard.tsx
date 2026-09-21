@@ -20,7 +20,7 @@ import { api } from '../../services/api'
 import type { CatalogParty } from '../../services/types'
 import { money } from '../../ui'
 import { Field, Segmented } from './SaleFields'
-import { SaleCombo } from './SaleCombo'
+import { Combo } from '../../components/Combo'
 import {
   GST_STATES,
   OVERSEAS_CODE,
@@ -146,7 +146,7 @@ export function CustomerBillCard({
             <h2 id="sale-party-heading">Customer (Party)</h2>
           </div>
 
-          <SaleCombo<CatalogParty>
+          <Combo<CatalogParty>
             label="Search or select a customer"
             placeholder={draft.party ? draft.party.acc_name : 'Search or select a customer…'}
             selected={draft.party?.acc_name ?? null}

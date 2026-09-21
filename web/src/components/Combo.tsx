@@ -1,10 +1,12 @@
 /**
- * The type-ahead this screen searches customers and items with.
+ * The type-ahead this product searches other products' records with.
  *
- * One component for both, because the two have to behave identically under the
+ * One component everywhere, because they have to behave identically under the
  * hands of somebody billing at a counter: the same debounce, the same arrow
  * keys, the same three states when nothing comes back. A second implementation
  * is how the item box ends up selecting on Tab and the customer box does not.
+ * It started on the bill screen and now serves the purchase grid as well,
+ * which is why it lives here rather than under one screen's folder.
  *
  * WHAT IT DOES NOT DO: hold a list. Every keystroke asks the product that owns
  * the records — Books for parties, Inventory for items — through this product's
@@ -12,7 +14,18 @@
  * choice except the record the caller was handed.
  */
 
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type Ref,
+} from 'react'
+import { createPortal } from 'react-dom'
 import { Loader2, Search, X } from 'lucide-react'
 
 export interface ComboRenderedOption {
@@ -24,7 +37,7 @@ export interface ComboRenderedOption {
   meta?: ReactNode[]
 }
 
-export function SaleCombo<T>({
+export function Combo<T>({
   label,
   placeholder,
   search,
@@ -43,6 +56,7 @@ export function SaleCombo<T>({
   describedBy,
   minChars = 2,
   emptyAction,
+  portal = false,
 }: {
   label: string
   placeholder: string
@@ -64,10 +78,19 @@ export function SaleCombo<T>({
   compact?: boolean
   invalid?: boolean
   autoFocus?: boolean
-  inputRef?: RefObject<HTMLInputElement | null>
+  inputRef?: Ref<HTMLInputElement>
   describedBy?: string
   minChars?: number
   emptyAction?: ReactNode
+  /**
+   * Draw the list in a portal, positioned against the viewport.
+   *
+   * A grid scrolls sideways (`overflow-x: auto`), and an absolutely positioned
+   * list inside one is clipped by it — a line whose item list is half visible
+   * is a line nobody can fill in. Pass this wherever the field sits in a
+   * scroller.
+   */
+  portal?: boolean
 }) {
   const listId = useId()
   const [term, setTerm] = useState('')
@@ -78,8 +101,8 @@ export function SaleCombo<T>({
   const [active, setActive] = useState(0)
   const [attempt, setAttempt] = useState(0)
   const box = useRef<HTMLDivElement>(null)
-  const fallbackRef = useRef<HTMLInputElement>(null)
-  const field = inputRef ?? fallbackRef
+  const list = useRef<HTMLUListElement>(null)
+  const [anchor, setAnchor] = useState<{ left: number; top: number; bottom: number; width: number } | null>(null)
 
   const trimmed = term.trim()
   const searching = trimmed.length >= minChars
@@ -125,7 +148,11 @@ export function SaleCombo<T>({
 
   useEffect(() => {
     function away(event: MouseEvent) {
-      if (box.current && !box.current.contains(event.target as Node)) setOpen(false)
+      const target = event.target as Node
+      // The portalled list is not a DOM descendant of the box, so it has to be
+      // asked separately or clicking an option would close the list first.
+      if (box.current?.contains(target) || list.current?.contains(target)) return
+      setOpen(false)
     }
     document.addEventListener('mousedown', away)
     return () => document.removeEventListener('mousedown', away)
@@ -181,16 +208,47 @@ export function SaleCombo<T>({
 
   const showList = open && (searching || (shown.length > 0 && trimmed === ''))
 
+  const measure = useCallback(() => {
+    const rect = box.current?.getBoundingClientRect()
+    if (rect) setAnchor({ left: rect.left, top: rect.top, bottom: rect.bottom, width: rect.width })
+  }, [])
+
+  useLayoutEffect(() => {
+    if (!portal || !showList) return undefined
+
+    measure()
+    window.addEventListener('scroll', measure, true)
+    window.addEventListener('resize', measure)
+    return () => {
+      window.removeEventListener('scroll', measure, true)
+      window.removeEventListener('resize', measure)
+    }
+  }, [portal, showList, measure])
+
+  /** Above the field when there is no room for the list below it. */
+  const floating =
+    portal && anchor
+      ? {
+          left: anchor.left,
+          width: Math.max(anchor.width, 260),
+          ...(window.innerHeight - anchor.bottom < 240 && anchor.top > 260
+            ? { bottom: window.innerHeight - anchor.top + 4 }
+            : { top: anchor.bottom + 4 }),
+        }
+      : undefined
+
+  const renderList = (node: ReactNode) => (portal ? createPortal(node, document.body) : node)
+
   return (
     <div
       ref={box}
-      className={`billing-sale-combo${compact ? ' billing-sale-combo--compact' : ''}${invalid ? ' billing-sale-combo--invalid' : ''}`}
+      className={`billing-combo${compact ? ' billing-combo--compact' : ''}${invalid ? ' billing-combo--invalid' : ''}`}
     >
-      <div className="billing-sale-combo__field">
-        <Search size={compact ? 13 : 15} className="billing-sale-combo__icon" aria-hidden />
+      <div className="billing-combo__field">
+        <Search size={compact ? 13 : 15} className="billing-combo__icon" aria-hidden />
         <input
-          ref={field}
-          className="billing-sale-combo__input"
+          ref={inputRef}
+          className="billing-combo__input"
           type="text"
           role="combobox"
           aria-expanded={showList}
@@ -198,6 +256,9 @@ export function SaleCombo<T>({
           aria-autocomplete="list"
           aria-label={label}
           aria-describedby={describedBy}
+          // The red border is not enough on its own: colour is the one signal
+          // a screen reader and a colour-blind user both miss.
+          aria-invalid={invalid || undefined}
           aria-activedescendant={showList && shown[active] ? `${listId}-${active}` : undefined}
           autoComplete="off"
           placeholder={selected ?? placeholder}
@@ -210,40 +271,47 @@ export function SaleCombo<T>({
           onFocus={() => setOpen(true)}
           onKeyDown={onKeyDown}
         />
-        {busy && <Loader2 size={14} className="billing-sale-combo__busy spin" aria-hidden />}
+        {busy && <Loader2 size={14} className="billing-combo__busy spin" aria-hidden />}
         {!busy && selected && onClear && (
-          <button type="button" className="billing-sale-combo__clear" onClick={onClear} aria-label={`Clear ${label}`}>
+          <button type="button" className="billing-combo__clear" onClick={onClear} aria-label={`Clear ${label}`}>
             <X size={14} aria-hidden />
           </button>
         )}
       </div>
 
-      {showList && (
-        <ul className="billing-sale-combo__list" id={listId} role="listbox" aria-label={label}>
+      {showList && renderList(
+        <ul
+          ref={list}
+          className={`billing-combo__list${portal ? ' billing-combo__list--floating' : ''}`}
+          id={listId}
+          role="listbox"
+          aria-label={label}
+          style={floating}
+        >
           {busy && shown.length === 0 && (
-            <li className="billing-sale-combo__status">
+            <li className="billing-combo__status">
               <Loader2 size={14} className="spin" aria-hidden /> Searching…
             </li>
           )}
 
           {failed && (
-            <li className="billing-sale-combo__status billing-sale-combo__status--error">
+            <li className="billing-combo__status billing-combo__status--error">
               <span>Could not reach the app that holds this list.</span>
-              <button type="button" className="billing-sale-combo__retry" onClick={() => setAttempt((n) => n + 1)}>
+              <button type="button" className="billing-combo__retry" onClick={() => setAttempt((n) => n + 1)}>
                 Retry
               </button>
             </li>
           )}
 
           {!busy && !failed && searching && shown.length === 0 && (
-            <li className="billing-sale-combo__status">
+            <li className="billing-combo__status">
               <span>No matches for “{trimmed}”.</span>
               {emptyAction}
             </li>
           )}
 
           {!searching && idleHeading && shown.length > 0 && (
-            <li className="billing-sale-combo__status" aria-hidden>
+            <li className="billing-combo__status" aria-hidden>
               {idleHeading}
             </li>
           )}
@@ -258,16 +326,16 @@ export function SaleCombo<T>({
                   id={`${listId}-${index}`}
                   role="option"
                   aria-selected={index === active}
-                  className="billing-sale-combo__option"
+                  className="billing-combo__option"
                   onMouseEnter={() => setActive(index)}
                   onClick={() => choose(record)}
                 >
-                  <span className="billing-sale-combo__option-top">
-                    <span className="billing-sale-combo__option-name">{rendered.name}</span>
+                  <span className="billing-combo__option-top">
+                    <span className="billing-combo__option-name">{rendered.name}</span>
                     {rendered.trailing !== undefined && <span className="num">{rendered.trailing}</span>}
                   </span>
                   {rendered.meta && rendered.meta.filter(Boolean).length > 0 && (
-                    <span className="billing-sale-combo__option-meta">
+                    <span className="billing-combo__option-meta">
                       {rendered.meta.filter(Boolean).map((part, position) => (
                         <span key={position}>{part}</span>
                       ))}
@@ -277,7 +345,7 @@ export function SaleCombo<T>({
               </li>
             )
           })}
-        </ul>
+        </ul>,
       )}
     </div>
   )

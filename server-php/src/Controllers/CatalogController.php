@@ -276,6 +276,20 @@ final class CatalogController extends Controller
         self::relay((new InventoryClient())->withSession($auth->sesKey())->warehouses($ctx), $ctx, $auth);
     }
 
+    /**
+     * Units of measure.
+     *
+     * A document line already carries `unit_id`, so the screen that writes one
+     * needs the names behind those ids. Inventory owns the master; this is the
+     * same pass-through the warehouses above are, and nothing it returns is
+     * stored here.
+     */
+    public static function uoms(): void
+    {
+        [$auth, $ctx] = self::enter();
+        self::relay((new InventoryClient())->withSession($auth->sesKey())->uoms($ctx), $ctx, $auth);
+    }
+
     /** Parties — Books' account ledgers. `side` narrows to customers or suppliers. */
     public static function parties(): void
     {

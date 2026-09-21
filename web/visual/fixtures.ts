@@ -1020,6 +1020,9 @@ export const suppliers = [
   { acc_id: 9012, acc_name: 'Meenakshi Paper Mills', gstin: '33AAGCM1234K1ZP' },
   { acc_id: 9013, acc_name: 'Coimbatore Stationers', gstin: '33AACCC5678L1Z2' },
   { acc_id: 9014, acc_name: 'Nilgiri Packaging LLP', gstin: '33AABFN9012M1Z8' },
+  // Registered in 27, the same state as the company above, so the within-state
+  // CGST + SGST split is reachable in the booth and not only the IGST one.
+  { acc_id: 606, acc_name: 'Sharma Paper Mart', gstin: '27AAECS1234F1Z2' },
 ]
 
 /** What the API returns when the harness "saves" an expense. */
@@ -1352,7 +1355,7 @@ export const originalDocument = {
 }
 
 export const warehouses = [
-  { mc_id: 3, mc_name: 'Main Warehouse' },
+  { mc_id: 3, mc_name: 'Main Warehouse', is_default: true },
   { mc_id: 4, mc_name: 'Delhi Warehouse' },
   { mc_id: 5, mc_name: 'Counter Stock' },
 ]
@@ -1558,6 +1561,32 @@ export const moneyRecentIn = {
   ],
 }
 
+/* ---------------------------------------------------------------------------
+   Purchases → New purchase
+
+   Only what nothing else in this file already covers. Items, parties,
+   warehouses, tax categories, cash/bank accounts and stock all come from the
+   fixtures above — the purchase screen reads the same masters the bill screen
+   does, and two copies of a master is how two booths end up disagreeing about
+   what an item costs.
+   --------------------------------------------------------------------------- */
+
+/** Inventory's UOM master, behind the Unit column on a purchase line. */
+export const uoms = [
+  { unit_id: 1, unit_symbol: 'Nos' },
+  { unit_id: 2, unit_symbol: 'Box' },
+  { unit_id: 3, unit_symbol: 'Kg' },
+  { unit_id: 4, unit_symbol: 'Ream' },
+]
+
+/** A purchase request, answered so the save path can be walked in the booth. */
+export const savedPurchase = {
+  request_id: 77,
+  request_uuid: 'visual-harness-purchase',
+  kind: 'purchase',
+  status: 'POSTED',
+  books_voucher_no: 'PUR-2026-0121',
+}
 // ---------------------------------------------------------------------------
 // Settings
 //

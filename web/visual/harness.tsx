@@ -42,6 +42,7 @@ import ItemsPage from '../src/pages/items/ItemsPage'
 import BankWithdrawalPage from '../src/pages/bank-withdrawal/BankWithdrawalPage'
 import SalesBillPage from '../src/pages/sale/SalesBillPage'
 import CreditNotePage from '../src/pages/credit-note/CreditNotePage'
+import NewPurchasePage from '../src/pages/purchase/NewPurchasePage'
 import SettingsHome from '../src/pages/settings/SettingsHome'
 import SettingsCategory from '../src/pages/settings/SettingsCategory'
 import { saveSession, setAuthToken } from '../src/auth/tokens'
@@ -140,6 +141,7 @@ const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
   sale: { path: '/sales/new', element: <SalesBillPage /> },
   'credit-note': { path: '/more/credit-note', element: <CreditNotePage /> },
   'bank-withdrawal': { path: '/bank-cash/withdrawal', element: <BankWithdrawalPage /> },
+  purchase: { path: '/purchases/new', element: <NewPurchasePage /> },
   settings: { path: '/settings', element: <SettingsHome /> },
 }
 
@@ -235,6 +237,14 @@ const RESPONSES: Array<[RegExp, unknown | ((url: string) => unknown)]> = [
       { bo_id: 2, bo_name: 'Warehouse', is_head_office: false },
     ],
   }],
+
+  // Purchases → New purchase. Everything else it reads — items, parties,
+  // warehouses, tax categories, cash/bank, stock, the register — is already
+  // answered above or by the interceptors, and is deliberately not repeated.
+  [/v1\/catalog\/uoms/, fixtures.uoms],
+  // A saved purchase. Narrow, so it cannot shadow the other transaction kinds
+  // answered above it.
+  [/v1\/transactions\/purchase/, fixtures.savedPurchase],
   [/v1\/profiles/, fixtures.profiles],
   [/v1\/reminders/, fixtures.reminderRules],
 ]
