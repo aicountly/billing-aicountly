@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace Aicountly\Api\Controllers;
 
+use Aicountly\Api\Auth;
 use Aicountly\Api\Clients\BooksClient;
 use Aicountly\Api\Clients\InventoryClient;
+use Aicountly\Api\Context;
 use Aicountly\Api\Db;
+use Aicountly\Api\Domain\ItemCatalog;
 use Aicountly\Api\Http;
 use Aicountly\Api\Permissions;
 
@@ -20,14 +23,130 @@ use Aicountly\Api\Permissions;
  */
 final class CatalogController extends Controller
 {
+    /**
+     * The item list behind the Items screen and the billing pickers.
+     *
+     * Filtering, sorting and paging all happen in Inventory, because Inventory
+     * is the only thing that can do them across the whole catalogue instead of
+     * across the twenty-five rows that happen to be in hand. What happens here
+     * is the shaping: one row shape for the browser, and a check that the
+     * narrowing that was asked for was actually applied. See ItemCatalog.
+     */
     public static function items(): void
     {
         [$auth, $ctx] = self::enter();
-        self::relay((new InventoryClient())->withSession($auth->sesKey())->items($ctx, [
-            'q'      => Http::param('q'),
-            'limit'  => Http::intParam('limit', 50),
-            'offset' => Http::intParam('offset', 0),
-        ]), $ctx, $auth);
+
+        $filters = ItemCatalog::filtersFromRequest();
+        // The billing pickers call this with `q` and a limit and nothing else,
+        // and 50 is the page they have always been given.
+        if (Http::param('limit') === null) {
+            $filters['limit'] = 50;
+        }
+
+        self::relay((new ItemCatalog($ctx, $auth))->page($filters), $ctx, $auth);
+    }
+
+    /**
+     * The five figures at the top of the Items screen.
+     *
+     * Each one carries its own availability. A count Inventory could not give
+     * is returned as null with the reason, and the card says "Unavailable" —
+     * it is not rendered as 0, because a zero and an outage look identical on
+     * screen and one of them means there is nothing to worry about.
+     */
+    public static function itemStats(): void
+    {
+        [$auth, $ctx] = self::enter();
+        self::assertMaySeeCatalogue($ctx, $auth);
+
+        Http::data((new ItemCatalog($ctx, $auth))->stats());
+    }
+
+    /**
+     * Item groups, for the filter. Inventory's own, never a list kept here.
+     *
+     * Shaped to `{group_id, group_name}` on the way through for the same reason
+     * the items are: which spelling arrives differs by deployment, and the
+     * browser should be reading a list, not a naming convention.
+     */
+    public static function itemGroups(): void
+    {
+        [$auth, $ctx] = self::enter();
+        self::assertMaySeeCatalogue($ctx, $auth);
+
+        $result = (new InventoryClient())->withSession($auth->sesKey())->itemGroups($ctx);
+        if (!$result['ok']) {
+            self::relay($result, $ctx, $auth);
+        }
+
+        $groups = [];
+        foreach ((array) ($result['body']['data'] ?? []) as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $id = ItemCatalog::pickInt($row, ['item_group_id', 'group_id', 'category_id', 'id']);
+            $name = ItemCatalog::pickString($row, ['item_group_name', 'group_name', 'category_name', 'name', 'label']);
+            if ($id === null || $name === null) {
+                continue;
+            }
+            $groups[] = ['group_id' => $id, 'group_name' => $name];
+        }
+
+        // Alphabetical, because a filter list is read by eye and Inventory's
+        // own order is its insertion order.
+        usort($groups, static fn (array $a, array $b) => strcasecmp($a['group_name'], $b['group_name']));
+
+        Http::list($groups, count($groups), count($groups), 0, ['source' => 'inventory']);
+    }
+
+    /**
+     * The catalogue as a file — the FULL filtered set, not the page on screen.
+     *
+     * A separate permission from looking at it, exactly as the reports are: a
+     * person may be trusted to look an item up at the counter and not to walk
+     * out with the price list.
+     */
+    public static function exportItems(): void
+    {
+        [$auth, $ctx] = self::enter();
+        self::assertMaySeeCatalogue($ctx, $auth);
+        Permissions::assert($ctx, $auth, 'export.data');
+
+        $filters = ItemCatalog::filtersFromRequest();
+        $csv = (new ItemCatalog($ctx, $auth))->exportCsv($filters);
+
+        \Aicountly\Api\Audit::record($ctx, $auth, 'items.exported', 'catalog', 0, null, [
+            'filters' => array_filter($filters, static fn ($value) => $value !== null && $value !== ''),
+        ]);
+
+        if (PHP_SAPI === 'cli') {
+            Http::json(200, ['data' => ['csv' => $csv]]);
+        }
+
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="items-' . date('Y-m-d') . '.csv"');
+        header('Cache-Control: no-store');
+        // A BOM, so Excel opens the rupee sign and Indian names as UTF-8
+        // rather than as mojibake.
+        echo "\xEF\xBB\xBF" . $csv;
+        exit;
+    }
+
+    /**
+     * May this profile look at the item catalogue at all?
+     *
+     * Whoever may see what is being sold or bought may look items up — the
+     * purchase operator holds no `sale.view` and still needs the list. This is
+     * the same pair the menu is built from, checked again here because a menu
+     * that does not draw an entry has not stopped anyone typing the URL.
+     */
+    private static function assertMaySeeCatalogue(Context $ctx, Auth $auth): void
+    {
+        if (Permissions::allows($ctx, $auth, 'sale.view') || Permissions::allows($ctx, $auth, 'purchase.view')) {
+            return;
+        }
+
+        Http::forbidden('Your Billing profile does not include the item catalogue.');
     }
 
     public static function searchItems(): void
@@ -43,6 +162,31 @@ final class CatalogController extends Controller
             $ctx,
             $auth,
         );
+    }
+
+    /**
+     * One item, by its id, in the same shape the list uses.
+     *
+     * The billing screens are opened with an item already chosen — from the
+     * Items screen, from the biller desk — and the id in that URL is a request,
+     * not a fact: the name, the rate and the stock have to come from the
+     * product that owns them on this request, whoever typed the id.
+     */
+    public static function item(string $id): void
+    {
+        [$auth, $ctx] = self::enter();
+
+        $itemId = (int) $id;
+        if ($itemId <= 0) {
+            Http::validationFailed('That is not an item id.', ['field' => 'id']);
+        }
+
+        $result = (new InventoryClient())->withSession($auth->sesKey())->item($ctx, $itemId);
+        if ($result['ok'] && is_array($result['body']['data'] ?? null)) {
+            $result['body']['data'] = ItemCatalog::normalise($result['body']['data']);
+        }
+
+        self::relay($result, $ctx, $auth);
     }
 
     /** Scan-to-bill: the barcode goes straight to Inventory. */

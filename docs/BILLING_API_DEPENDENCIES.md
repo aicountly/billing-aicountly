@@ -46,9 +46,59 @@ the absence as a zero.
 
 | Endpoint | Used by |
 |---|---|
-| `GET items`, `GET items/search`, `GET items/barcode/{code}` | item pickers, biller desk |
+| `GET items`, `GET items/search`, `GET items/barcode/{code}` | item pickers, biller desk, the Items screen |
+| `GET items/{id}` | a billing screen opened with an item already chosen |
+| `GET item-groups` | the group filter on the Items screen |
+| `GET stock-balances` | the stock column, one batched call per page |
 | `GET availability` | stock check |
-| `GET replenishment` | "running low" |
+| `GET replenishment` | "running low", and the Low stock figure |
+
+#### What the Items screen asks `GET items` for
+
+The screen filters, sorts and pages **upstream**, because Inventory is the only
+thing that can do any of the three across the whole catalogue rather than
+across the twenty-five rows Billing happens to be holding. One spelling per
+filter, and these are it:
+
+```
+GET items ?cmp_id&fy_id&bo_id
+          &q            search over name, SKU, HSN/SAC and barcode
+          &type         stock | service
+          &status       active | inactive
+          &stock_status in | low | out
+          &group_id     an item group id
+          &warehouse_id narrows availability to one warehouse
+          &sort         name | sku | hsn_sac | rate | stock | status
+          &order        asc | desc
+          &limit&offset
+  → { data: [ … ], meta: { total, limit, offset } }
+```
+
+`meta.total` is what the pager counts with. Without it the screen still steps
+forward a page at a time, but it stops claiming to know where the end is.
+
+**Where Inventory does not support one of these, the screen says so.** Billing
+checks the rows that come back against the narrowing it asked for — a row whose
+own type, status, stock state or group contradicts the filter is proof the
+filter was not applied — and reports it in `meta.upstream.filters_ignored`. The
+same is done for the order, in `meta.upstream.sort_applied`. The list is then
+drawn as Inventory returned it, with a line above it saying that is what
+happened. It is not quietly re-filtered in the browser, because a page that has
+been filtered locally is a page whose totals and paging are wrong.
+
+The five figures above the list are five counts of the same endpoint with
+`limit=1`, read for their `meta.total`, plus `reports/replenishment` for
+"running low". Each carries its own availability: one that cannot be read shows
+as **Unavailable with the reason**, never as 0.
+
+#### Not available: creating, editing and importing an item
+
+Deliberately, and this one is not a gap to be closed. Inventory owns the item
+master, so **Add item**, **Import** and **Item groups** on the Items screen open
+Inventory rather than doing anything here, carrying `cmp_id`, `fy_id`, `bo_id`
+and a `return_url`. Inventory applies its own permissions when the user lands.
+A second place to create an item is a second place for the same item to exist
+under two codes.
 
 ### Manage
 

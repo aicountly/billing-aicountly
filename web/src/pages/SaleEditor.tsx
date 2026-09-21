@@ -176,9 +176,12 @@ export default function SaleEditor({ kind = 'sale' }: { kind?: EditorKind }) {
 
     const controller = new AbortController()
     const lookup = itemId
-      ? api
-          .get<{ data: CatalogItem[] }>('v1/catalog/items', { limit: 1, q: '' }, controller.signal)
-          .then((response) => response.data.find((item) => item.item_id === Number(itemId)) ?? null)
+      ? // By id, from Inventory. This used to ask for the first page of the
+        // catalogue and look for the id in it, which found the item only when
+        // it happened to be the first one in the list.
+        api
+          .one<CatalogItem>(`v1/catalog/items/${encodeURIComponent(itemId)}`, undefined, controller.signal)
+          .then((response) => response.data)
       : api
           .one<CatalogItem>(`v1/catalog/items/barcode/${encodeURIComponent(scan as string)}`, undefined, controller.signal)
           .then((response) => response.data)
