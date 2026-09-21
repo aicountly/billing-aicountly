@@ -1,0 +1,678 @@
+/* ---------------------------------------------------------------------------
+   Money received — the receipt workspace.
+
+   Layout only, on the tokens already declared in index.css and beside the
+   components in billing-dashboard.css. Nothing here introduces a second
+   palette, a second radius scale or a second shadow: the page is the existing
+   design system arranged for one job, which is recording a receipt quickly.
+
+   Everything is namespaced `billing-receipt-` and nothing styles a bare
+   element selector, so adding this sheet cannot reach into another screen.
+   --------------------------------------------------------------------------- */
+
+.billing-receipt { display: grid; gap: 18px; }
+
+/* ------------------------------------------------------------ page heading */
+
+.billing-receipt-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: var(--billing-muted);
+  font-size: 13px;
+}
+
+.billing-receipt-breadcrumb strong { color: var(--billing-text); font-weight: 650; }
+.billing-receipt-breadcrumb span[aria-hidden] { color: #a2aaa5; }
+
+.billing-receipt-title { display: flex; align-items: center; gap: 12px; }
+
+.billing-receipt-title h1 { margin: 0; }
+.billing-receipt-title p { margin: 6px 0 0; color: var(--billing-muted); max-width: 60ch; }
+
+/* The mark beside the title and the smaller one on each card heading are the
+   same shape at two sizes, so the page reads as one family rather than as a
+   collection of icons. */
+.billing-receipt-mark {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--billing-mint);
+  color: var(--billing-action);
+}
+
+.billing-receipt-mark--sm { width: 32px; height: 32px; border-radius: 10px; }
+
+.billing-receipt-kbd {
+  padding: 2px 6px;
+  border: 1px solid var(--billing-border-strong);
+  border-radius: 5px;
+  background: var(--billing-surface-2);
+  color: var(--billing-muted);
+  font-size: 11px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------------------- workspace */
+
+.billing-receipt-grid {
+  display: grid;
+  /* minmax(0, …) on the main column for the same reason the dashboards use it:
+     a grid item's default min-width is its content, so one wide table would
+     otherwise widen the column, the page, and the shell around it. */
+  grid-template-columns: minmax(0, 1fr) 372px;
+  gap: 18px;
+  align-items: start;
+}
+
+.billing-receipt-main,
+.billing-receipt-aside { display: grid; gap: 16px; min-width: 0; align-content: start; }
+
+/* ------------------------------------------------------------- entry card */
+
+.billing-receipt-cardhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.billing-receipt-cardhead__title { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.billing-receipt-cardhead__title h2 { margin: 0; font-size: 16px; letter-spacing: -0.015em; }
+.billing-receipt-cardhead__title p { margin: 3px 0 0; color: var(--billing-muted); font-size: 13px; }
+
+/* The four receipt types. A tab list rather than four buttons, so the arrow
+   keys move between them the way a keyboard user expects. */
+.billing-receipt-tabs {
+  display: flex;
+  padding: 4px;
+  border-radius: 11px;
+  background: var(--billing-surface-2);
+  border: 1px solid var(--billing-border);
+  overflow-x: auto;
+  scrollbar-width: none;
+  max-width: 100%;
+}
+
+.billing-receipt-tabs::-webkit-scrollbar { display: none; }
+
+.billing-receipt-tab {
+  min-height: 34px;
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--billing-muted);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.billing-receipt-tab:hover:not([aria-selected='true']):not(:disabled) { color: var(--billing-text); }
+
+.billing-receipt-tab[aria-selected='true'] {
+  background: var(--billing-action);
+  color: #fff;
+  box-shadow: 0 3px 8px rgb(24 122 18 / 20%);
+}
+
+.billing-receipt-tab:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ------------------------------------------------------------------ fields */
+
+.billing-receipt-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px 16px;
+}
+
+.billing-receipt-field { display: grid; gap: 6px; align-content: start; min-width: 0; }
+
+.billing-receipt-field > label,
+.billing-receipt-field__label {
+  font-size: 13px;
+  font-weight: 650;
+  color: #4a564f;
+}
+
+.billing-receipt-field__required { color: var(--billing-danger); margin-left: 2px; }
+
+.billing-receipt-field input,
+.billing-receipt-field select,
+.billing-receipt-field textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--billing-border-strong);
+  border-radius: 10px;
+  background: var(--billing-surface);
+  color: var(--billing-text);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.billing-receipt-field textarea { min-height: 84px; resize: vertical; padding-bottom: 26px; }
+
+.billing-receipt-field input::placeholder,
+.billing-receipt-field textarea::placeholder { color: #9aa39e; }
+
+.billing-receipt-field input:hover,
+.billing-receipt-field select:hover,
+.billing-receipt-field textarea:hover { border-color: #aebbb2; }
+
+.billing-receipt-field input:focus,
+.billing-receipt-field select:focus,
+.billing-receipt-field textarea:focus {
+  outline: none;
+  border-color: var(--billing-action);
+  box-shadow: 0 0 0 3px rgb(24 122 18 / 12%);
+}
+
+/* An invalid field is outlined AND carries a message with an icon: colour is
+   never the only thing saying something is wrong. */
+.billing-receipt-field[data-invalid='true'] input,
+.billing-receipt-field[data-invalid='true'] select,
+.billing-receipt-field[data-invalid='true'] textarea { border-color: var(--billing-danger); }
+
+.billing-receipt-field__error {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--billing-danger);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.billing-receipt-field__hint { color: var(--billing-muted); font-size: 12px; }
+
+.billing-receipt-input { position: relative; }
+.billing-receipt-input input { padding-left: 36px; }
+
+.billing-receipt-input__icon {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  transform: translateY(-50%);
+  color: var(--billing-muted);
+  pointer-events: none;
+  line-height: 0;
+}
+
+.billing-receipt-input--amount input {
+  padding-left: 30px;
+  font-size: 17px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.billing-receipt-input--amount .billing-receipt-input__icon { left: 12px; font-weight: 650; color: #4a564f; }
+
+.billing-receipt-counter {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  color: var(--billing-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.billing-receipt-textarea { position: relative; }
+
+/* -------------------------------------------------------- customer picker */
+
+.billing-receipt-combo { position: relative; }
+
+.billing-receipt-combo__list {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 17rem;
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--billing-surface);
+  border: 1px solid var(--billing-border-strong);
+  border-radius: 11px;
+  box-shadow: var(--billing-shadow-lg);
+}
+
+.billing-receipt-combo__option {
+  display: block;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--billing-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.billing-receipt-combo__option[aria-selected='true'] { background: var(--billing-mint); }
+.billing-receipt-combo__option small { display: block; color: var(--billing-muted); font-size: 12px; }
+.billing-receipt-combo__note { padding: 10px; color: var(--billing-muted); font-size: 13px; }
+
+.billing-receipt-combo__chosen {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  overflow: hidden;
+  min-height: 44px;
+  padding: 8px 8px 8px 12px;
+  border: 1px solid var(--billing-action);
+  border-radius: 10px;
+  background: var(--billing-mint);
+}
+
+.billing-receipt-combo__chosen > span { min-width: 0; }
+
+.billing-receipt-combo__chosen strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 650;
+}
+.billing-receipt-combo__chosen small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--billing-muted);
+  font-weight: 500;
+}
+
+/* --------------------------------------------------------------- banners */
+
+.billing-receipt-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 12px 14px;
+  border-radius: 11px;
+  border: 1px solid var(--billing-border);
+  background: var(--billing-surface-2);
+  color: var(--billing-text);
+  font-size: 13px;
+}
+
+.billing-receipt-banner p { margin: 0; }
+.billing-receipt-banner strong { display: block; margin-bottom: 2px; }
+.billing-receipt-banner--info { background: var(--billing-mint); border-color: var(--billing-mint-strong); color: #21402a; }
+.billing-receipt-banner--warning { background: var(--billing-warning-bg); border-color: #f0dcb8; color: #6d4208; }
+.billing-receipt-banner__icon { flex: 0 0 auto; line-height: 0; margin-top: 1px; }
+
+/* ------------------------------------------------------------- allocation */
+
+.billing-receipt-section {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--billing-border);
+}
+
+.billing-receipt-section__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.billing-receipt-section__head h3 { margin: 0; font-size: 14px; }
+.billing-receipt-section__head p { margin: 3px 0 0; color: var(--billing-muted); font-size: 12px; }
+
+.billing-receipt-alloc { border: 1px solid var(--billing-border); border-radius: 12px; overflow: hidden; }
+.billing-receipt-alloc .billing-table th { border-bottom: 1px solid var(--billing-border); }
+.billing-receipt-alloc .billing-table td { padding: 9px 12px; }
+
+.billing-receipt-alloc__input {
+  width: 8.5rem;
+  min-height: 38px;
+  padding: 7px 10px;
+  border: 1px solid var(--billing-border-strong);
+  border-radius: 8px;
+  background: var(--billing-surface);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.billing-receipt-alloc__input:focus {
+  outline: none;
+  border-color: var(--billing-action);
+  box-shadow: 0 0 0 3px rgb(24 122 18 / 12%);
+}
+
+.billing-receipt-alloc__input[aria-invalid='true'] { border-color: var(--billing-danger); }
+
+/* Receipt / allocated / unallocated. Three figures that must always add up,
+   so they sit together rather than in three corners of the card. */
+.billing-receipt-totals {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.billing-receipt-total {
+  padding: 11px 13px;
+  border-radius: 10px;
+  background: var(--billing-surface-2);
+  border: 1px solid var(--billing-border);
+}
+
+.billing-receipt-total span { display: block; color: var(--billing-muted); font-size: 11.5px; font-weight: 600; }
+.billing-receipt-total strong { display: block; margin-top: 4px; font-size: 16px; font-variant-numeric: tabular-nums; }
+.billing-receipt-total--good { background: var(--billing-mint); border-color: var(--billing-mint-strong); }
+.billing-receipt-total--good strong { color: var(--billing-action); }
+.billing-receipt-total--warn { background: var(--billing-warning-bg); border-color: #f0dcb8; }
+.billing-receipt-total--warn strong { color: #855000; }
+.billing-receipt-total--bad { background: var(--billing-danger-bg); border-color: #f4cfcc; }
+.billing-receipt-total--bad strong { color: var(--billing-danger); }
+
+/* ------------------------------------------------------------ attachments */
+
+.billing-receipt-drop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  min-height: 64px;
+  padding: 12px 18px;
+  border: 1px dashed var(--billing-border-strong);
+  border-radius: 12px;
+  background: var(--billing-surface-2);
+  color: var(--billing-muted);
+  text-align: center;
+  font-size: 13px;
+}
+
+.billing-receipt-drop small { display: block; margin-top: 3px; font-size: 12px; }
+
+.billing-receipt-attach {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
+/* ----------------------------------------------------------------- footer */
+
+.billing-receipt-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--billing-border);
+}
+
+.billing-receipt-footer__actions { display: flex; align-items: center; gap: 9px; }
+
+/* The save button and its menu are one control: the arrow must not look like a
+   second button sitting next to the first. */
+.billing-receipt-split { display: flex; position: relative; }
+
+.billing-receipt-split > .billing-button:first-child {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.billing-receipt-split > .billing-button + .billing-button {
+  margin-left: -1px;
+  padding-inline: 10px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-left-color: rgb(255 255 255 / 30%);
+}
+
+.billing-receipt-menu {
+  position: absolute;
+  z-index: 30;
+  right: 0;
+  bottom: calc(100% + 6px);
+  min-width: 15rem;
+  padding: 5px;
+  background: var(--billing-surface);
+  border: 1px solid var(--billing-border);
+  border-radius: 11px;
+  box-shadow: var(--billing-shadow-lg);
+}
+
+.billing-receipt-menu--below { top: calc(100% + 6px); bottom: auto; }
+
+.billing-receipt-menu button {
+  display: block;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--billing-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.billing-receipt-menu button:hover { background: var(--billing-surface-2); }
+.billing-receipt-menu button:disabled { color: var(--billing-muted); cursor: not-allowed; }
+.billing-receipt-menu button small { display: block; color: var(--billing-muted); font-size: 12px; }
+
+/* ------------------------------------------------------------ the sidebar */
+
+.billing-receipt-assistant {
+  position: relative;
+  padding: 18px;
+  border: 1px solid var(--billing-mint-strong);
+  border-radius: var(--billing-radius);
+  background: linear-gradient(145deg, #effbf1 0%, #f9fdf9 100%);
+}
+
+.billing-receipt-assistant__head { display: flex; gap: 12px; align-items: flex-start; }
+.billing-receipt-assistant h2 { margin: 0; font-size: 15px; }
+.billing-receipt-assistant p { margin: 5px 0 0; color: #4d5a52; font-size: 13px; line-height: 1.5; }
+
+.billing-receipt-dismiss {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--billing-muted);
+  cursor: pointer;
+}
+
+.billing-receipt-dismiss:hover { background: rgb(255 255 255 / 70%); color: var(--billing-text); }
+
+.billing-receipt-party { display: flex; align-items: center; gap: 11px; min-width: 0; }
+
+.billing-receipt-avatar {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: var(--billing-mint);
+  color: var(--billing-action);
+  font-weight: 700;
+}
+
+.billing-receipt-party strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.billing-receipt-party span { display: block; margin-top: 2px; color: var(--billing-muted); font-size: 12px; }
+
+.billing-receipt-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; margin-top: 14px; }
+
+.billing-receipt-metric { min-width: 0; padding: 11px; border-radius: 10px; background: var(--billing-surface-2); }
+.billing-receipt-metric { padding: 10px; }
+.billing-receipt-metric span { display: block; font-size: 11px; font-weight: 600; }
+
+.billing-receipt-metric strong {
+  display: block;
+  margin-top: 5px;
+  font-size: 13.5px;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.billing-receipt-metric--danger { background: var(--billing-danger-bg); color: var(--billing-danger); }
+.billing-receipt-metric--info { background: #eff5ff; color: #1d4ed8; }
+.billing-receipt-metric--muted { color: var(--billing-muted); }
+
+.billing-receipt-history { margin-top: 16px; }
+
+.billing-receipt-history__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.billing-receipt-history__head strong { font-size: 12.5px; }
+
+.billing-receipt-history__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 10px;
+  padding: 9px 0;
+  border-top: 1px solid var(--billing-border);
+  font-size: 12px;
+  color: var(--billing-muted);
+}
+
+.billing-receipt-history__row b { color: var(--billing-text); font-variant-numeric: tabular-nums; }
+.billing-receipt-history__row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.billing-receipt-tips {
+  position: relative;
+  padding: 16px;
+  border: 1px solid #cddfff;
+  border-radius: var(--billing-radius);
+  background: #f3f7ff;
+}
+
+.billing-receipt-tips__layout { display: flex; gap: 12px; }
+
+.billing-receipt-tips__mark {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #e5eeff;
+  color: #1d4ed8;
+}
+
+.billing-receipt-tips h2 { margin: 0; font-size: 14px; }
+.billing-receipt-tips ul { margin: 8px 0 0; padding-left: 17px; color: #4a5568; font-size: 12.5px; line-height: 1.65; }
+
+/* ------------------------------------------------------- recent receipts */
+
+/* The recent table decides its own columns from the width of the PANEL, not
+   the window: this panel is full width on a tablet and two thirds of it beside
+   the insight column on a desktop, so a viewport breakpoint would hide columns
+   that fit and keep columns that do not. Where container queries are not
+   supported the two optional columns simply stay hidden, which is the correct
+   fallback — the row still carries the date, the customer and the amount. */
+.billing-receipt-recent { container-type: inline-size; }
+
+.billing-receipt-recent .billing-table th,
+.billing-receipt-recent .billing-table td { padding: 10px 11px; font-size: 12.5px; }
+.billing-receipt-recent .billing-table td { white-space: nowrap; }
+
+.billing-receipt-recent__truncate {
+  display: block;
+  max-width: 13ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.billing-receipt-recent__optional { display: none; }
+
+@container (min-width: 900px) {
+  .billing-receipt-recent__optional { display: table-cell; }
+}
+
+/* Room enough for an account name to be read rather than recognised. */
+@container (min-width: 1150px) {
+  .billing-receipt-recent__truncate { max-width: 22ch; }
+}
+
+.billing-receipt-recent__mobile { display: none; }
+
+.billing-receipt-rowcard {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--billing-border);
+}
+
+.billing-receipt-rowcard:last-child { border-bottom: 0; }
+.billing-receipt-rowcard__top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.billing-receipt-rowcard__top strong { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.billing-receipt-rowcard__amount { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.billing-receipt-rowcard__meta { display: flex; flex-wrap: wrap; gap: 4px 8px; color: var(--billing-muted); font-size: 12.5px; }
+.billing-receipt-rowcard__foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+
+.billing-receipt-rowmenu { position: relative; }
+
+/* ------------------------------------------------------------- responsive */
+
+@media (max-width: 1250px) {
+  .billing-receipt-grid { grid-template-columns: minmax(0, 1fr) 330px; }
+  .billing-receipt-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 1050px) {
+  /* The insight column stops being a column: the form takes the width and the
+     three cards sit below it, two abreast. */
+  .billing-receipt-grid { grid-template-columns: minmax(0, 1fr); }
+  .billing-receipt-aside { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+  .billing-receipt-aside > :first-child { grid-column: span 2; }
+}
+
+@media (max-width: 820px) {
+  .billing-receipt-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .billing-receipt-cardhead { align-items: stretch; flex-direction: column; }
+  .billing-receipt-totals { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 640px) {
+  .billing-receipt-fields { grid-template-columns: minmax(0, 1fr); }
+  .billing-receipt-aside { grid-template-columns: minmax(0, 1fr); }
+  .billing-receipt-aside > :first-child { grid-column: auto; }
+  .billing-receipt-metrics { grid-template-columns: minmax(0, 1fr); }
+  .billing-receipt-attach { grid-template-columns: minmax(0, 1fr); }
+  .billing-receipt-footer { align-items: stretch; flex-direction: column-reverse; gap: 10px; }
+  .billing-receipt-footer__actions { justify-content: stretch; }
+  .billing-receipt-footer__actions > * { flex: 1; }
+  .billing-receipt-split { flex: 2; }
+  .billing-receipt-split > .billing-button:first-child { flex: 1; }
+
+  /* A nine-column table on a 390px screen is a table nobody reads. The same
+     rows are drawn as cards instead, with the figure people look for first. */
+  .billing-receipt-recent__table { display: none; }
+  .billing-receipt-recent__mobile { display: block; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .billing-receipt-field input,
+  .billing-receipt-field select,
+  .billing-receipt-field textarea { transition: none !important; }
+}

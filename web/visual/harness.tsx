@@ -33,6 +33,7 @@ import Payables from '../src/dashboards/Payables'
 import CashCompliance from '../src/dashboards/CashCompliance'
 import { DuesScreen } from '../src/receivables/DuesScreen'
 import { MoneyScreen } from '../src/pages/money/MoneyScreen'
+import MoneyReceived from '../src/pages/money-received'
 import ExpensePage from '../src/pages/expense/ExpensePage'
 import ItemsPage from '../src/pages/items/ItemsPage'
 import BankWithdrawalPage from '../src/pages/bank-withdrawal/BankWithdrawalPage'
@@ -80,12 +81,18 @@ const FAILABLE: Array<[string, RegExp]> = [
   ['paid-from', /v1\/catalog\/cash-bank/],
   ['parties', /v1\/catalog\/parties/],
   ['capabilities', /v1\/expenses\/capabilities/],
+  // The overview's two halves, so "the dashboard is down" and "only the
+  // written summary is down" can both be photographed.
+  ['briefing', /v1\/dashboards\/overview\/briefing/],
+  ['overview', /v1\/dashboards\/overview(\?|$)/],
   ['items', /v1\/catalog\/items(\?|$)/],
   ['stats', /v1\/catalog\/items\/stats/],
   ['groups', /v1\/catalog\/item-groups/],
   ['tax', /v1\/catalog\/tax-categories/],
   ['stock', /v1\/catalog\/stock/],
   ['open-bills', /v1\/open-bills/],
+  ['dues', /v1\/receivables/],
+  ['money-recent', /v1\/money\/recent/],
   ['bills', /v1\/original-documents(\?|$)/],
   ['bill-lines', /v1\/original-documents\/\d+/],
   ['warehouses', /v1\/catalog\/warehouses/],
@@ -109,7 +116,8 @@ const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
   dues: { path: '/receivables', element: <DuesScreen side="receivable" /> },
   'dues-payable': { path: '/payables', element: <DuesScreen side="payable" /> },
   'money-out': { path: '/money-out/new', element: <MoneyScreen direction="out" /> },
-  'money-in': { path: '/money-in/new', element: <MoneyScreen direction="in" /> },
+  'money-in': { path: '/money-in/new', element: <MoneyReceived /> },
+  'money-in-form': { path: '/money-in/new', element: <MoneyScreen direction="in" /> },
   expense: { path: '/more/expense', element: <ExpensePage /> },
   items: { path: '/items', element: <ItemsPage /> },
   sale: { path: '/sales/new', element: <SalesBillPage /> },
@@ -122,6 +130,18 @@ const DUES = /v1\/(receivables|payables)(\?|$)/
 /** The fixture behind each endpoint the screens call. A function gets the URL. */
 const RESPONSES: Array<[RegExp, unknown | ((url: string) => unknown)]> = [
   [/v1\/session/, asBiller ? fixtures.billerSession : fixtures.ownerSession],
+  // Before the dashboard itself: `v1/dashboards/overview` matches the briefing
+  // URL too, and the first pattern in this list wins.
+  [/v1\/dashboards\/overview\/briefing/, {
+    data: {
+      available: false,
+      reason: 'No briefing model is configured for this deployment, so there is nothing to write the summary. '
+        + 'The counted briefing above is unaffected.',
+      narrative: null,
+      sources: [],
+      generated_at: null,
+    },
+  }],
   [/v1\/dashboards\/overview/, fixtures.overview],
   [/v1\/dashboards\/biller/, fixtures.biller],
   [/v1\/dashboards\/receivables/, fixtures.receivables],
@@ -152,8 +172,7 @@ const RESPONSES: Array<[RegExp, unknown | ((url: string) => unknown)]> = [
   [/v1\/transactions\/(payment|receipt)/, fixtures.savedPayment],
   [/v1\/transactions\/sale/, fixtures.savedSale],
   [/v1\/money\/party-context/, fixtures.moneyPartyContext],
-  [/v1\/money\/recent/, fixtures.moneyRecent],
-  [/v1\/open-bills/, fixtures.openBills],
+  [/v1\/receivables/, fixtures.customerDues],
   [/v1\/original-documents\/\d+/, fixtures.originalDocument],
   [/v1\/original-documents/, fixtures.originalDocuments],
   [/v1\/credit-notes\/trend/, fixtures.creditNoteTrend],
@@ -295,7 +314,7 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Res
   if (/v1\/catalog\/items\/search/.test(url)) {
     const term = (new URL(url, window.location.origin).searchParams.get('q') ?? '').toLowerCase()
     const rows = everyItem().filter(
-      (row) => (row.item_name ?? '').toLowerCase().includes(term) || (row.item_sku ?? '').toLowerCase().includes(term),
+      (row) => String(row.item_name ?? '').toLowerCase().includes(term) || String(row.item_sku ?? '').toLowerCase().includes(term),
     )
     return new Response(JSON.stringify({ data: rows, meta: { total: rows.length, limit: 20, offset: 0 } }), {
       status: 200,
@@ -309,10 +328,29 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Res
   if (/v1\/catalog\/items\/barcode\//.test(url)) {
     const code = decodeURIComponent(url.split('/barcode/')[1]?.split('?')[0] ?? '').toLowerCase()
     const item = everyItem().find(
-      (row) => (row.barcode ?? '').toLowerCase() === code || (row.item_sku ?? '').toLowerCase() === code,
+      (row) => String(row.barcode ?? '').toLowerCase() === code || String(row.item_sku ?? '').toLowerCase() === code,
     )
     return new Response(JSON.stringify(item ? { data: item } : { error: { code: 'not_found', message: 'No such code.' } }), {
       status: item ? 200 : 404,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  // The money endpoints answer for the direction they were asked about: the
+  // receipt booth must not be shown a supplier's payments, and the payment
+  // booth must not be shown a customer's receipts.
+  if (/v1\/money\/recent/.test(url)) {
+    const direction = new URL(url, window.location.origin).searchParams.get('direction') ?? 'out'
+    return new Response(JSON.stringify({ data: direction === 'in' ? fixtures.moneyRecentIn : fixtures.moneyRecent }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  if (/v1\/open-bills/.test(url)) {
+    const side = new URL(url, window.location.origin).searchParams.get('side') ?? 'payable'
+    return new Response(JSON.stringify({ data: side === 'receivable' ? fixtures.openBillsIn : fixtures.openBills }), {
+      status: 200,
       headers: { 'Content-Type': 'application/json' },
     })
   }

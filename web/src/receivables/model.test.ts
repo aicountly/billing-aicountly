@@ -30,7 +30,7 @@ import {
   toRows,
   type DueBillInput,
   type DuesInput,
-} from '../src/receivables/model.ts'
+} from './model.ts'
 
 const AS_ON = '2026-09-19'
 

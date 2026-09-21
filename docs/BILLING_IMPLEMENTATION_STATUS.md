@@ -263,17 +263,19 @@ approximated.
 
 ## Verification
 
-* `server-php/tests/run.sh` — 95 passing, 0 failing, against a real
+* `server-php/tests/run.sh` — 101 passing, 0 failing, against a real
   PostgreSQL and a stub standing in for Books and Inventory. Among them the
   release-blocking pair, which fail the build if a table or column ever starts
   holding a voucher, ledger, balance, item or party.
-* `npm test` in `web/` — the ageing, status, filter, summary and export rules,
-  run by node's own test runner against `src/receivables/model.ts`. No test
-  framework is installed; that file imports nothing, so node runs it directly.
-* `npm run build` in `web/` — `tsc -b` clean, thirteen lazy chunks.
-* Visual pass across the five dashboards, the Items workspace, the expense,
-  bank-withdrawal, sale, credit-note and money screens and both dues screens,
-  via `web/visual.html` — a development-only entry point that mounts the real
+* `npm test` in `web/` — 54 passing, 0 failing, on node's own runner. Among
+  them the ageing, status, filter, summary and export rules, checked against
+  `src/receivables/model.ts` — a file that imports nothing, which is why no
+  test framework has had to be added to run it.
+* `npm run build` in `web/` — `tsc -b` clean, fourteen lazy chunks.
+* Visual pass across all fifteen booth screens — the five dashboards, the Items
+  workspace, the expense, bank-withdrawal, sale, credit-note, money-out and
+  money-received screens, and both dues screens — via `web/visual.html`, a
+  development-only entry point that mounts the real
   components against fixtures, including their unavailable states
   (`?fail=balance,withdrawals`, `?state=error`). `vite build` does not include
   it, and no fake record is written anywhere.
