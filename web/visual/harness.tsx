@@ -1,5 +1,6 @@
 /**
- * A photo booth for the dashboards and the dues screens. Development only.
+ * A photo booth for the dashboards, the debit note editor and the dues
+ * screens. Development only.
  *
  * It mounts the REAL page components inside the REAL shell, with the real
  * hooks, the real loading states and the real router. The only thing replaced
@@ -11,6 +12,7 @@
  * none of this reaches the deployed bundle.
  *
  *   /visual.html?screen=overview&as=owner
+ *   /visual.html?screen=debit-note
  *   /visual.html?screen=bank-withdrawal&fail=balance
  *   /visual.html?screen=dues&state=empty|error|slow
  *   /visual.html?screen=dues&as=biller            (no receipt or reminder rights)
@@ -31,6 +33,7 @@ import BillerDesk from '../src/dashboards/BillerDesk'
 import Receivables from '../src/dashboards/Receivables'
 import Payables from '../src/dashboards/Payables'
 import CashCompliance from '../src/dashboards/CashCompliance'
+import DebitNote from '../src/pages/DebitNote'
 import { DuesScreen } from '../src/receivables/DuesScreen'
 import { MoneyScreen } from '../src/pages/money/MoneyScreen'
 import MoneyReceived from '../src/pages/money-received'
@@ -123,6 +126,7 @@ const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
   receivables: { path: '/dashboard/receivables', element: <Receivables /> },
   payables: { path: '/dashboard/payables', element: <Payables /> },
   'cash-compliance': { path: '/dashboard/cash-compliance', element: <CashCompliance /> },
+  'debit-note': { path: '/more/debit-note', element: <DebitNote /> },
 
   // The bill-by-bill screens. `/receivables` is the one the menu points at.
   dues: { path: '/receivables', element: <DuesScreen side="receivable" /> },
@@ -185,9 +189,9 @@ const RESPONSES: Array<[RegExp, unknown | ((url: string) => unknown)]> = [
   [/v1\/transactions\/(payment|receipt)/, fixtures.savedPayment],
   [/v1\/transactions\/sale/, fixtures.savedSale],
   [/v1\/money\/party-context/, fixtures.moneyPartyContext],
+  [/v1\/money\/recent/, fixtures.moneyRecent],
   [/v1\/receivables/, fixtures.customerDues],
   [/v1\/original-documents\/\d+/, fixtures.originalDocument],
-  [/v1\/original-documents/, fixtures.originalDocuments],
   [/v1\/credit-notes\/trend/, fixtures.creditNoteTrend],
   [/v1\/catalog\/warehouses/, fixtures.warehouses],
   [/v1\/transactions\/credit_note/, fixtures.savedCreditNote],
@@ -211,7 +215,8 @@ const RESPONSES: Array<[RegExp, unknown | ((url: string) => unknown)]> = [
   // Two branches and two years on purpose: switching one mid-entry is a case
   // the expense form has to handle (it clears the ids that belonged to the
   // company that was open), and it is only checkable if there is something to
-  // switch to.
+  // switch to. Real dates on both years, because the debit note editor bounds
+  // its date field with them and refuses a date outside the scoped year.
   [/v1\/manage\/companyinfo/, {
     cmp_id: 1,
     cmp_name: 'Sharma Enterprises',
@@ -431,9 +436,21 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Res
     })
   }
 
+  // Open bills — branched on the ACCOUNT, not the side alone. `side=payable`
+  // is asked by both the payment screen (any supplier) and the debit note
+  // (this booth's one supplier, 9012), and only the account tells them apart;
+  // `side=receivable` is the money-received screen's, unambiguously.
   if (/v1\/open-bills/.test(url)) {
-    const side = new URL(url, window.location.origin).searchParams.get('side') ?? 'payable'
-    return new Response(JSON.stringify({ data: side === 'receivable' ? fixtures.openBillsIn : fixtures.openBills }), {
+    const params = new URL(url, window.location.origin).searchParams
+    const side = params.get('side') ?? 'payable'
+    const accountId = params.get('account_id')
+    const body =
+      side === 'receivable'
+        ? fixtures.openBillsIn
+        : accountId === '9012'
+          ? fixtures.debitNoteOpenBills
+          : fixtures.openBills
+    return new Response(JSON.stringify({ data: body }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     })
@@ -454,6 +471,19 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Res
   if (/v1\/catalog\/stock/.test(url)) {
     const itemId = Number(new URL(url, window.location.origin).searchParams.get('item_id') ?? 0)
     return new Response(JSON.stringify({ data: fixtures.availability[itemId] ?? {} }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  // Bills a note can be raised against, branched on `kind` — the credit note
+  // and the debit note both call the bare path, and only the query string
+  // says which supplier's or customer's documents belong in the answer.
+  // (Excludes the `/\d+` sub-route, which stays a plain RESPONSES entry.)
+  if (/v1\/original-documents(\?|$)/.test(url)) {
+    const kind = new URL(url, window.location.origin).searchParams.get('kind')
+    const body = kind === 'purchase' ? fixtures.debitNoteDocuments : fixtures.originalDocuments
+    return new Response(JSON.stringify({ data: body }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     })

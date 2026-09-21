@@ -20,6 +20,25 @@ export interface MenuEntry {
   children?: Array<{ label: string; path: string }>
 }
 
+/**
+ * Something this DEPLOYMENT can or cannot do, and why.
+ *
+ * Not a permission: a permission says what this user may do, a capability says
+ * whether the contract behind a feature exists at all. The reason is the
+ * server's wording, printed as-is, so one missing service does not get
+ * described four different ways on four screens.
+ */
+export interface Capability {
+  available: boolean
+  reason: string | null
+}
+
+export type CapabilityKey =
+  | 'document_extraction'
+  | 'transaction_drafts'
+  | 'transaction_attachments'
+  | 'accounting_preview'
+
 /** A dashboard this profile may open. The API checks the same list. */
 export interface DashboardEntry {
   key: string
@@ -63,6 +82,23 @@ export interface BillingSession {
    */
   dashboards: DashboardEntry[]
   landing: string
+  /**
+   * Optional because an older API does not send it. A screen that cannot read a
+   * capability must treat it as absent rather than as present, which is what
+   * `capability()` below does.
+   */
+  capabilities?: Partial<Record<CapabilityKey, Capability>>
+}
+
+/**
+ * What the server said about a capability, or a safe absence.
+ *
+ * The fallback is deliberately "not available": a feature drawn as working
+ * because the flag could not be read is the failure this whole mechanism
+ * exists to prevent.
+ */
+export function capability(session: BillingSession | null, key: CapabilityKey): Capability {
+  return session?.capabilities?.[key] ?? { available: false, reason: null }
 }
 
 export interface IntegrationCommand {
@@ -322,8 +358,17 @@ export interface CatalogItem {
   item_name: string
   item_sku: string | null
   unit_id: number | null
+  /** Present when Inventory names the unit as well as identifying it. */
+  unit_name?: string | null
   hsn_sac: string | null
   mrp: string | null
+  /**
+   * What the item was last bought for. Inventory sends these only to a user
+   * with `cost.view` — the relay strips them for everyone else — so both are
+   * optional and neither is ever required for a screen to work.
+   */
+  purchase_rate?: string | number | null
+  last_purchase_rate?: string | number | null
   use_count?: number
 }
 
@@ -630,4 +675,44 @@ export interface WithdrawalSummary {
   total: number
   count: number
   basis: string
+}
+
+/**
+ * A tax category as Smart Books describes it.
+ *
+ * Billing sends the id and nothing else: the rate here is for the person
+ * choosing it, and Books computes the tax from its own master on posting.
+ */
+export interface TaxCategory {
+  tax_cat_id: number
+  tax_cat_name: string
+  rate?: number | string | null
+}
+
+/** A stock location as Inventory describes it. Rendered, never stored. */
+export interface Warehouse {
+  mc_id: number
+  mc_name: string
+}
+
+/** A document a note can be raised against, as Books' register describes it. */
+export interface OriginalDocument {
+  voucher_id: number | null
+  voucher_uuid: string | null
+  document_no: string | null
+  date: string | null
+  party: string | null
+  party_id: number | null
+  amount: number | null
+  status: string | null
+}
+
+/** A bill with something still outstanding on it, from Books' bill-by-bill. */
+export interface OpenBill {
+  bill_no: string | null
+  bill_date: string | null
+  due_date: string | null
+  balance: number
+  voucher_id: number | null
+  voucher_uuid: string | null
 }

@@ -2,12 +2,16 @@
 
 Billing owns no accounting data. Every figure on every screen is read live from
 the product that owns it, on the request that draws it — so this file is the
-complete list of what Billing asks for, and of the two things it asks for that
+complete list of what Billing asks for, and of the things it asks for that
 nobody serves yet.
 
 The rule this file exists to keep honest: **when a capability is missing, the
 screen says so.** It does not fall back to a stored copy, and it does not render
 the absence as a zero.
+
+Four of them are reported to the browser by `GET v1/session` as `capabilities`,
+each with the reason printed on the screen that needs it, so one missing service
+is not described five different ways in five components.
 
 ## Who owns what
 
@@ -53,6 +57,7 @@ the absence as a zero.
 | `GET stock-balances` | the stock column, one batched call per page |
 | `GET availability` | stock check |
 | `GET replenishment` | "running low", and the Low stock figure |
+| `GET warehouses` | where returned goods go back in, on a debit note |
 
 #### What the Items screen asks `GET items` for
 
@@ -202,8 +207,139 @@ Every extracted field must arrive reviewable, and nothing is posted until a
 person has approved it. The expense screen shows what was read, applies only the
 amount, bill date and bill number, and leaves the supplier for a person to pick
 — matching a name against a ledger is a choice with accounting consequences.
-**Until this exists**, both screens offer the manual path, which records exactly
-the same thing.
+**Until this exists**, all three screens offer the manual path, which records
+exactly the same thing: the debit note screen disables *Scan & add (AI)*,
+*Use AI to fill the items* and *Import* and carries this reason on each, rather
+than looking live and doing nothing.
+
+---
+
+## Not available: the lines of an original document
+
+**Purchases → Debit note shows this on its "Add from invoice" button.**
+
+A debit note is usually part of a bill coming back, so the natural move is to
+pick the supplier's bill and tick the lines being returned. Billing cannot offer
+it. `GET registers` returns one row per voucher — number, date, party, amount,
+settlement status — and no lines, so there is nothing to tick.
+
+The screen therefore asks for the item, the quantity and the rate, and does
+**not** default the rate to the item's selling price: an MRP on a purchase being
+reversed would quietly overstate the note. Where Inventory sends a purchase rate
+— which it does only for a user with `cost.view` — that is used instead, and
+otherwise the rate starts at zero and is typed from the bill.
+
+### The contract Billing would need
+
+Owner: **Smart Books**.
+
+```
+GET vouchers/{voucher_id}/lines
+  ?cmp_id&fy_id&bo_id
+
+  → { data: [ {
+        line_id, item_id, description, hsn_sac,
+        unit_id, unit_name, qty, rate, discount_pc,
+        tax_cat_id, amount,
+        qty_already_returned          // across every note against this voucher
+      } ] }
+```
+
+`qty_already_returned` is the part that cannot be computed here: Billing can see
+the notes it raised itself, never the ones raised in Books or by another
+product, and a screen offering "8 of 10 still returnable" from a partial view is
+worse than one that asks.
+
+**Until this exists**, the button is disabled with this reason and the lines are
+entered by hand. Books still validates the quantity when the note is posted.
+
+---
+
+## Not available: an unfinished document kept on the server
+
+**Purchases → Debit note says this wherever it mentions a draft.**
+
+`POST vouchers/drafts` and `POST vouchers/drafts/{id}/post` are one step from
+Billing's point of view: `TransactionService` creates the request row and posts
+it in the same request, and `billing_transaction_requests` has no DRAFT state —
+its unfinished rows are PENDING, POSTING or FAILED, which mean "on its way to
+Books", not "still being typed".
+
+So *Save as draft* keeps the form in `localStorage`, under the company and
+financial year it was typed in, and the screen says exactly that: kept in this
+browser, not on the server, not visible to anybody else. It is offered back when
+the screen is next opened, and thrown away once the note posts.
+
+### The contract Billing would need
+
+Owner: **Billing**, not Books — a half-typed document is not an accounting
+record and should never reach the ledger. It needs a `billing_document_drafts`
+table and three endpoints (`GET` / `PUT` / `DELETE v1/drafts/{kind}`), scoped to
+the company, the financial year and the user.
+
+**Until that exists**, the local draft is the honest version: it works, it is
+labelled, and it cannot leave a half-made voucher anywhere near the accounts.
+
+---
+
+## Not available: files attached to a document
+
+**Purchases → Debit note shows this in place of its dropzone.**
+
+A return challan, a photograph of damaged goods or the supplier's own credit
+note all belong with the debit note, and there is nowhere to put them. This is
+the same gap the expense screen has — see *Not available: keeping the bill
+file*, below — and `DocumentCapture::storage()` is the single switch that
+answers for both: absent a `DOCUMENT_STORAGE_BASE`, it is `false` regardless of
+what the environment says, because Billing has no client that sends a file to
+one yet. The debit note screen reads the same answer through
+`GET v1/session`'s `capabilities.transaction_attachments`, so it cannot
+disagree with the expense screen about what this deployment can keep.
+
+**Until that client exists**, the dropzone here is replaced by a statement that
+attachments are not available, and why — the debit note's own "Reference No."
+field is the nearest thing to the expense screen's `attachment_ref`: a place to
+record where the document is kept, not the document itself.
+
+---
+
+## Not available: the ledger effect before posting
+
+**Purchases → Debit note shows this in its Accounting impact card.**
+
+Which ledgers a debit note touches depends on the reason on the note, the bill
+it is raised against, whether goods physically came back, the company's GST
+registration and its own account settings — all of which live in Smart Books.
+Books posts the voucher and answers with what it did; it has no endpoint that
+answers what it *would* do.
+
+The card therefore states what is certain, in words — that charging the supplier
+back reduces what is owed to them, and whether any stock moves — and then says
+the ledgers are decided when the note posts. **It does not draw two plausible
+ledger rows**, because a guess printed where somebody looks for a fact is the
+thing this file exists to prevent.
+
+### The contract Billing would need
+
+Owner: **Smart Books**.
+
+```
+POST vouchers/preview
+  { cmp_id, fy_id, bo_id, vch_type_id, <the same payload as vouchers/drafts> }
+
+  → { data: {
+        entries: [ { acc_id, acc_name, side: "debit"|"credit", amount } ],
+        tax: [ { tax_cat_id, component, rate, amount } ],
+        round_off, total,
+        warnings: [ { code, message } ]
+      } }
+```
+
+It must compute nothing of its own and write nothing — the same code path as
+posting, run without the write — or the preview and the posting will disagree,
+which is worse than having no preview at all.
+
+---
 
 ## Needs configuring: keeping the bill file
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Search } from 'lucide-react'
 import { api } from '../services/api'
 import type { CatalogItem, CatalogParty } from '../services/types'
@@ -14,8 +14,8 @@ import type { CatalogItem, CatalogParty } from '../services/types'
  * it. That split exists because the behaviour is the part with the sharp edges
  * — a debounce, an abort on every new term, and a highlight that has to survive
  * a response arriving after the user has already typed further — and the money
- * screens need the same behaviour inside a different control. Two copies of
- * this logic would be two sets of those bugs.
+ * and debit note screens need the same behaviour inside a different control.
+ * Two copies of this logic would be two sets of those bugs.
  */
 
 function useDebounced<T>(value: T, ms: number): T {
@@ -164,6 +164,24 @@ export function usePartySearch(side: 'customer' | 'supplier') {
   )
 }
 
+/**
+ * The optional props exist so a screen can put this picker inside its own field
+ * layout — with that layout's label, control styling and error wiring — without
+ * a second copy of `useTypeahead`'s wiring. Left out, the picker looks and
+ * behaves exactly as it always has.
+ */
+interface PickerChrome {
+  /** Hide the built-in label when the surrounding field already draws one. */
+  hideLabel?: boolean
+  required?: boolean
+  /** Replaces the built-in inline control styling. */
+  inputClassName?: string
+  inputId?: string
+  describedBy?: string
+  /** The surrounding field prints the message; this only marks the control. */
+  invalid?: boolean
+}
+
 function Picker<T>({
   label,
   placeholder,
@@ -173,46 +191,80 @@ function Picker<T>({
   renderOption,
   keyOf,
   autoFocus,
-}: {
+  hideLabel = false,
+  required = false,
+  inputClassName,
+  inputId,
+  describedBy,
+  invalid = false,
+}: PickerChrome & {
   label: string
   placeholder?: string
   selectedLabel?: string | null
   onPick: (record: T) => void
   search: (term: string, signal: AbortSignal) => Promise<T[]>
-  renderOption: (record: T) => string
+  renderOption: (record: T) => ReactNode
   keyOf: (record: T) => string | number
   autoFocus?: boolean
 }) {
   const picker = useTypeahead<T>({ search, onPick })
+  const generatedId = useId()
+  const listId = `${inputId ?? generatedId}-options`
+  const showList = picker.open && picker.ready
 
   return (
     <div ref={picker.boxRef} style={{ position: 'relative' }}>
-      <span style={{ display: 'block', fontSize: '0.8rem', color: 'var(--muted)', marginBottom: '0.25rem' }}>{label}</span>
+      {!hideLabel && (
+        <label
+          htmlFor={inputId}
+          style={{ display: 'block', fontSize: '0.8rem', color: 'var(--muted)', marginBottom: '0.25rem' }}
+        >
+          {label}
+          {required && <span style={{ color: 'var(--danger)', marginLeft: 2 }} aria-hidden>*</span>}
+        </label>
+      )}
       <div style={{ position: 'relative' }}>
-        <Search size={14} aria-hidden style={{ position: 'absolute', left: '0.5rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }} />
+        <Search size={14} aria-hidden style={{ position: 'absolute', left: '0.6rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)', zIndex: 1 }} />
         <input
+          id={inputId}
           value={picker.term}
           placeholder={selectedLabel ?? placeholder ?? 'Type to search…'}
           autoFocus={autoFocus}
+          role="combobox"
+          aria-expanded={showList}
+          aria-controls={showList ? listId : undefined}
+          aria-autocomplete="list"
+          aria-label={hideLabel ? label : undefined}
+          aria-required={required || undefined}
+          aria-invalid={invalid || undefined}
+          aria-describedby={describedBy}
           onChange={(event) => {
             picker.setTerm(event.target.value)
             picker.setOpen(true)
           }}
           onFocus={() => picker.setOpen(true)}
           onKeyDown={picker.onKeyDown}
-          style={{
-            width: '100%',
-            padding: '0.5rem 0.55rem 0.5rem 1.7rem',
-            border: '1px solid var(--border-strong)',
-            borderRadius: 'var(--radius-sm)',
-            background: 'var(--surface)',
-            fontSize: '1rem',
-          }}
+          className={inputClassName}
+          style={
+            inputClassName
+              ? { paddingLeft: '1.9rem' }
+              : {
+                  width: '100%',
+                  padding: '0.5rem 0.55rem 0.5rem 1.7rem',
+                  border: '1px solid var(--border-strong)',
+                  borderRadius: 'var(--radius-sm)',
+                  background: 'var(--surface)',
+                  fontSize: '1rem',
+                }
+          }
         />
       </div>
 
-      {picker.open && picker.ready && (
+      {showList && (
         <div
+          id={listId}
+          role="listbox"
+          aria-label={label}
           style={{
             position: 'absolute',
             zIndex: 20,
@@ -241,6 +293,8 @@ function Picker<T>({
             <button
               key={keyOf(option)}
               type="button"
+              role="option"
+              aria-selected={index === picker.highlighted}
               onMouseEnter={() => picker.setHighlighted(index)}
               onClick={() => picker.choose(option)}
               style={{
@@ -266,7 +320,8 @@ export function ItemPicker({
   onPick,
   selectedLabel,
   autoFocus,
-}: {
+  ...chrome
+}: PickerChrome & {
   onPick: (item: CatalogItem) => void
   selectedLabel?: string | null
   autoFocus?: boolean
@@ -281,14 +336,24 @@ export function ItemPicker({
 
   return (
     <Picker
+      {...chrome}
       label="Item"
-      placeholder="Type or scan…"
+      placeholder="Search or select item…"
       selectedLabel={selectedLabel}
       onPick={onPick}
       search={search}
       autoFocus={autoFocus}
       keyOf={(item) => item.item_id}
-      renderOption={(item) => (item.item_sku ? `${item.item_name} · ${item.item_sku}` : item.item_name)}
+      renderOption={(item) => (
+        <>
+          <span style={{ display: 'block' }}>{item.item_name}</span>
+          {(item.item_sku || item.hsn_sac) && (
+            <span style={{ display: 'block', fontSize: '0.78rem', color: 'var(--muted)' }}>
+              {[item.item_sku, item.hsn_sac ? `HSN ${item.hsn_sac}` : null].filter(Boolean).join(' · ')}
+            </span>
+          )}
+        </>
+      )}
     />
   )
 }
@@ -298,7 +363,8 @@ export function PartyPicker({
   onPick,
   selectedLabel,
   autoFocus,
-}: {
+  ...chrome
+}: PickerChrome & {
   side?: 'customer' | 'supplier'
   onPick: (party: CatalogParty) => void
   selectedLabel?: string | null
@@ -308,14 +374,22 @@ export function PartyPicker({
 
   return (
     <Picker
+      {...chrome}
       label={side === 'supplier' ? 'Supplier' : 'Customer'}
-      placeholder="Type a name…"
+      placeholder={side === 'supplier' ? 'Select supplier' : 'Type a name…'}
       selectedLabel={selectedLabel}
       onPick={onPick}
       search={search}
       autoFocus={autoFocus}
       keyOf={(party) => party.acc_id}
-      renderOption={(party) => (party.gstin ? `${party.acc_name} · ${party.gstin}` : party.acc_name)}
+      renderOption={(party) => (
+        <>
+          <span style={{ display: 'block' }}>{party.acc_name}</span>
+          {party.gstin && (
+            <span style={{ display: 'block', fontSize: '0.78rem', color: 'var(--muted)' }}>{party.gstin}</span>
+          )}
+        </>
+      )}
     />
   )
 }

@@ -5,7 +5,6 @@ import { BillingProvider, useBilling } from './context/BillingContext'
 import { AppShell } from './shell/AppShell'
 import SignIn from './pages/SignIn'
 import Onboarding from './pages/Onboarding'
-import SaleEditor from './pages/SaleEditor'
 import { PartyStatement } from './pages/Dues'
 import { BankCash } from './pages/MoneyMovement'
 import { Parties } from './pages/Directory'
@@ -86,6 +85,12 @@ const SalesBillPage = lazy(() => import('./pages/sale/SalesBillPage'))
  * and a counter that only makes bills never opens it.
  */
 const CreditNotePage = lazy(() => import('./pages/credit-note/CreditNotePage'))
+
+/**
+ * The debit note editor is split out for the same reason: it is a screen most
+ * users open occasionally, and it pulls in the panel kit and its own stylesheet.
+ */
+const DebitNote = lazy(() => import('./pages/DebitNote'))
 
 /**
  * Money to Collect and Money to Pay, split for the same reason: the screen
@@ -204,8 +209,9 @@ function Shell() {
         <Route path="dashboard/payables" element={<Suspense fallback={<Loading />}><RequireScope><Payables /></RequireScope></Suspense>} />
         <Route path="dashboard/cash-compliance" element={<Suspense fallback={<Loading />}><RequireScope><CashCompliance /></RequireScope></Suspense>} />
 
-        {/* Sales has its own screen. Purchases and the two notes keep the
-            shared editor below, which still handles all three. */}
+        {/* Sales, expense, the credit note and the debit note have each grown
+            their own screen. Purchases keeps the shared editor below, which
+            is now the only thing that still routes through it. */}
         <Route path="sales">
           <Route index element={<Suspense fallback={<Loading />}><RequireScope><SalesBillPage /></RequireScope></Suspense>} />
           <Route path="new" element={<Suspense fallback={<Loading />}><RequireScope><SalesBillPage /></RequireScope></Suspense>} />
@@ -283,7 +289,10 @@ function Shell() {
               </Suspense>
             }
           />
-          <Route path="debit-note" element={<RequireScope><SaleEditor kind="debit_note" /></RequireScope>} />
+          <Route
+            path="debit-note"
+            element={<Suspense fallback={<Loading />}><RequireScope><DebitNote /></RequireScope></Suspense>}
+          />
           <Route path="recurring" element={<RequireScope><Recurring /></RequireScope>} />
           <Route path="unfinished" element={<RequireScope><Unfinished /></RequireScope>} />
           <Route path="profiles" element={<RequireScope><Profiles /></RequireScope>} />
