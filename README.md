@@ -30,7 +30,7 @@ ten live reports with CSV export, and Billing profiles deciding who sees what.
 
 See [docs/BILLING_IMPLEMENTATION_STATUS.md](docs/BILLING_IMPLEMENTATION_STATUS.md)
 for what each figure means, and
-[docs/BILLING_API_DEPENDENCIES.md](docs/BILLING_API_DEPENDENCIES.md) for the two
+[docs/BILLING_API_DEPENDENCIES.md](docs/BILLING_API_DEPENDENCIES.md) for the
 capabilities no product in this deployment serves yet.
 
 Signing in is the AICOUNTLY portal's job, the same as every other AICOUNTLY
@@ -76,13 +76,16 @@ same-origin.
 `web/visual.html` is a development-only photo booth: it mounts the real page
 components against fixtures so the screens can be checked at any width without a
 portal session or a company's data. `?screen=` picks one — the five dashboards,
-`expense`, `money-in`, `money-out` or `items` — `?as=biller` narrows the profile,
-and `?fail=recent,categories` makes those endpoints answer 503, which is how the
-"one panel is down, the form still works" states get checked. `?at=` sets the
-screen's OWN query string (`?screen=items&at=stock_status%3Dlow`), which is the
-only way to photograph a screen that keeps its state in the address bar in its
-filtered, sorted or paged states. `vite build` takes `index.html` only, so none of
-it reaches the deployed bundle.
+`money-in`, `money-out`, `expense`, `credit-note` or `items` — `?as=biller`
+narrows the profile, and `?fail=recent,categories` makes those endpoints answer
+503, which is how the "one panel is down, the form still works" states get
+checked. The credit note screen adds `bills`, `bill-lines`, `warehouses`,
+`trend` and `issue` to that list, and the Items screen adds `items`, `stats` and
+`groups`, so their degraded states are reachable too. `?at=` sets the screen's
+OWN query string (`?screen=items&at=stock_status%3Dlow`), which is the only way
+to photograph a screen that keeps its state in the address bar in its filtered,
+sorted or paged states. `vite build` takes `index.html` only, so none of it
+reaches the deployed bundle.
 
 The PHP API has no build step and no dependencies. To run it locally:
 

@@ -2,25 +2,19 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Trash2 } from 'lucide-react'
 import { api, ApiError } from '../services/api'
-import type { CashBankAccount, CatalogItem, CatalogParty, TransactionRequest } from '../services/types'
+import type {
+  CashBankAccount,
+  CatalogItem,
+  CatalogParty,
+  OriginalDocument,
+  TransactionRequest,
+} from '../services/types'
 import { useApi } from '../hooks/useApi'
 import { useBilling } from '../context/BillingContext'
 import { ItemPicker, PartyPicker } from '../components/LivePicker'
 import { Button, Card, date as formatDate, DataTable, Field, Input, money, Notice, Select, Textarea } from '../ui'
 
 type EditorKind = 'sale' | 'purchase' | 'credit_note' | 'debit_note'
-
-/** A document a note can be raised against, as Books' register describes it. */
-interface OriginalDocument {
-  voucher_id: number | null
-  voucher_uuid: string | null
-  document_no: string | null
-  date: string | null
-  party: string | null
-  party_id: number | null
-  amount: number | null
-  status: string | null
-}
 
 /**
  * Why a note is being raised.

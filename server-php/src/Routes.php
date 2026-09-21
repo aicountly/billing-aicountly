@@ -74,8 +74,13 @@ final class Routes
         $router->get('v1/expenses/recent', [ExpensesController::class, 'recent']);
         $router->get('v1/expenses/capabilities', [ExpensesController::class, 'capabilities']);
         $router->post('v1/expenses/read-bill', [ExpensesController::class, 'readBill']);
-        // Invoices a credit note (or bills a debit note) can be raised against.
+        // Invoices a credit note (or bills a debit note) can be raised against,
+        // and — for one of them — the lines that were billed on it, so the note
+        // can start from what was sold instead of an empty table.
         $router->get('v1/original-documents', [TransactionsController::class, 'originalDocuments']);
+        $router->get('v1/original-documents/{voucherId}', [TransactionsController::class, 'originalDocument']);
+        // How many credit notes this month, against the window before it.
+        $router->get('v1/credit-notes/trend', [TransactionsController::class, 'creditNoteTrend']);
         $router->get('v1/transactions/{id}', [TransactionsController::class, 'show']);
         $router->post('v1/transactions/{id}/retry', [TransactionsController::class, 'retry']);
         $router->get('v1/transactions/{id}/statutory', [TransactionsController::class, 'statutoryStatus']);

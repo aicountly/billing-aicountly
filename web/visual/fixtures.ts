@@ -751,6 +751,15 @@ export const catalogItems = [
   // Inventory answered, but said nothing about what this is or how many there
   // are. The row still has to draw — as "—" and "Unavailable", never as 0.
   row(10, 'Imported Gift Set', { description: null, sku: 'GFT-001', hsn: null, type: null, group: null, rate: null }),
+
+  // The three the credit note screen resolves by search and by scan. THE IDS
+  // MATTER: originalDocument's bill lines are items 401 and 402, and a booth
+  // where the bill being credited names an item the search cannot find is a
+  // booth that cannot photograph the line picker. One catalogue, because two
+  // would be two answers to "what does this company sell".
+  row(401, 'Wireless Mouse', { description: 'Wireless | Black', sku: 'M221-BLK', hsn: '8471', type: 'stock', group: [4, 'Computers'], rate: 850, stock: [64, 20] }),
+  row(402, 'USB-C Cable 1M', { description: '1 metre | Braided', sku: 'CB11-1M', hsn: '8544', type: 'stock', group: [4, 'Computers'], rate: 450, stock: [210, 50] }),
+  row(403, 'Laptop Stand', { description: 'Aluminium | Adjustable', sku: 'LS-ALU', hsn: '8473', type: 'stock', group: [4, 'Computers'], rate: 1299, stock: [18, 6] }),
 ]
 
 /** One fixture row in the shape the API's normaliser produces. */
@@ -816,3 +825,177 @@ export const catalogItemGroups = [
   { group_id: 7, group_name: 'Services' },
   { group_id: 3, group_name: 'Stationery' },
 ]
+
+// ---------------------------------------------------------------------------
+// Sales → Credit note
+// ---------------------------------------------------------------------------
+
+/** Customers, for the credit note's party search. */
+export const customers = [
+  { acc_id: 701, acc_name: 'Vaibhav Traders', gstin: '29AACCV1234K1Z9' },
+  { acc_id: 702, acc_name: 'Sunrise Electronics', gstin: '29AASCS4411P1ZQ' },
+  { acc_id: 703, acc_name: 'Deepak General Store', gstin: null },
+  { acc_id: 704, acc_name: 'Kaveri Retail LLP', gstin: '29AAKKR7788D1ZB' },
+]
+
+/** This customer's bills, as `v1/original-documents` returns them. */
+export const originalDocuments = {
+  party_account_id: 701,
+  from: '2025-09-21',
+  to: '2026-09-21',
+  documents: [
+    {
+      voucher_id: 55201,
+      voucher_uuid: 'v-55201',
+      document_no: 'INV-2026-0912-087',
+      date: '2026-09-12',
+      party: 'Vaibhav Traders',
+      party_id: 701,
+      amount: 8500,
+      status: 'PARTIALLY_PAID',
+      outstanding: 7260,
+    },
+    {
+      voucher_id: 55188,
+      voucher_uuid: 'v-55188',
+      document_no: 'INV-2026-0829-071',
+      date: '2026-08-29',
+      party: 'Vaibhav Traders',
+      party_id: 701,
+      amount: 14250,
+      status: 'PAID',
+      outstanding: 0,
+    },
+    {
+      voucher_id: 55150,
+      voucher_uuid: 'v-55150',
+      document_no: 'INV-2026-0804-055',
+      date: '2026-08-04',
+      party: 'Vaibhav Traders',
+      party_id: 701,
+      amount: 3120,
+      status: 'UNPAID',
+      outstanding: 3120,
+    },
+  ],
+  complete: true,
+  outstanding_available: true,
+  source: 'books',
+  note: 'Read from Smart Books just now.',
+}
+
+/** One bill with the lines that were billed on it. */
+export const originalDocument = {
+  voucher_id: 55201,
+  voucher_uuid: 'v-55201',
+  document_no: 'INV-2026-0912-087',
+  date: '2026-09-12',
+  party: 'Vaibhav Traders',
+  party_id: 701,
+  amount: 8500,
+  status: 'PARTIALLY_PAID',
+  available: true,
+  reason: null,
+  lines_available: true,
+  lines: [
+    {
+      line_ref: '1',
+      item_id: 401,
+      item_name: 'Wireless Mouse',
+      sku: 'M221-BLK',
+      hsn_sac: '8471',
+      unit_id: 1,
+      unit_name: 'Nos',
+      warehouse_id: 3,
+      batch_id: null,
+      batch_no: 'BATCH-A1',
+      qty: 5,
+      rate: 850,
+      discount_pc: 0,
+      amount: 4250,
+      tax_cat_id: 4,
+      tax_rate: 18,
+      stockable: true,
+    },
+    {
+      line_ref: '2',
+      item_id: 402,
+      item_name: 'USB-C Cable 1M',
+      sku: 'CB11-1M',
+      hsn_sac: '8544',
+      unit_id: 1,
+      unit_name: 'Nos',
+      warehouse_id: 3,
+      batch_id: null,
+      batch_no: 'BATCH-B3',
+      qty: 6,
+      rate: 450,
+      discount_pc: 5,
+      amount: 2565,
+      tax_cat_id: 4,
+      tax_rate: 18,
+      stockable: true,
+    },
+    {
+      line_ref: '3',
+      item_id: null,
+      item_name: 'Installation at site',
+      sku: null,
+      hsn_sac: '9987',
+      unit_id: null,
+      unit_name: null,
+      warehouse_id: null,
+      batch_id: null,
+      batch_no: null,
+      qty: 1,
+      rate: 1200,
+      discount_pc: 0,
+      amount: 1200,
+      tax_cat_id: 4,
+      tax_rate: 18,
+      stockable: false,
+    },
+  ],
+  note: 'Read from Smart Books just now. Smart Books decides what may still be credited when the note is posted.',
+}
+
+export const warehouses = [
+  { mc_id: 3, mc_name: 'Main Warehouse' },
+  { mc_id: 4, mc_name: 'Delhi Warehouse' },
+  { mc_id: 5, mc_name: 'Counter Stock' },
+]
+
+export const creditNoteTrend = {
+  available: true,
+  reason: null,
+  label: 'September 2026',
+  from: '2026-09-01',
+  to: '2026-09-21',
+  count: 3,
+  value: 18240,
+  previous_label: '11 Aug 2026 – 31 Aug 2026',
+  previous_count: 2,
+  series: [
+    { label: '1–8', count: 1 },
+    { label: '9–16', count: 0 },
+    { label: '17–24', count: 2 },
+    { label: '25+', count: 0 },
+  ],
+  source: 'books',
+}
+
+/** What the API returns when the harness "issues" a credit note. */
+export const savedCreditNote = {
+  request_id: 9210,
+  request_uuid: '8f2c1a10-0000-4000-8000-000000009210',
+  kind: 'credit_note',
+  status: 'POSTED',
+  party_account_id: 701,
+  transaction_date: '2026-09-21',
+  payload: {},
+  books_voucher_id: 55311,
+  books_voucher_uuid: 'v-55311',
+  books_voucher_no: 'CN/0014',
+  last_error: null,
+  created_at: '2026-09-21T06:10:00Z',
+}

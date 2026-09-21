@@ -36,6 +36,7 @@ the absence as a zero.
 | `GET reports/account-ledger` | party statement |
 | `GET masters/accounts` | party and cash/bank pickers |
 | `GET masters/tax-categories` | line tax category picker |
+| `GET vouchers/{id}` | the credit note's "what was on this bill" |
 | `POST vouchers/drafts`, `POST vouchers/drafts/{id}/post` | every transaction |
 | `POST receipt-vouchers/{id}/settlement` | receipt allocation |
 | `POST payment-vouchers/{id}/settlement` | payment allocation |
@@ -230,6 +231,66 @@ The second is a client for it in `server-php/src/Clients/`, and one line in
 `DocumentCapture::storage()`. Until both exist that method answers `false`
 whatever the environment says, because configuring a service Billing cannot call
 would put a drop zone on screen that swallows a photo and loses it.
+
+## Partly available: what may still be credited
+
+**The credit note screen states the invoice quantity and says who decides.**
+
+`GET vouchers/{id}` gives Billing the lines that were billed, so a credit note
+starts from what was actually sold rather than from an empty table, and a line
+crediting more than the bill carried is refused before it is sent. What no
+endpoint gives is the quantity still **eligible** after earlier notes against
+the same invoice: nothing in the estate reports "5 sold, 2 already credited, 3
+left", and Billing must not keep a returns ledger of its own to work it out —
+that is a second answer to a question Books owns.
+
+So the screen shows the invoiced quantity ("of 5 billed"), blocks anything
+above it, and leaves the rest to Books, which refuses an over-credit when the
+note is posted. The contract that would close the gap:
+
+```
+GET reports/credit-eligibility
+  ?cmp_id&fy_id&against_voucher_id
+
+  → { data: { voucher_id, lines: [ {
+        line_ref, item_id, billed_qty, credited_qty, eligible_qty,
+        billed_amount, credited_amount, eligible_amount
+      } ] } }
+```
+
+Owner: **Smart Books**, because Books holds both the invoice and every note
+raised against it. Authentication as everywhere else: the caller's `ses_key`.
+
+Two smaller gaps sit behind the same screen, and both are stated on it rather
+than papered over:
+
+* **The number before it is issued.** Books allots the credit note number from
+  the company's own series when it posts the voucher. There is no "reserve the
+  next number" call, so the field reads *Allotted on issue* instead of showing
+  a number Billing would have had to invent.
+* **The tax, and the posting, in figures.** Billing sends no tax fields and
+  calculates none, so the summary is before tax and the posting preview shows
+  the direction of each leg with an amount only where there is one to show. A
+  `POST vouchers/preview` returning the computed tax and ledger legs for an
+  unsaved voucher would let both show real figures; until then the screen names
+  Smart Books rather than printing a number it cannot stand behind.
+
+## Not available: the condition returned goods came back in
+
+**The credit note records it and sends it on; nothing downstream reads it yet.**
+
+Inventory has no disposition or condition list — no "good, damaged, scrap" that
+decides which bin a return lands in — so the four words on the credit note's
+Condition column are Billing's own. They are kept on the transaction request
+and passed to Books as `return_condition` on the line, which means the note a
+person reads in six months says what came back in what state. Whether stock is
+segregated by it is Inventory's to decide when it has a contract for it:
+
+```
+GET v1/return-dispositions          → { data: [ { code, label, restocks: bool } ] }
+```
+
+Until that exists the list stays short, plain, and honest about being ours.
 
 ## Not depended on: Aicountly Pay
 

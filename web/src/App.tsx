@@ -61,6 +61,13 @@ const ExpensePage = lazy(() => import('./pages/expense/ExpensePage'))
  */
 const ItemsPage = lazy(() => import('./pages/items/ItemsPage'))
 
+/**
+ * The credit note screen, split for the same reason again: its own
+ * stylesheet, its own table and its own readings of the bill being credited,
+ * and a counter that only makes bills never opens it.
+ */
+const CreditNotePage = lazy(() => import('./pages/credit-note/CreditNotePage'))
+
 initAnalytics()
 
 function PageViews() {
@@ -217,7 +224,14 @@ function Shell() {
             />
             <Route path=":id" element={<RequireScope><TransactionDetail /></RequireScope>} />
           </Route>
-          <Route path="credit-note" element={<RequireScope><SaleEditor kind="credit_note" /></RequireScope>} />
+          <Route
+            path="credit-note"
+            element={
+              <Suspense fallback={<Loading />}>
+                <RequireScope><CreditNotePage /></RequireScope>
+              </Suspense>
+            }
+          />
           <Route path="debit-note" element={<RequireScope><SaleEditor kind="debit_note" /></RequireScope>} />
           <Route path="recurring" element={<RequireScope><Recurring /></RequireScope>} />
           <Route path="unfinished" element={<RequireScope><Unfinished /></RequireScope>} />

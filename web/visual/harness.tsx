@@ -27,6 +27,7 @@ import CashCompliance from '../src/dashboards/CashCompliance'
 import { MoneyScreen } from '../src/pages/money/MoneyScreen'
 import ExpensePage from '../src/pages/expense/ExpensePage'
 import ItemsPage from '../src/pages/items/ItemsPage'
+import CreditNotePage from '../src/pages/credit-note/CreditNotePage'
 import { saveSession, setAuthToken } from '../src/auth/tokens'
 import { setScope } from '../src/services/api'
 import * as fixtures from './fixtures'
@@ -66,6 +67,11 @@ const FAILABLE: Array<[string, RegExp]> = [
   ['items', /v1\/catalog\/items(\?|$)/],
   ['stats', /v1\/catalog\/items\/stats/],
   ['groups', /v1\/catalog\/item-groups/],
+  ['bills', /v1\/original-documents(\?|$)/],
+  ['bill-lines', /v1\/original-documents\/\d+/],
+  ['warehouses', /v1\/catalog\/warehouses/],
+  ['trend', /v1\/credit-notes\/trend/],
+  ['issue', /v1\/transactions\/credit_note/],
 ]
 
 const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
@@ -78,6 +84,7 @@ const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
   'money-in': { path: '/money-in/new', element: <MoneyScreen direction="in" /> },
   expense: { path: '/more/expense', element: <ExpensePage /> },
   items: { path: '/items', element: <ItemsPage /> },
+  'credit-note': { path: '/more/credit-note', element: <CreditNotePage /> },
 }
 
 /** The fixture behind each endpoint the screens call. */
@@ -101,6 +108,11 @@ const RESPONSES: Array<[RegExp, unknown]> = [
   [/v1\/money\/party-context/, fixtures.moneyPartyContext],
   [/v1\/money\/recent/, fixtures.moneyRecent],
   [/v1\/open-bills/, fixtures.openBills],
+  [/v1\/original-documents\/\d+/, fixtures.originalDocument],
+  [/v1\/original-documents/, fixtures.originalDocuments],
+  [/v1\/credit-notes\/trend/, fixtures.creditNoteTrend],
+  [/v1\/catalog\/warehouses/, fixtures.warehouses],
+  [/v1\/transactions\/credit_note/, fixtures.savedCreditNote],
   [/v1\/catalog\/expense-accounts/, fixtures.expenseAccounts],
   [/v1\/catalog\/tax-categories/, fixtures.taxCategories],
   [/v1\/catalog\/items\/stats/, fixtures.catalogItemStats],
@@ -198,10 +210,37 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Res
     )
   }
 
+  // Item search really searches, so a line can be added by hand in the booth.
+  if (/v1\/catalog\/items\/search/.test(url)) {
+    const term = (new URL(url, window.location.origin).searchParams.get('q') ?? '').toLowerCase()
+    // `item_sku` is nullable, and the catalogue deliberately holds an item
+    // without one — a search that assumes every item has an SKU crashes on the
+    // first real catalogue it meets.
+    const rows = fixtures.catalogItems.filter(
+      (row) => row.item_name.toLowerCase().includes(term) || (row.item_sku ?? '').toLowerCase().includes(term),
+    )
+    return new Response(JSON.stringify({ data: rows, meta: { total: rows.length, limit: 20, offset: 0 } }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  // Scan to credit: a code that matches an SKU resolves, anything else 404s.
+  if (/v1\/catalog\/items\/barcode\//.test(url)) {
+    const code = decodeURIComponent(url.split('/barcode/')[1].split('?')[0]).toLowerCase()
+    const item = fixtures.catalogItems.find((row) => row.item_sku !== null && row.item_sku.toLowerCase() === code)
+    return new Response(JSON.stringify(item ? { data: item } : { error: { code: 'not_found', message: 'No such code.' } }), {
+      status: item ? 200 : 404,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
   // Party search really searches, so the empty state is reachable here too.
   if (/v1\/catalog\/parties/.test(url)) {
     const term = (new URL(url, window.location.origin).searchParams.get('q') ?? '').toLowerCase()
-    const rows = fixtures.suppliers.filter((row) => row.acc_name.toLowerCase().includes(term))
+    const side = new URL(url, window.location.origin).searchParams.get('side') ?? 'customer'
+    const pool = side === 'supplier' ? fixtures.suppliers : fixtures.customers
+    const rows = pool.filter((row) => row.acc_name.toLowerCase().includes(term))
     return new Response(JSON.stringify({ data: rows, meta: { total: rows.length, limit: 20, offset: 0 } }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
