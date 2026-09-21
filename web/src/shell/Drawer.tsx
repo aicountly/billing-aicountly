@@ -24,11 +24,15 @@ export function Drawer({
   onClose,
   title,
   children,
+  side = 'left',
 }: {
   open: boolean
   onClose: () => void
   title: string
   children: ReactNode
+  /** Which edge it comes in from. The navigation is on the left; panels that
+      belong beside the content rather than in place of it come from the right. */
+  side?: 'left' | 'right'
 }) {
   const panel = useRef<HTMLDivElement | null>(null)
   const returnTo = useRef<HTMLElement | null>(null)
@@ -83,10 +87,16 @@ export function Drawer({
   return (
     <>
       <div className="billing-drawer-backdrop" onClick={onClose} aria-hidden="true" />
-      <div className="billing-drawer" role="dialog" aria-modal="true" aria-label={title} ref={panel}>
+      <div
+        className={`billing-drawer${side === 'right' ? ' billing-drawer--right' : ''}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        ref={panel}
+      >
         <div className="billing-drawer__head">
           <strong>{title}</strong>
-          <button type="button" className="billing-iconbutton" onClick={onClose} aria-label="Close menu">
+          <button type="button" className="billing-iconbutton" onClick={onClose} aria-label={`Close ${title.toLowerCase()}`}>
             <X size={18} aria-hidden />
           </button>
         </div>
