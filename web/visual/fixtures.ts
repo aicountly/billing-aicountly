@@ -654,3 +654,165 @@ export const savedExpense = {
   last_error: null,
   created_at: '2026-09-19T06:10:00Z',
 }
+
+// ---------------------------------------------------------------------------
+// The Items workspace
+// ---------------------------------------------------------------------------
+
+/**
+ * A catalogue with every shape the screen has to survive in it.
+ *
+ * Deliberately awkward: an item with no SKU, one with a name longer than the
+ * column, an amount in lakhs, a service with no stock, an item running low,
+ * one out of stock, one withdrawn, and one Inventory said nothing useful about
+ * at all. Photographing a screen where every row is tidy proves nothing.
+ */
+export const catalogItems = [
+  row(1, 'Ballpoint Pens', {
+    description: 'Smooth writing | Blue',
+    sku: 'PEN-001',
+    hsn: '960810',
+    type: 'stock',
+    group: [3, 'Stationery'],
+    rate: 12,
+    stock: [1250, 100],
+  }),
+  row(2, 'A4 Notebook', {
+    description: '200 Pages | Single Line',
+    sku: 'NB-002',
+    hsn: '482020',
+    type: 'stock',
+    group: [3, 'Stationery'],
+    rate: 45,
+    stock: [320, 60],
+  }),
+  row(3, 'Laptop — Dell Inspiron 15 3520 with 16GB RAM and 512GB NVMe storage', {
+    description: '15.6" | 16GB | 512GB SSD',
+    sku: 'LAP-001',
+    hsn: '847130',
+    type: 'stock',
+    group: [4, 'Computers'],
+    rate: 52000,
+    stock: [15, 5],
+  }),
+  row(4, 'Installation Service', {
+    description: 'On-site installation',
+    sku: 'SERV-001',
+    hsn: '998719',
+    type: 'service',
+    group: [7, 'Services'],
+    rate: 1500,
+  }),
+  row(5, 'Office Chair', {
+    description: 'Ergonomic | Adjustable',
+    sku: 'CHR-001',
+    hsn: '940130',
+    type: 'stock',
+    group: [5, 'Furniture'],
+    rate: 3800,
+    stock: [8, 10],
+  }),
+  row(6, 'Annual AMC', {
+    description: 'Comprehensive support',
+    sku: 'AMC-001',
+    hsn: '998719',
+    type: 'service',
+    group: [7, 'Services'],
+    rate: 5000,
+  }),
+  row(7, 'Whiteboard Marker', {
+    description: null,
+    sku: null,
+    hsn: '960910',
+    type: 'stock',
+    group: [3, 'Stationery'],
+    rate: 25,
+    stock: [0, 24],
+  }),
+  row(8, 'Industrial Air Compressor', {
+    description: '7.5 HP | Two stage',
+    sku: 'ACP-220',
+    hsn: '841430',
+    type: 'stock',
+    group: [6, 'Machinery'],
+    rate: 248500,
+    stock: [2, 1],
+  }),
+  row(9, 'Legacy Fax Rolls', {
+    description: 'Withdrawn from sale',
+    sku: 'FAX-010',
+    hsn: '481140',
+    type: 'stock',
+    group: [3, 'Stationery'],
+    rate: 90,
+    stock: [40, 10],
+    active: false,
+  }),
+  // Inventory answered, but said nothing about what this is or how many there
+  // are. The row still has to draw — as "—" and "Unavailable", never as 0.
+  row(10, 'Imported Gift Set', { description: null, sku: 'GFT-001', hsn: null, type: null, group: null, rate: null }),
+]
+
+/** One fixture row in the shape the API's normaliser produces. */
+function row(
+  id: number,
+  name: string,
+  options: {
+    description?: string | null
+    sku?: string | null
+    hsn?: string | null
+    type?: 'stock' | 'service' | null
+    group?: [number, string] | null
+    rate?: number | null
+    /** [available, reorder level] — omitted entirely means "Inventory did not say". */
+    stock?: [number, number]
+    active?: boolean
+  },
+) {
+  const isService = options.type === 'service'
+  const available = options.stock?.[0]
+  const threshold = options.stock?.[1] ?? null
+
+  let state: 'in' | 'low' | 'out' | 'none' | 'unknown' = 'unknown'
+  if (isService) state = 'none'
+  else if (available === undefined) state = 'unknown'
+  else if (available <= 0) state = 'out'
+  else if (threshold !== null && available <= threshold) state = 'low'
+  else state = 'in'
+
+  return {
+    item_id: id,
+    item_name: name,
+    item_sku: options.sku ?? null,
+    hsn_sac: options.hsn ?? null,
+    unit_id: 1,
+    mrp: options.rate === null || options.rate === undefined ? null : String(options.rate),
+    description: options.description ?? null,
+    barcode: null,
+    type: options.type === undefined ? 'stock' : options.type,
+    group: options.group ? { id: options.group[0], name: options.group[1] } : null,
+    unit_name: isService ? null : 'Nos',
+    rate: options.rate ?? null,
+    currency: 'INR',
+    is_active: options.active ?? (options.type === null ? null : true),
+    image_url: null,
+    stock: { available: isService ? null : (available ?? null), threshold: isService ? null : threshold, state },
+    source: 'inventory',
+  }
+}
+
+export const catalogItemStats = {
+  total: { value: 1248, available: true, reason: null },
+  stock: { value: 892, available: true, reason: null },
+  services: { value: 356, available: true, reason: null },
+  low_stock: { value: 24, available: true, reason: null },
+  inactive: { value: 62, available: true, reason: null },
+}
+
+export const catalogItemGroups = [
+  { group_id: 4, group_name: 'Computers' },
+  { group_id: 5, group_name: 'Furniture' },
+  { group_id: 6, group_name: 'Machinery' },
+  { group_id: 7, group_name: 'Services' },
+  { group_id: 3, group_name: 'Stationery' },
+]

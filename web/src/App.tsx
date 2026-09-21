@@ -8,7 +8,7 @@ import Onboarding from './pages/Onboarding'
 import SaleEditor from './pages/SaleEditor'
 import { DuesScreen, PartyStatement } from './pages/Dues'
 import { BankCash } from './pages/MoneyMovement'
-import { Items, Parties } from './pages/Directory'
+import { Parties } from './pages/Directory'
 import {
   BankCashOverview,
   Profiles,
@@ -51,6 +51,15 @@ const MoneyScreen = lazy(() =>
  * sessions never open it. Split for the same reason the dashboards are.
  */
 const ExpensePage = lazy(() => import('./pages/expense/ExpensePage'))
+
+/**
+ * The Items workspace, split for the same reason.
+ *
+ * It carries its own stylesheet, a table, a filter popover and a detail panel,
+ * and a counter biller who never leaves the till should not pay for any of it
+ * on the screen they do use.
+ */
+const ItemsPage = lazy(() => import('./pages/items/ItemsPage'))
 
 initAnalytics()
 
@@ -193,7 +202,10 @@ function Shell() {
           <Route path=":accountId" element={<RequireScope><PartyStatement /></RequireScope>} />
         </Route>
 
-        <Route path="items" element={<RequireScope><Items /></RequireScope>} />
+        <Route
+          path="items"
+          element={<Suspense fallback={<Loading />}><RequireScope><ItemsPage /></RequireScope></Suspense>}
+        />
         <Route path="reports" element={<Suspense fallback={<Loading />}><RequireScope><Reports /></RequireScope></Suspense>} />
 
         <Route path="more">
