@@ -401,6 +401,17 @@ export interface CashBankAccount {
   acc_id: number
   acc_name: string
   /**
+   * The bank account number, when the ledger carries one.
+   *
+   * Books spells it differently across deployments, so the screens read it
+   * through readText() over these keys and show the last few digits only. It
+   * is rendered on the request that reads it and never stored here.
+   */
+  account_no?: string | null
+  acc_no?: string | null
+  bank_account_no?: string | null
+  account_number?: string | null
+  /**
    * Whatever Books calls the group this account sits in — "Bank Accounts",
    * "Cash-in-hand". Optional because the catalog relays Books' own response and
    * not every deployment spells it. Rendered only when present; never guessed
@@ -552,4 +563,43 @@ export interface ExpenseCapabilities {
 export interface CatalogAccount {
   acc_id: number
   acc_name: string
+}
+
+/**
+ * A bank withdrawal this product recorded, as `v1/bank-withdrawals/recent`
+ * describes it.
+ *
+ * The names are resolved live from Books on that request; `null` means Books
+ * did not answer, not that the account is missing.
+ */
+export interface RecentWithdrawal {
+  request_id: number
+  date: string
+  amount: number | null
+  bank_account_id: number | null
+  bank_account_name: string | null
+  cash_account_id: number | null
+  cash_account_name: string | null
+  reference_no: string | null
+  note: string | null
+  voucher_id: number | null
+  voucher_no: string | null
+}
+
+export interface RecentWithdrawals {
+  rows: RecentWithdrawal[]
+  /** False when Books did not answer: the amounts still stand, the names do not. */
+  names_available: boolean
+  basis: string
+}
+
+/** What has come out of one bank account lately. Context beside a balance, not a balance. */
+export interface WithdrawalSummary {
+  bank_account_id: number
+  days: number
+  from: string
+  to: string
+  total: number
+  count: number
+  basis: string
 }

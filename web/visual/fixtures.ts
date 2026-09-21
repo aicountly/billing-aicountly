@@ -70,7 +70,17 @@ export const ownerSession: BillingSession = {
         { label: 'Expense', path: '/more/expense' },
       ],
     },
-    { key: 'money', label: 'Money', path: '/money-in', children: [] },
+    {
+      key: 'money',
+      label: 'Money',
+      path: '/money-in',
+      children: [
+        { label: 'Money received', path: '/money-in/new' },
+        { label: 'Money paid', path: '/money-out/new' },
+        { label: 'Bank deposit', path: '/bank-cash/deposit' },
+        { label: 'Bank withdrawal', path: '/bank-cash/withdrawal' },
+      ],
+    },
     { key: 'receivables', label: 'Money to Collect', path: '/receivables', children: [] },
     { key: 'payables', label: 'Money to Pay', path: '/payables', children: [] },
     { key: 'parties', label: 'Parties', path: '/parties', children: [] },
@@ -578,8 +588,9 @@ export const expenseAccounts = [
 // be reached. `group_name` is what the money screens show under "Paid from".
 export const cashBankAccounts = [
   { acc_id: 101, acc_name: 'Cash in hand', group_name: 'Cash-in-hand' },
-  { acc_id: 102, acc_name: 'HDFC Bank · 4471', group_name: 'Bank Accounts' },
-  { acc_id: 103, acc_name: 'ICICI Current · 9082', group_name: 'Bank Accounts' },
+  { acc_id: 102, acc_name: 'HDFC Bank · 4471', group_name: 'Bank Accounts', account_no: '502000124471' },
+  { acc_id: 103, acc_name: 'ICICI Current · 9082', group_name: 'Bank Accounts', account_no: '123456789082' },
+  { acc_id: 104, acc_name: 'Petty cash — counter', group_name: 'Cash-in-hand' },
 ]
 
 export const taxCategories = [
@@ -1086,4 +1097,83 @@ export const savedCreditNote = {
   books_voucher_no: 'CN/0014',
   last_error: null,
   created_at: '2026-09-21T06:10:00Z',
+}
+
+// ---------------------------------------------------------------------------
+// Money → Bank withdrawal
+// ---------------------------------------------------------------------------
+
+/**
+ * Balances, as `v1/cash-bank` composes them from Books' account summary.
+ *
+ * The `kind` is what lets the withdrawal screen offer banks on one side and
+ * cash on the other; without it the screen falls back to the group name on the
+ * ledger, and with neither it shows every ledger in both lists — which is the
+ * state `?fail=balance` photographs.
+ */
+export const cashBankBalances = {
+  available: true,
+  cash: 42500,
+  bank: 1530500,
+  accounts: [
+    { account_id: 101, account_name: 'Cash in hand', balance: 38500, kind: 'cash' },
+    { account_id: 102, account_name: 'HDFC Bank · 4471', balance: 1248500, kind: 'bank' },
+    { account_id: 103, account_name: 'ICICI Current · 9082', balance: 282000, kind: 'bank' },
+    { account_id: 104, account_name: 'Petty cash — counter', balance: 4000, kind: 'cash' },
+  ],
+  source: 'books',
+}
+
+export const recentWithdrawals = {
+  rows: [
+    {
+      request_id: 9204, date: '2026-09-18', amount: 25000, bank_account_id: 102,
+      bank_account_name: 'HDFC Bank · 4471', cash_account_id: 101, cash_account_name: 'Cash in hand',
+      reference_no: 'CHQ002341', note: 'Counter float', voucher_id: 55240, voucher_no: 'CON/0044',
+    },
+    {
+      request_id: 9203, date: '2026-09-16', amount: 10000, bank_account_id: 103,
+      bank_account_name: 'ICICI Current · 9082', cash_account_id: 104, cash_account_name: 'Petty cash — counter',
+      reference_no: 'UTR987654321', note: null, voucher_id: 55221, voucher_no: 'CON/0043',
+    },
+    {
+      request_id: 9202, date: '2026-09-12', amount: 50000, bank_account_id: 102,
+      bank_account_name: 'HDFC Bank · 4471', cash_account_id: 101, cash_account_name: 'Cash in hand',
+      reference_no: 'CHQ002333', note: 'Wages', voucher_id: 55190, voucher_no: 'CON/0041',
+    },
+    {
+      request_id: 9201, date: '2026-09-05', amount: 15000, bank_account_id: 103,
+      bank_account_name: 'ICICI Current · 9082', cash_account_id: 101, cash_account_name: 'Cash in hand',
+      reference_no: 'Slip No. 4456', note: null, voucher_id: 55151, voucher_no: 'CON/0039',
+    },
+  ],
+  names_available: true,
+  basis:
+    "Withdrawals recorded from Billing in this company and year. Withdrawals entered directly in Smart Books are in Books' own contra register.",
+}
+
+export const withdrawalSummary = {
+  bank_account_id: 102,
+  days: 30,
+  from: '2026-08-21',
+  to: '2026-09-19',
+  total: 235000,
+  count: 12,
+  basis: "Counted from the withdrawals recorded in Billing. The balance above is Smart Books' own.",
+}
+
+/** What the API returns when the harness "saves" a withdrawal. */
+export const savedWithdrawal = {
+  request_id: 9205,
+  request_uuid: '8f2c1a10-0000-4000-8000-000000009205',
+  kind: 'bank_withdrawal',
+  status: 'POSTED',
+  party_account_id: null,
+  transaction_date: '2026-09-19',
+  payload: {},
+  books_voucher_id: 55262,
+  books_voucher_uuid: 'v-55262',
+  books_voucher_no: 'CON/0045',
+  last_error: null,
+  created_at: '2026-09-19T06:20:00Z',
 }
