@@ -1,21 +1,23 @@
 /**
  * Receipts already recorded.
  *
- * This is Smart Books' receipt register, read on this page load — not a list
- * Billing keeps. That is why it can be trusted to answer "did somebody already
- * enter this cheque?": it is the same rows the accounts show.
+ * Smart Books' receipt register, read on this page load — not a list Billing
+ * keeps. That is why it can be trusted to answer "did somebody already enter
+ * this cheque?": it is the same rows the accounts show.
  *
- * Columns the register does not carry are drawn as "—" rather than filled in
- * from what the browser happens to remember about the receipt it just saved.
+ * The mode, the reference and the account are Billing's own half of the row,
+ * joined on by the endpoint from the request written when Save was pressed. A
+ * receipt recorded in Books rather than here has them empty, and the row says
+ * so rather than inventing them.
  */
 
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronDown, Clock3, MoreVertical } from 'lucide-react'
 import { date as formatDate, money } from '../../ui'
-import { Badge, EmptyState, ErrorState, SettlementBadge, SkeletonRows } from '../../dashboards/kit'
+import { Badge, EmptyState, ErrorState, SettlementBadge, SkeletonRows, Unavailable } from '../../dashboards/kit'
 import { useBilling } from '../../context/BillingContext'
-import type { ReceiptRow } from './data'
+import type { MoneyActivityRow } from '../../services/types'
 import { modeWords } from './form'
 
 const SHOWN = 8
@@ -24,16 +26,17 @@ export function RecentReceipts({
   rows,
   loading,
   error,
-  allowed,
+  unavailable,
   onRetry,
   onUseCustomer,
 }: {
-  rows: ReceiptRow[]
+  rows: MoneyActivityRow[]
   loading: boolean
   error: string | null
-  allowed: boolean
+  /** Books answered, but not with a register — the form still works. */
+  unavailable?: string | null
   onRetry: () => void
-  onUseCustomer: (row: ReceiptRow) => void
+  onUseCustomer: (row: MoneyActivityRow) => void
 }) {
   const navigate = useNavigate()
   const { can } = useBilling()
@@ -54,7 +57,7 @@ export function RecentReceipts({
           </div>
         </div>
 
-        {allowed && (
+        {can('reports.view') && (
           <button
             type="button"
             className="billing-button billing-button--small"
@@ -66,21 +69,18 @@ export function RecentReceipts({
       </div>
 
       <div style={{ paddingInline: 22 }}>
-        {!allowed ? (
-          <EmptyState>
-            Your Billing profile does not include the receipt register, so past receipts are not shown here. Anything
-            you record on this screen is still saved to Smart Books.
-          </EmptyState>
-        ) : loading ? (
+        {loading ? (
           <SkeletonRows rows={5} />
         ) : error ? (
           <ErrorState message={`Could not read the receipt register. ${error}`} onRetry={onRetry} />
+        ) : unavailable ? (
+          <Unavailable title="Receipts could not be listed">{unavailable}</Unavailable>
         ) : visible.length === 0 ? (
           <EmptyState>Your recorded customer receipts will appear here.</EmptyState>
         ) : null}
       </div>
 
-      {allowed && !loading && !error && visible.length > 0 && (
+      {!loading && !error && !unavailable && visible.length > 0 && (
         <>
           <div className="billing-table-scroll billing-receipt-recent__table">
             <table className="billing-table">
@@ -119,8 +119,8 @@ export function RecentReceipts({
                       <strong>{row.amount === null ? '—' : money(row.amount)}</strong>
                     </td>
                     <td className="billing-receipt-recent__optional">
-                      <span className="billing-receipt-recent__truncate" title={row.received_in ?? undefined}>
-                        {row.received_in ?? '—'}
+                      <span className="billing-receipt-recent__truncate" title={row.account_name ?? undefined}>
+                        {row.account_name ?? '—'}
                       </span>
                     </td>
                     <td>{modeWords(row.payment_mode)}</td>
@@ -130,7 +130,7 @@ export function RecentReceipts({
                       </span>
                     </td>
                     <td>
-                      <ReceiptStatus status={row.status} />
+                      <ReceiptStatus status={row.status} recordedHere={row.recorded_here} />
                     </td>
                     <td>
                       <RowActions
@@ -160,10 +160,10 @@ export function RecentReceipts({
                   <span>{formatDate(row.date)}</span>
                   <span aria-hidden>·</span>
                   <span>{modeWords(row.payment_mode)}</span>
-                  {row.received_in && (
+                  {row.account_name && (
                     <>
                       <span aria-hidden>·</span>
-                      <span>{row.received_in}</span>
+                      <span>{row.account_name}</span>
                     </>
                   )}
                 </div>
@@ -183,7 +183,7 @@ export function RecentReceipts({
   )
 }
 
-function rowKey(row: ReceiptRow, index: number): string {
+function rowKey(row: MoneyActivityRow, index: number): string {
   return String(row.voucher_id ?? row.voucher_uuid ?? `${row.document_no ?? 'row'}-${index}`)
 }
 
@@ -195,10 +195,12 @@ function rowKey(row: ReceiptRow, index: number): string {
  * nothing. It does not invent a state Books did not give: anything more
  * specific comes from Books' own status.
  */
-function ReceiptStatus({ status }: { status: string | null }) {
+function ReceiptStatus({ status, recordedHere }: { status: string | null; recordedHere?: boolean }) {
+  const where = recordedHere === false ? 'This receipt was recorded in Smart Books, not here.' : 'This receipt is in Smart Books’ register.'
+
   if (status === null) {
     return (
-      <span title="This receipt is in Smart Books’ register.">
+      <span title={where}>
         <Badge tone="success">Received</Badge>
       </span>
     )
@@ -220,7 +222,7 @@ function RowActions({
   onUseCustomer,
   onViewLedger,
 }: {
-  row: ReceiptRow
+  row: MoneyActivityRow
   mayViewLedger: boolean
   onUseCustomer: () => void
   onViewLedger: () => void

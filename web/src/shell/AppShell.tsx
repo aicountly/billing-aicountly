@@ -14,7 +14,7 @@
  */
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { Bell, ChevronDown, LogOut, Menu, Plus, Settings, User } from 'lucide-react'
 import { useAuth } from '../auth/AuthProvider'
 import { AppLauncher } from '../components/AppLauncher'
@@ -126,38 +126,61 @@ function Brand() {
 function Navigation({ menu }: { menu: MenuEntry[] }) {
   const location = useLocation()
 
+  /**
+   * A section that CLAIMS this path as one of its own beats a section that
+   * merely shares its prefix.
+   *
+   * Some screens live under a path belonging to another section — the expense
+   * form is `/more/expense` and belongs to Purchases — and without this both
+   * Purchases and Settings light up, which tells the user they are in two
+   * places at once.
+   */
+  const claimed = menu.some((entry) =>
+    (entry.children ?? []).some(
+      (child) => location.pathname === child.path || location.pathname.startsWith(`${child.path}/`),
+    ),
+  )
+
   return (
     <nav aria-label="Sections" style={{ display: 'grid', gap: 2 }}>
       {menu.map((entry) => {
         const children = entry.children ?? []
+        const owns = children.some(
+          (child) => location.pathname === child.path || location.pathname.startsWith(`${child.path}/`),
+        )
         // A section expands when you are inside it. Expanding on click as well
         // would mean a section whose own page is one tap away needs two.
         const inside =
           location.pathname === entry.path ||
-          children.some((child) => location.pathname.startsWith(child.path)) ||
-          (entry.path !== '/' && location.pathname.startsWith(entry.path))
+          owns ||
+          (!claimed && entry.path !== '/' && location.pathname.startsWith(entry.path))
 
         return (
           <div key={entry.key}>
-            <NavLink
-              to={entry.path}
-              end={entry.path === '/'}
-              className="billing-nav__link"
-              aria-current={inside ? 'page' : undefined}
-            >
+            {/* Link, not NavLink: NavLink decides "current" by prefix and
+                swallows the aria-current prop, which is how one screen ends up
+                marked in two sections. What is current is worked out above. */}
+            <Link to={entry.path} className="billing-nav__link" aria-current={inside ? 'page' : undefined}>
               {entry.label}
-            </NavLink>
+            </Link>
             {inside && children.length > 0 && (
               <div className="billing-nav__children">
                 {children.map((child) => (
-                  <NavLink
+                  <Link
                     key={child.path}
                     to={child.path}
                     className="billing-nav__child"
-                    aria-current={location.pathname === child.path ? 'page' : undefined}
+                    // Prefix rather than equality, so a screen's own detail
+                    // route (…/expense/12) keeps its entry lit instead of
+                    // leaving the section open with nothing marked inside it.
+                    aria-current={
+                      location.pathname === child.path || location.pathname.startsWith(`${child.path}/`)
+                        ? 'page'
+                        : undefined
+                    }
                   >
                     {child.label}
-                  </NavLink>
+                  </Link>
                 ))}
               </div>
             )}

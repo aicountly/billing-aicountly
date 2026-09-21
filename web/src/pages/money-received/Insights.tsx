@@ -15,7 +15,8 @@ import { Link } from 'react-router-dom'
 import { Lightbulb, Sparkles, UserRound, X } from 'lucide-react'
 import { date as formatDate, money } from '../../ui'
 import { SkeletonRows } from '../../dashboards/kit'
-import type { OpenBill, ReceiptRow } from './data'
+import type { MoneyActivityRow } from '../../services/types'
+import type { OpenBill } from './data'
 import { fromPaise, modeWords, type ChosenParty } from './form'
 
 export function ReceiptAssistant({
@@ -87,14 +88,12 @@ export function CustomerSummary({
   party,
   dues,
   payments,
-  paymentsAllowed,
   paymentsLoading,
   mayViewLedger,
 }: {
   party: ChosenParty | null
   dues: { total: number | null; overdue: number | null; loading: boolean; error: string | null; allowed: boolean }
-  payments: ReceiptRow[]
-  paymentsAllowed: boolean
+  payments: MoneyActivityRow[]
   paymentsLoading: boolean
   mayViewLedger: boolean
 }) {
@@ -171,11 +170,7 @@ export function CustomerSummary({
               )}
             </div>
 
-            {!paymentsAllowed ? (
-              <p style={{ margin: '8px 0 0', color: 'var(--billing-muted)', fontSize: 12 }}>
-                Your Billing profile does not include the receipt register, so past receipts are not listed here.
-              </p>
-            ) : paymentsLoading ? (
+            {paymentsLoading ? (
               <SkeletonRows rows={3} />
             ) : payments.length === 0 ? (
               <p style={{ margin: '8px 0 0', color: 'var(--billing-muted)', fontSize: 12 }}>

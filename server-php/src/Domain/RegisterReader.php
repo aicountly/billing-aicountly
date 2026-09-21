@@ -144,29 +144,15 @@ final class RegisterReader
     {
         $rows = [];
         foreach ($reading['rows'] as $row) {
-            $documentNo = BooksReadings::voucherNumber($row);
-            $reference = BooksReadings::instrumentNo($row);
-
             $rows[] = [
                 'voucher_id'   => BooksReadings::voucherId($row),
                 'voucher_uuid' => BooksReadings::voucherUuid($row),
-                'document_no'  => $documentNo,
+                'document_no'  => BooksReadings::voucherNumber($row),
                 'date'         => BooksReadings::voucherDate($row),
                 'party'        => BooksReadings::counterparty($row),
                 'party_id'     => BooksReadings::counterpartyId($row),
                 'amount'       => BooksReadings::voucherAmount($row),
                 'status'       => BooksReadings::settlementStatus($row),
-
-                // How the money moved, what it was referenced by, and where it
-                // landed. Additive and nullable: a register that does not carry
-                // them leaves them null and the screen shows a dash, which is
-                // the same rule the rest of this class follows. The reference is
-                // dropped when it is only the document number under another
-                // name — repeating the receipt number in a "Reference" column
-                // reads as a UTR that was never recorded.
-                'payment_mode' => BooksReadings::paymentMode($row),
-                'reference_no' => $reference === $documentNo ? null : $reference,
-                'received_in'  => BooksReadings::settlementAccount($row),
             ];
         }
 

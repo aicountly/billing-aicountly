@@ -228,7 +228,59 @@ export const api = {
     return { blob: await response.blob(), filename: match?.[1] ?? 'export.csv' }
   },
 
-  /** Context-free: the health check and the portal relay. */
+  /**
+   * A file, posted with the session key and the company scope.
+   *
+   * Content-Type is deliberately NOT set: the browser has to write the
+   * multipart boundary itself, and setting it by hand produces a body the
+   * server cannot take apart. The scope rides in the query string, which is
+   * where it already goes for every other call — a multipart body is not JSON
+   * and the backend's Http::param() reads the URL first for exactly this case.
+   */
+  async upload<T>(path: string, form: FormData, params?: QueryParams): Promise<ItemResponse<T>> {
+    const send = async (sesKey: string): Promise<ItemResponse<T>> => {
+      const response = await fetch(buildUrl(path, params, true), {
+        method: 'POST',
+        headers: { Accept: 'application/json', Authorization: `Bearer ${sesKey}` },
+        body: form,
+      })
+
+      const text = await response.text()
+      let parsed: unknown = null
+      if (text) {
+        try {
+          parsed = JSON.parse(text)
+        } catch {
+          parsed = null
+        }
+      }
+
+      if (!response.ok) {
+        const envelope = parsed as
+          | { error?: { code?: string; message?: string; details?: Record<string, unknown> } }
+          | null
+        throw new ApiError(
+          response.status,
+          envelope?.error?.code ?? 'error',
+          envelope?.error?.message ?? `That file was not accepted (${response.status})`,
+          envelope?.error?.details ?? {},
+        )
+      }
+
+      return parsed as ItemResponse<T>
+    }
+
+    const sesKey = await ensureSesKey()
+    try {
+      return await send(sesKey)
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        return await send(await ensureSesKey(true))
+      }
+      throw error
+    }
+  },
+
   /**
    * Context-free: the health check, the portal relay, and the company switcher.
    *

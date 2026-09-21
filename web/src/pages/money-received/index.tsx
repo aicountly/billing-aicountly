@@ -36,7 +36,7 @@ import {
   Wallet,
 } from 'lucide-react'
 import { api, ApiError } from '../../services/api'
-import type { TransactionRequest } from '../../services/types'
+import type { MoneyActivityRow, TransactionRequest } from '../../services/types'
 import { useBilling } from '../../context/BillingContext'
 import { date as formatDate, money, Notice } from '../../ui'
 import {
@@ -45,7 +45,6 @@ import {
   useCustomerDues,
   useOpenBills,
   useRecentReceipts,
-  type ReceiptRow,
 } from './data'
 import {
   PAYMENT_MODES,
@@ -293,7 +292,7 @@ export default function MoneyReceived() {
     clearError('amount')
   }
 
-  function useCustomerFromRow(row: ReceiptRow) {
+  function useCustomerFromRow(row: MoneyActivityRow) {
     if (row.party_id === null) return
     form.setParty({ id: row.party_id, name: row.party ?? 'Customer', gstin: null })
     setSaved(null)
@@ -629,7 +628,7 @@ export default function MoneyReceived() {
             rows={recent.data?.data.rows ?? []}
             loading={recent.loading}
             error={recent.error}
-            allowed={recent.allowed}
+            unavailable={recent.data?.data.available === false ? recent.data.data.reason : null}
             onRetry={recent.reload}
             onUseCustomer={useCustomerFromRow}
           />
@@ -657,7 +656,6 @@ export default function MoneyReceived() {
               allowed: dues.allowed,
             }}
             payments={customerPayments}
-            paymentsAllowed={recent.allowed}
             paymentsLoading={recent.loading}
             mayViewLedger={can('statement.view')}
           />

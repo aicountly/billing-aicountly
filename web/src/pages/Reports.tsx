@@ -40,11 +40,17 @@ interface ReportResult {
 
 export default function Reports() {
   const { scope, can } = useBilling()
-  // `?report=receipts` lets another screen link straight at one of these —
-  // Money received's "View all" is the same register, unfiltered.
-  const [params, setParams] = useSearchParams()
-  const [selected, setSelected] = useState<string | null>(params.get('report'))
-  const [period, setPeriod] = useState<PeriodKey>('month')
+
+  // Another screen can link straight to a register — "View all" on the money
+  // screens does. Read once, as the initial value: after that the buttons on
+  // this page own the state, so choosing a different report does not have to
+  // round-trip through the URL.
+  const [params] = useSearchParams()
+  const [selected, setSelected] = useState<string | null>(() => params.get('report'))
+  const [period, setPeriod] = useState<PeriodKey>(() => {
+    const asked = params.get('period')
+    return PERIOD_OPTIONS.some((option) => option.key === asked) ? (asked as PeriodKey) : 'month'
+  })
   const [downloading, setDownloading] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
 
@@ -114,7 +120,6 @@ export default function Reports() {
                   style={{ border: 0, cursor: 'pointer', width: '100%', background: 'transparent' }}
                   onClick={() => {
                     setSelected(entry.key)
-                    setParams({ report: entry.key }, { replace: true })
                     setExportError(null)
                   }}
                 >

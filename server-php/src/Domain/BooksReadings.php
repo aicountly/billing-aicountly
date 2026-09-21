@@ -216,48 +216,6 @@ final class BooksReadings
         return self::text($row, ['voucher_uuid', 'vch_uuid', 'uuid']);
     }
 
-    /**
-     * How the money moved — cash, UPI, a bank transfer.
-     *
-     * Normalised to the same lower-case words Billing sends when it creates a
-     * receipt, so a screen that shows both its own modes and the register's
-     * does not print "Bank Transfer" beside "bank_transfer". Null when the
-     * register does not say, which is not the same as cash.
-     *
-     * @param array<string, mixed> $row
-     */
-    public static function paymentMode(array $row): ?string
-    {
-        $mode = self::text($row, ['payment_mode', 'mode_of_payment', 'payment_method', 'instrument_type']);
-
-        return $mode === null ? null : strtolower(str_replace([' ', '-'], '_', $mode));
-    }
-
-    /**
-     * The instrument on an entry: a UTR, a cheque number, a terminal reference.
-     *
-     * @param array<string, mixed> $row
-     */
-    public static function instrumentNo(array $row): ?string
-    {
-        return self::text($row, ['instrument_no', 'cheque_no', 'utr_no', 'transaction_ref', 'reference_no']);
-    }
-
-    /**
-     * The cash or bank ledger the money landed in.
-     *
-     * @param array<string, mixed> $row
-     */
-    public static function settlementAccount(array $row): ?string
-    {
-        return self::text($row, [
-            'cash_bank_account_name',
-            'bank_account_name',
-            'settlement_account_name',
-            'payment_account_name',
-        ]);
-    }
-
     /** The other side of the entry — a customer on a sale, a supplier on a bill. */
     public static function counterparty(array $row): ?string
     {

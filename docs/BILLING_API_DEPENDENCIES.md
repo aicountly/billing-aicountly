@@ -2,7 +2,7 @@
 
 Billing owns no accounting data. Every figure on every screen is read live from
 the product that owns it, on the request that draws it — so this file is the
-complete list of what Billing asks for, and of the three things it asks for that
+complete list of what Billing asks for, and of the two things it asks for that
 nobody serves yet.
 
 The rule this file exists to keep honest: **when a capability is missing, the
@@ -36,6 +36,7 @@ the absence as a zero.
 | `GET reports/account-ledger` | party statement |
 | `GET masters/accounts` | party and cash/bank pickers |
 | `GET masters/tax-categories` | line tax category picker |
+| `GET vouchers/{id}` | the credit note's "what was on this bill" |
 | `POST vouchers/drafts`, `POST vouchers/drafts/{id}/post` | every transaction |
 | `POST receipt-vouchers/{id}/settlement` | receipt allocation |
 | `POST payment-vouchers/{id}/settlement` | payment allocation |
@@ -110,18 +111,30 @@ by the person confirming it.
 panel explains the missing capability, and the checklist step says so rather
 than pretending there is nothing to match.
 
-## Not available: supplier-bill extraction
+## Not available: bill extraction
 
-**Dashboard 4 shows an unavailable state for this.**
+**Dashboard 4 and the expense screen both show an unavailable state for this.**
 
 Reading a bill out of a PDF or a photo needs a document-extraction service, and
 this deployment has none. Billing does not add an OCR stack, and it does not ask
 a model to guess at a supplier's totals.
 
-Enabled by setting `DOCUMENT_EXTRACTION_BASE` in `server-php/.env` once a
-service exists. Money received offers the same capability as **Scan receipt**,
-disabled for the same reason and behind the same flag. The expected shape,
-following the house "deterministic first, AI only for what is left" rule:
+Enabled by setting `DOCUMENT_EXTRACTION_BASE` in `server-php/.env` once a service
+exists. Billing's half of it is written: `POST /api/v1/expenses/read-bill` takes
+the upload, checks its type from the file's own content and its size, calls the
+service below, and hands the fields back for the person to confirm. It records
+nothing — not the file, not the answer — and the expense the user then saves is
+the only thing that survives the request. One switch, `DocumentCapture`, answers
+for both screens, so they cannot disagree about what this deployment can read.
+
+Money received offers the same idea as **Scan receipt** and it is disabled for a
+second reason as well: what exists is `POST /api/v1/expenses/read-bill`, which
+reads a supplier's BILL. Reading a receipt is a different hint and a different
+set of fields, so the button stays off until there is a call behind it rather
+than borrowing one that would answer about the wrong document.
+
+The expected shape, following the house "deterministic first, AI only for
+what is left" rule:
 
 ```
 POST <DOCUMENT_EXTRACTION_BASE>/v1/extract
@@ -136,40 +149,112 @@ POST <DOCUMENT_EXTRACTION_BASE>/v1/extract
 ```
 
 Every extracted field must arrive reviewable, and nothing is posted until a
-person has approved it. **Until this exists**, the panel offers the manual path,
-which records exactly the same purchase bill.
+person has approved it. The expense screen shows what was read, applies only the
+amount, bill date and bill number, and leaves the supplier for a person to pick
+— matching a name against a ledger is a choice with accounting consequences.
+**Until this exists**, both screens offer the manual path, which records exactly
+the same thing.
 
-## Not available: payment-proof attachments
+## Not available: keeping the bill file
 
-**Money received shows an unavailable state for this, on the screen itself.**
+**The expense screen shows a reference field instead.**
 
-A receipt is often backed by something — a UPI screenshot, a photographed
-counterfoil, a bank advice — and the person entering it would like to keep the
-proof beside the entry. Billing cannot: there is no document store in this
-deployment, and the receipt payload Books accepts carries no attachment
-reference, so a file chosen on that screen would have nowhere to be filed. The
-screen therefore draws the section and says so, rather than accepting a file and
-losing it.
+There is nowhere in this deployment to put a PDF or a photo of a bill and get it
+back later, and Billing is the wrong place to build one: the deploy runs
+`rsync --delete` over the document root (see `DEPLOYMENT.md`), so a folder of
+uploads beside the app would not survive a release.
 
-### The contract Billing would need
+So the expense screen records **where the bill is kept** — a file number, a
+folder, a link — and sends it to Books as `attachment_ref` on the voucher, which
+is a field the expense request already accepted. That is a smaller thing than an
+attachment and it is honest about being one.
 
-Owner: **Vault**, or whichever product holds documents in the deployment.
+Two pieces are needed to turn it into a real attachment, and the first is
+configuration:
 
 ```
-POST <DOCUMENT_STORE_BASE>/v1/documents
-  multipart: file=<pdf|jpg|png>, cmp_id, kind=payment_proof
-  → { data: { document_id, document_uuid, filename, bytes, content_type, url } }
+DOCUMENT_STORAGE_BASE=<service>     in server-php/.env
 
-DELETE <DOCUMENT_STORE_BASE>/v1/documents/{id}
+POST <DOCUMENT_STORAGE_BASE>/v1/documents
+  multipart: file=<pdf|jpg|png>, scope=<cmp_id>/<fy_id>
+  → { data: { reference, filename, size, content_type, url } }
+
+GET <DOCUMENT_STORAGE_BASE>/v1/documents/<reference>
+  → the file, for whoever may see the voucher
 ```
 
-And, from **Smart Books**, one field on the receipt voucher — an array of
-document uuids — so the proof travels with the entry rather than being findable
-only from this product.
+The second is a client for it in `server-php/src/Clients/`, and one line in
+`DocumentCapture::storage()`. Until both exist that method answers `false`
+whatever the environment says, because configuring a service Billing cannot call
+would put a drop zone on screen that swallows a photo and loses it.
 
-Until both exist, the entry screen records the receipt without a proof, which is
-what the previous screen did too. `web/src/pages/money-received/features.ts` is
-where it is turned on.
+**Money received is in the same position, with one difference.** A receipt is
+often backed by a UPI screenshot, a counterfoil or a bank advice, and the screen
+draws the section and says there is nowhere to keep one. It cannot fall back on
+recording *where* the proof is kept the way the expense screen does: the receipt
+payload Books accepts has no `attachment_ref` — see
+`TransactionService::settlementPayload()` — so that field would have to exist
+before there was anything to write a reference into.
+
+## Partly available: what may still be credited
+
+**The credit note screen states the invoice quantity and says who decides.**
+
+`GET vouchers/{id}` gives Billing the lines that were billed, so a credit note
+starts from what was actually sold rather than from an empty table, and a line
+crediting more than the bill carried is refused before it is sent. What no
+endpoint gives is the quantity still **eligible** after earlier notes against
+the same invoice: nothing in the estate reports "5 sold, 2 already credited, 3
+left", and Billing must not keep a returns ledger of its own to work it out —
+that is a second answer to a question Books owns.
+
+So the screen shows the invoiced quantity ("of 5 billed"), blocks anything
+above it, and leaves the rest to Books, which refuses an over-credit when the
+note is posted. The contract that would close the gap:
+
+```
+GET reports/credit-eligibility
+  ?cmp_id&fy_id&against_voucher_id
+
+  → { data: { voucher_id, lines: [ {
+        line_ref, item_id, billed_qty, credited_qty, eligible_qty,
+        billed_amount, credited_amount, eligible_amount
+      } ] } }
+```
+
+Owner: **Smart Books**, because Books holds both the invoice and every note
+raised against it. Authentication as everywhere else: the caller's `ses_key`.
+
+Two smaller gaps sit behind the same screen, and both are stated on it rather
+than papered over:
+
+* **The number before it is issued.** Books allots the credit note number from
+  the company's own series when it posts the voucher. There is no "reserve the
+  next number" call, so the field reads *Allotted on issue* instead of showing
+  a number Billing would have had to invent.
+* **The tax, and the posting, in figures.** Billing sends no tax fields and
+  calculates none, so the summary is before tax and the posting preview shows
+  the direction of each leg with an amount only where there is one to show. A
+  `POST vouchers/preview` returning the computed tax and ledger legs for an
+  unsaved voucher would let both show real figures; until then the screen names
+  Smart Books rather than printing a number it cannot stand behind.
+
+## Not available: the condition returned goods came back in
+
+**The credit note records it and sends it on; nothing downstream reads it yet.**
+
+Inventory has no disposition or condition list — no "good, damaged, scrap" that
+decides which bin a return lands in — so the four words on the credit note's
+Condition column are Billing's own. They are kept on the transaction request
+and passed to Books as `return_condition` on the line, which means the note a
+person reads in six months says what came back in what state. Whether stock is
+segregated by it is Inventory's to decide when it has a contract for it:
+
+```
+GET v1/return-dispositions          → { data: [ { code, label, restocks: bool } ] }
+```
+
+Until that exists the list stays short, plain, and honest about being ours.
 
 ## Not depended on: Aicountly Pay
 

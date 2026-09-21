@@ -5,7 +5,7 @@ import type { BillingProfile, CashBank, RecurringRule, StatutoryStatus, Transact
 import { useApi } from '../hooks/useApi'
 import { useBilling } from '../context/BillingContext'
 import { CommandStrip } from '../components/CommandStrip'
-import { Button, Card, DataTable, date, Field, Input, money, Notice, Select, StatCard, StatusBadge } from '../ui'
+import { Button, Card, DataTable, date, Field, Input, money, Notice, StatCard, StatusBadge } from '../ui'
 
 /**
  * The screen a user lands on after saving, and where the statutory buttons live.
@@ -405,88 +405,6 @@ export function Profiles() {
           screen or not.
         </p>
       </Card>
-    </div>
-  )
-}
-
-export function Expense() {
-  const navigate = useNavigate()
-  const { scope } = useBilling()
-  const [amount, setAmount] = useState('')
-  const [expenseAccount, setExpenseAccount] = useState('')
-  const [paidFrom, setPaidFrom] = useState('')
-  const [entryDate, setEntryDate] = useState(() => new Date().toISOString().slice(0, 10))
-  const [note, setNote] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const expenseAccounts = useApi(
-    (signal) => api.list<{ acc_id: number; acc_name: string }>('v1/catalog/expense-accounts', undefined, signal),
-    [scope?.cmp_id],
-    Boolean(scope),
-  )
-  const cashBank = useApi(
-    (signal) => api.list<{ acc_id: number; acc_name: string }>('v1/catalog/cash-bank', undefined, signal),
-    [scope?.cmp_id],
-    Boolean(scope),
-  )
-
-  async function save() {
-    setSaving(true)
-    setError(null)
-    try {
-      await api.post('v1/transactions/expense', {
-        amount: Number(amount || 0),
-        expense_account_id: Number(expenseAccount),
-        cash_bank_account_id: Number(paidFrom),
-        date: entryDate,
-        narration: note || undefined,
-      })
-      navigate('/')
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : String(err))
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div style={{ display: 'grid', gap: '1rem', maxWidth: '38rem' }}>
-      <h1 style={{ margin: 0, fontSize: '1.3rem' }}>Record an expense</h1>
-      {error && <Notice tone="danger" title="Could not save">{error}</Notice>}
-
-      <Card>
-        <div style={{ display: 'grid', gap: '0.85rem' }}>
-          <Field label="Amount">
-            <Input value={amount} inputMode="decimal" onChange={(e) => setAmount(e.target.value)} style={{ textAlign: 'right', fontSize: '1.15rem' }} autoFocus />
-          </Field>
-          <Field label="What for">
-            <Select value={expenseAccount} onChange={(e) => setExpenseAccount(e.target.value)}>
-              <option value="">Choose…</option>
-              {(expenseAccounts.data?.data ?? []).map((row) => (
-                <option key={row.acc_id} value={row.acc_id}>{row.acc_name}</option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Paid from">
-            <Select value={paidFrom} onChange={(e) => setPaidFrom(e.target.value)}>
-              <option value="">Choose…</option>
-              {(cashBank.data?.data ?? []).map((row) => (
-                <option key={row.acc_id} value={row.acc_id}>{row.acc_name}</option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Date"><Input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} /></Field>
-          <Field label="Note"><Input value={note} onChange={(e) => setNote(e.target.value)} /></Field>
-        </div>
-      </Card>
-
-      <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-        <Button onClick={() => navigate(-1)}>Cancel</Button>
-        <Button tone="primary" disabled={saving || !expenseAccount || !paidFrom} onClick={save}>
-          {saving ? 'Saving…' : 'Save'}
-        </Button>
-      </div>
     </div>
   )
 }
