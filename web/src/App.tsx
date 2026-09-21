@@ -40,6 +40,9 @@ const Reports = lazy(() => import('./pages/Reports'))
  */
 const ExpensePage = lazy(() => import('./pages/expense/ExpensePage'))
 
+/** The bank-withdrawal screen, for the same reason: its own stylesheet, its own panel. */
+const BankWithdrawalPage = lazy(() => import('./pages/bank-withdrawal/BankWithdrawalPage'))
+
 initAnalytics()
 
 function PageViews() {
@@ -168,8 +171,18 @@ function Shell() {
         <Route path="bank-cash">
           <Route index element={<RequireScope><BankCashOverview /></RequireScope>} />
           <Route path="deposit" element={<RequireScope><BankCash kind="bank_deposit" /></RequireScope>} />
-          <Route path="withdrawal" element={<RequireScope><BankCash kind="bank_withdrawal" /></RequireScope>} />
+          <Route
+            path="withdrawal"
+            element={
+              <Suspense fallback={<Loading />}>
+                <RequireScope><BankWithdrawalPage /></RequireScope>
+              </Suspense>
+            }
+          />
           <Route path="transfer" element={<RequireScope><BankCash kind="bank_transfer" /></RequireScope>} />
+          {/* A saved deposit, withdrawal or transfer, by its request id. The three
+              names above are static and so still win over this. */}
+          <Route path=":id" element={<RequireScope><TransactionDetail /></RequireScope>} />
         </Route>
 
         {/* The bill-by-bill lists. The dashboards summarise them and link here. */}

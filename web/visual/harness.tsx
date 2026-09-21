@@ -11,6 +11,7 @@
  * none of this reaches the deployed bundle.
  *
  *   /visual.html?screen=overview&as=owner
+ *   /visual.html?screen=bank-withdrawal&fail=balance
  */
 
 import { StrictMode } from 'react'
@@ -25,6 +26,7 @@ import Receivables from '../src/dashboards/Receivables'
 import Payables from '../src/dashboards/Payables'
 import CashCompliance from '../src/dashboards/CashCompliance'
 import ExpensePage from '../src/pages/expense/ExpensePage'
+import BankWithdrawalPage from '../src/pages/bank-withdrawal/BankWithdrawalPage'
 import { saveSession, setAuthToken } from '../src/auth/tokens'
 import { setScope } from '../src/services/api'
 import * as fixtures from './fixtures'
@@ -51,6 +53,11 @@ const FAILABLE: Array<[string, RegExp]> = [
   ['paid-from', /v1\/catalog\/cash-bank/],
   ['parties', /v1\/catalog\/parties/],
   ['capabilities', /v1\/expenses\/capabilities/],
+  // The withdrawal screen's two sidebar panels and its balance, each of which
+  // has to be able to fail without taking the form down with it.
+  ['balance', /\/v1\/cash-bank(\?|$)/],
+  ['withdrawals', /v1\/bank-withdrawals\/recent/],
+  ['withdrawal-summary', /v1\/bank-withdrawals\/summary/],
 ]
 
 const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
@@ -60,6 +67,7 @@ const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
   payables: { path: '/dashboard/payables', element: <Payables /> },
   'cash-compliance': { path: '/dashboard/cash-compliance', element: <CashCompliance /> },
   expense: { path: '/more/expense', element: <ExpensePage /> },
+  'bank-withdrawal': { path: '/bank-cash/withdrawal', element: <BankWithdrawalPage /> },
 }
 
 /** The fixture behind each endpoint the screens call. */
@@ -85,6 +93,11 @@ const RESPONSES: Array<[RegExp, unknown]> = [
   [/v1\/expenses\/recent/, fixtures.recentExpenses],
   [/v1\/transactions\/expense/, fixtures.savedExpense],
   [/v1\/expenses\/capabilities/, fixtures.expenseCapabilities],
+  // After v1/catalog/cash-bank above, so the catalog list keeps that URL.
+  [/\/v1\/cash-bank(\?|$)/, fixtures.cashBankBalances],
+  [/v1\/bank-withdrawals\/recent/, fixtures.recentWithdrawals],
+  [/v1\/bank-withdrawals\/summary/, fixtures.withdrawalSummary],
+  [/v1\/transactions\/bank_withdrawal/, fixtures.savedWithdrawal],
   [/v1\/manage\/companies/, { data: [{ cmp_id: 1, cmp_name: 'Sharma Enterprises' }], meta: { total: 1 } }],
   [/v1\/manage\/companyinfo/, {
     cmp_id: 1,
