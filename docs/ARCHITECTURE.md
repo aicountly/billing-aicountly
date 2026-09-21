@@ -70,6 +70,41 @@ There are exactly three states: ready, loading, and unavailable-with-a-reason.
 There is no fourth, and in particular no "nought because Books did not answer" —
 a zero and an outage look identical on screen and one of them means a quiet day.
 
+## Settings
+
+`/settings` is a hub over twelve categories, and the whole of it — the cards,
+the search, the detail pages, the left rail — renders from one array in
+`web/src/config/settingsCatalog.ts`. A thirteenth category is a line in that
+file, not a new page.
+
+Every child setting carries one of three states, and the distinction is the
+same ownership rule as everywhere else in this product:
+
+| State | Meaning |
+|---|---|
+| `ready` | Billing owns it. There is a screen, or a form behind an explicit Save. |
+| `elsewhere` | Another product owns it. The row opens Manage, Books or Inventory. |
+| `planned` | The capability does not exist in this deployment. The row says so and does nothing. |
+
+So there is no company form here, no branch form, no financial-year form, no
+item master and no tax rate: Billing keeps none of those and a form for one
+would be a copy it would then have to keep in step. What IS editable is the
+handful of columns on `billing_settings` — business mode, business type, the
+four menu switches, the timezone, the two document defaults — plus the profiles
+and the schedules this product owns outright.
+
+**The setup checklist is derived, never decorative.**
+`web/src/services/settingsSetup.ts` asks Manage for the company, Books for the
+accounts and Billing for its own rules, on the request that draws the bar. Each
+line has three outcomes rather than two — done, not done, and *not known*, for
+a source that did not answer or that this profile may not read — and an unknown
+line is left out of the denominator instead of counted as a failure. Nothing
+returns a fixed "4 of 6".
+
+Integration status works the same way: a row reads Connected because a call to
+that product answered on this page load, never because something was once
+configured.
+
 ## Billing profiles
 
 The problem, in the shopkeeper's words: *"I want my counter staff to make bills,

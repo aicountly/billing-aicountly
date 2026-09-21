@@ -35,6 +35,7 @@ import Payables from '../src/dashboards/Payables'
 import CashCompliance from '../src/dashboards/CashCompliance'
 import DebitNote from '../src/pages/DebitNote'
 import { DuesScreen } from '../src/receivables/DuesScreen'
+import MoneyToPay from '../src/pages/payables/MoneyToPay'
 import { MoneyScreen } from '../src/pages/money/MoneyScreen'
 import MoneyReceived from '../src/pages/money-received'
 import ExpensePage from '../src/pages/expense/ExpensePage'
@@ -46,6 +47,8 @@ import CreditNotePage from '../src/pages/credit-note/CreditNotePage'
 import NewPurchasePage from '../src/pages/purchase/NewPurchasePage'
 import Reports from '../src/pages/reports'
 import ReportView from '../src/pages/reports/ReportView'
+import SettingsHome from '../src/pages/settings/SettingsHome'
+import SettingsCategory from '../src/pages/settings/SettingsCategory'
 import { saveSession, setAuthToken } from '../src/auth/tokens'
 import { setScope } from '../src/services/api'
 import * as fixtures from './fixtures'
@@ -145,9 +148,10 @@ const SCREENS: Record<string, { path: string; entry?: string; element: React.Rea
   'cash-compliance': { path: '/dashboard/cash-compliance', element: <CashCompliance /> },
   'debit-note': { path: '/more/debit-note', element: <DebitNote /> },
 
-  // The bill-by-bill screens. `/receivables` is the one the menu points at.
+  // The bill-by-bill screens. Money to Collect is the shared DuesScreen;
+  // Money to Pay is its own workspace and owns the /payables route.
   dues: { path: '/receivables', element: <DuesScreen side="receivable" /> },
-  'dues-payable': { path: '/payables', element: <DuesScreen side="payable" /> },
+  'money-to-pay': { path: '/payables', element: <MoneyToPay /> },
   'money-out': { path: '/money-out/new', element: <MoneyScreen direction="out" /> },
   'money-in': { path: '/money-in/new', element: <MoneyReceived /> },
   'money-in-form': { path: '/money-in/new', element: <MoneyScreen direction="in" /> },
@@ -162,7 +166,11 @@ const SCREENS: Record<string, { path: string; entry?: string; element: React.Rea
   // Reports is two screens: the discovery layer, and one report open.
   reports: { path: '/reports', element: <Reports /> },
   report: { path: '/reports/:reportKey', entry: '/reports/sales_register', element: <ReportView /> },
+  settings: { path: '/settings', element: <SettingsHome /> },
 }
+
+/** The settings hub's detail pages: /visual.html?screen=settings&category=taxes */
+const SETTINGS_CATEGORY = params.get('category')
 
 const DUES = /v1\/(receivables|payables)(\?|$)/
 
@@ -193,6 +201,12 @@ const RESPONSES: Array<[RegExp, unknown | ((url: string) => unknown)]> = [
   // `v1/reports/sales_register` with the catalogue.
   [/v1\/reports\/[a-z_]+(\?|$)/, fixtures.salesRegisterReport],
   [/v1\/reports(\?|$)/, fixtures.reportCatalogue],
+
+  [/v1\/payables\/comparison/, fixtures.payablesComparison],
+  [
+    /v1\/payables(\?|$)/,
+    () => (state === 'empty' ? fixtures.payablesNothingOwed : fixtures.payablesWorkspace),
+  ],
 
   [
     DUES,
@@ -272,6 +286,8 @@ const RESPONSES: Array<[RegExp, unknown | ((url: string) => unknown)]> = [
   // A saved purchase. Narrow, so it cannot shadow the other transaction kinds
   // answered above it.
   [/v1\/transactions\/purchase/, fixtures.savedPurchase],
+  [/v1\/profiles/, fixtures.profiles],
+  [/v1\/reminders/, fixtures.reminderRules],
 ]
 
 /**
@@ -339,6 +355,17 @@ const everyItem = (): LooseItem[] => [...fixtures.catalogItems, ...fixtures.sale
 
 const originalFetch = window.fetch.bind(window)
 
+/**
+ * Every URL a screen asked for, in order.
+ *
+ * The harness answers fetch itself, so nothing reaches the network and a
+ * browser automating this page cannot otherwise see what the screen asked for.
+ * Checking that a filter, a sort or a debounced search reaches the API — rather
+ * than only changing a chip's colour — needs somewhere to look, and this is it.
+ */
+const calls: string[] = []
+;(window as unknown as { harnessCalls: string[] }).harnessCalls = calls
+
 function json(payload: unknown, status = 200): Response {
   const body = Array.isArray(payload) || !(payload as { data?: unknown }).data ? { data: payload } : payload
 
@@ -347,10 +374,11 @@ function json(payload: unknown, status = 200): Response {
 
 window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+  calls.push(url)
 
   // The error state is the whole point of having one: the screen has to keep
   // its shell and say what failed, rather than going blank.
-  if (state === 'error' && DUES.test(url)) {
+  if (state === 'error' && (DUES.test(url) || /v1\/payables(\?|$)/.test(url))) {
     return json(
       { error: { code: 'books_unavailable', message: 'Could not reach Smart Books to work out money to collect. Please retry.' } },
       503,
@@ -567,7 +595,10 @@ try {
 }
 
 const target = SCREENS[screen] ?? SCREENS.overview
-const base = target.entry ?? target.path
+const base =
+  screen === 'settings' && SETTINGS_CATEGORY
+    ? `/settings/${SETTINGS_CATEGORY}`
+    : (target.entry ?? target.path)
 const entry = at === '' ? base : `${base}?${at}`
 
 const routes = (
@@ -582,6 +613,11 @@ const routes = (
         <Route path="/reports/:reportKey" element={<ReportView />} />
       )}
       {target.path !== '/reports' && <Route path="/reports" element={<Reports />} />}
+      {/* Settings is the same shape: twelve cards, a rail and a
+          breadcrumb, all navigating between the hub and its detail
+          pages. Both are mounted so none of them is a dead end. */}
+      {target.path !== '/settings' && <Route path="/settings" element={<SettingsHome />} />}
+      <Route path="/settings/:categoryId" element={<SettingsCategory />} />
     </Route>
   </Routes>
 )

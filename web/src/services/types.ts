@@ -273,6 +273,127 @@ export interface Dues {
   note: string
 }
 
+/** Where a bill sits against the company's today. The server decides, once. */
+export type PayableStatus = 'overdue' | 'due_today' | 'due_soon' | 'upcoming' | 'no_due_date'
+
+export type AgeBucket = 'current' | '1_30' | '31_60' | '61_90' | '90_plus' | 'no_due_date'
+
+/** One outstanding supplier bill, as Books described it and Billing aged it. */
+export interface PayableBill {
+  row_key: string
+  account_id: number
+  account_name: string
+  bill_no: string | null
+  /** The supplier's own reference — a PO number, usually. Never the bill number again. */
+  reference: string | null
+  document_no: string | null
+  bill_date: string | null
+  due_date: string | null
+  balance: number
+  /** What the bill was for, when Books states it. Null means no part payment can be claimed. */
+  bill_amount: number | null
+  /** What has come in against it. Null whenever the bill's own value is. */
+  received: number | null
+  partially_paid: boolean
+  days_overdue: number
+  /** Days still to run. Null on an overdue or undated bill — never a negative. */
+  days_to_due: number | null
+  status: PayableStatus
+  age_bucket: AgeBucket
+  category: string | null
+  voucher_id: number | null
+  voucher_uuid: string | null
+}
+
+export interface PayablesSummary {
+  total: number
+  bill_count: number
+  supplier_count: number
+  overdue: number
+  overdue_count: number
+  due_today: number
+  due_today_count: number
+  due_this_week: number
+  due_this_week_count: number
+  due_soon_days: number
+}
+
+export interface AgeingBucketRow {
+  key: AgeBucket
+  label: string
+  tone: 'ok' | 'warning' | 'danger' | 'neutral'
+  amount: number
+  count: number
+  share: number
+}
+
+export interface PayablesUpcoming {
+  days: number
+  from: string
+  to: string
+  count: number
+  amount: number
+  rows: PayableBill[]
+}
+
+/**
+ * What the money is owed for — or an honest statement that Books does not say.
+ *
+ * `available: false` is a real answer and the screen prints the reason. It is
+ * never filled in by splitting the total by supplier and calling that a
+ * category.
+ */
+export interface PayableCategories {
+  available: boolean
+  reason: string | null
+  total: number
+  rows: Array<{ key: string; label: string; amount: number; count: number; share: number }>
+}
+
+export interface PayablesPagination {
+  page: number
+  page_size: number
+  total: number
+  pages: number
+  from: number
+  to: number
+}
+
+/** Everything the Money to Pay screen draws, from one reading of Books. */
+export interface PayablesWorkspace {
+  title: string
+  as_on: string
+  source: string
+  summary: PayablesSummary
+  ageing_reconciles: boolean
+  ageing_buckets: AgeingBucketRow[]
+  parties: DueParty[]
+  upcoming: PayablesUpcoming
+  categories: PayableCategories
+  calendar: Array<{ date: string; amount: number; count: number; overdue: boolean }>
+  bills: PayableBill[]
+  pagination: PayablesPagination
+  filtered: { count: number; amount: number; is_filtered: boolean }
+  /**
+   * What this DEPLOYMENT can do, which the browser cannot know.
+   *
+   * What the USER may do is not here: that is in the session, and the screen
+   * gates on `can()` like every other screen does.
+   */
+  import: { available: boolean; manual_path: string; reason: string | null }
+  note: string
+}
+
+/** What was owed a month ago, so the headline card can show a real change. */
+export interface PayablesComparison {
+  available: boolean
+  reason: string | null
+  as_on: string
+  label: string
+  total: number | null
+  basis?: string
+}
+
 export interface CashBank {
   available: boolean
   reason?: string

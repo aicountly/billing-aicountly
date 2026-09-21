@@ -119,6 +119,7 @@ final class SettingsController extends Controller
             'business_mode', 'business_type', 'gst_registered', 'maintains_stock',
             'needs_purchase', 'needs_payables', 'needs_bank_cash',
             'default_sale_terms', 'default_payment_terms', 'onboarding_done',
+            'timezone',
         ] as $field) {
             if (array_key_exists($field, $body)) {
                 $changes[$field] = $body[$field];
@@ -127,6 +128,18 @@ final class SettingsController extends Controller
 
         if (isset($changes['business_mode']) && !in_array($changes['business_mode'], ['micro', 'trader', 'service', 'retail', 'owner'], true)) {
             Http::validationFailed('Business mode must be micro, trader, service, retail or owner.', ['field' => 'business_mode']);
+        }
+
+        // The timezone decides whose day "today" is on every dashboard, due
+        // date and day close, so an unknown name here would not fail loudly —
+        // it would quietly move the business day. Validated against the zone
+        // database rather than against a list this file would have to keep.
+        if (array_key_exists('timezone', $changes)) {
+            $zone = is_string($changes['timezone']) ? trim($changes['timezone']) : '';
+            if ($zone === '' || !in_array($zone, \DateTimeZone::listIdentifiers(), true)) {
+                Http::validationFailed('That is not a time zone this server knows.', ['field' => 'timezone']);
+            }
+            $changes['timezone'] = $zone;
         }
 
         if ($changes !== []) {
@@ -223,7 +236,10 @@ final class SettingsController extends Controller
             ['key' => 'parties',     'label' => 'Parties',     'path' => '/parties',     'permission' => 'sale.view',       'needs' => null, 'children' => []],
             ['key' => 'items',       'label' => 'Items',       'path' => '/items',       'permission' => 'sale.view',       'needs' => 'maintains_stock', 'children' => []],
             ['key' => 'reports',     'label' => 'Reports',     'path' => '/reports',     'permission' => 'reports.view',    'needs' => null, 'children' => []],
-            ['key' => 'more',        'label' => 'Settings',    'path' => '/more',        'permission' => null,              'needs' => null, 'children' => []],
+            // `/more` is still served — every screen that lived under it kept
+            // its URL — but the menu points at the settings hub that now
+            // organises them.
+            ['key' => 'more',        'label' => 'Settings',    'path' => '/settings',    'permission' => null,              'needs' => null, 'children' => []],
         ];
 
         $out = [];

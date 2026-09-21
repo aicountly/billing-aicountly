@@ -112,6 +112,11 @@ final class Routes
         // Dues — every figure read live from Books.
         $router->get('v1/receivables', [DuesController::class, 'receivables']);
         $router->get('v1/payables', [DuesController::class, 'payables']);
+        // Both are second readings of the same report, kept off the main call so
+        // that filtering the table does not re-read a month of history or build
+        // a file nobody asked for.
+        $router->get('v1/payables/comparison', [DuesController::class, 'payablesComparison']);
+        $router->get('v1/payables/export', [DuesController::class, 'payablesExport']);
         $router->get('v1/parties/{accountId}/statement', [DuesController::class, 'statement']);
         $router->get('v1/cash-bank', [DuesController::class, 'cashAndBank']);
         $router->get('v1/open-bills', [DuesController::class, 'openBills']);
