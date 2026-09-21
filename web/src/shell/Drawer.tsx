@@ -26,7 +26,6 @@ export function Drawer({
   onClose,
   title,
   children,
-  /** Which edge it comes in from. Navigation opens left; a record opens right. */
   side = 'left',
   /** A wider panel for a record, where the default 300px would wrap every figure. */
   wide = false,
@@ -36,6 +35,8 @@ export function Drawer({
   onClose: () => void
   title: ReactNode
   children: ReactNode
+  /** Which edge it comes in from. The navigation is on the left; panels that
+      belong beside the content rather than in place of it come from the right. */
   side?: 'left' | 'right'
   wide?: boolean
   footer?: ReactNode
@@ -102,7 +103,14 @@ export function Drawer({
       >
         <div className="billing-drawer__head">
           <strong>{title}</strong>
-          <button type="button" className="billing-iconbutton" onClick={onClose} aria-label="Close">
+          {/* The title is a node here, not always a string — the party
+              drawer's carries badges — so the label names it only when it can. */}
+          <button
+            type="button"
+            className="billing-iconbutton"
+            onClick={onClose}
+            aria-label={typeof title === 'string' ? `Close ${title.toLowerCase()}` : 'Close'}
+          >
             <X size={18} aria-hidden />
           </button>
         </div>

@@ -5,7 +5,6 @@ import { BillingProvider, useBilling } from './context/BillingContext'
 import { AppShell } from './shell/AppShell'
 import SignIn from './pages/SignIn'
 import Onboarding from './pages/Onboarding'
-import SaleEditor from './pages/SaleEditor'
 import { PartyStatement } from './pages/Dues'
 import { BankCash } from './pages/MoneyMovement'
 import { Parties } from './pages/parties'
@@ -99,6 +98,15 @@ const DebitNote = lazy(() => import('./pages/DebitNote'))
  * ever makes bills should not pay for them on first load.
  */
 const Dues = lazy(() => import('./receivables/DuesScreen').then((module) => ({ default: module.DuesScreen })))
+
+/**
+ * New purchase is split out for the same reason.
+ *
+ * It carries the item grid, the GST preview and the supplier readings, and the
+ * person it is heaviest for — a counter biller on the slowest machine in the
+ * building — never opens it. Their bundle should not pay for it.
+ */
+const NewPurchase = lazy(() => import('./pages/purchase/NewPurchasePage'))
 
 initAnalytics()
 
@@ -211,8 +219,8 @@ function Shell() {
         </Route>
 
         <Route path="purchases">
-          <Route index element={<RequireScope><SaleEditor kind="purchase" /></RequireScope>} />
-          <Route path="new" element={<RequireScope><SaleEditor kind="purchase" /></RequireScope>} />
+          <Route index element={<Suspense fallback={<Loading />}><RequireScope><NewPurchase /></RequireScope></Suspense>} />
+          <Route path="new" element={<Suspense fallback={<Loading />}><RequireScope><NewPurchase /></RequireScope></Suspense>} />
           <Route path=":id" element={<RequireScope><TransactionDetail /></RequireScope>} />
         </Route>
 
