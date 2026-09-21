@@ -16,7 +16,7 @@
  * Nothing here invents a point. Every coordinate comes from the props.
  */
 
-import { useId, useMemo, useState } from 'react'
+import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { compactMoney, money } from '../ui'
 import { EmptyState, Unavailable } from './kit'
 
@@ -27,18 +27,45 @@ interface Series {
   points: Array<{ label: string; value: number }>
 }
 
-/**
- * Indian digit grouping, shortened for an axis where space is the constraint.
- *
- * Shared with the payables charts through `ui`, so an axis here and a bar label
- * there cannot round the same figure two different ways.
- */
-const axisMoney = compactMoney
-
 function shortDate(iso: string): string {
   const parsed = new Date(iso)
   if (Number.isNaN(parsed.getTime())) return iso
   return new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short' }).format(parsed)
+}
+
+/**
+ * The width the chart is actually being drawn at.
+ *
+ * WITHOUT THIS THE AXIS LABELS SHRINK WITH THE PHONE. An SVG with a fixed
+ * viewBox scales its whole coordinate system to fit, text included, so an
+ * 11px date label drawn into a 720-wide viewBox is about 6px once that box is
+ * squeezed into a 390px screen — present, unreadable, and invisible to every
+ * check that only looks for overflow. Measuring the container and drawing into
+ * a viewBox of that width keeps a px a px at every size.
+ *
+ * Falls back to 720 before the first measurement so the first paint is a chart
+ * rather than a collapsed one, and never goes below 320 — under that the chart
+ * scrolls sideways inside its own box instead of becoming illegible.
+ */
+function useDrawnWidth(): [(node: HTMLElement | null) => void, number] {
+  const [width, setWidth] = useState(720)
+  const observer = useRef<ResizeObserver | null>(null)
+
+  const ref = useCallback((node: HTMLElement | null) => {
+    observer.current?.disconnect()
+    if (node === null) return
+
+    const measure = () => setWidth(Math.max(320, Math.round(node.clientWidth)))
+    measure()
+
+    if (typeof ResizeObserver === 'undefined') return
+    observer.current = new ResizeObserver(measure)
+    observer.current.observe(node)
+  }, [])
+
+  useLayoutEffect(() => () => observer.current?.disconnect(), [])
+
+  return [ref, width]
 }
 
 /**
@@ -70,10 +97,10 @@ export function TrendChart({
 }) {
   const titleId = useId()
   const [hover, setHover] = useState<number | null>(null)
+  const [box, width] = useDrawnWidth()
 
-  const width = 720
-  const height = 260
-  const padding = { top: 16, right: 16, bottom: 30, left: 56 }
+  const height = width < 520 ? 230 : 260
+  const padding = { top: 16, right: 16, bottom: 30, left: width < 520 ? 46 : 56 }
   const plotWidth = width - padding.left - padding.right
   const plotHeight = height - padding.top - padding.bottom
 
@@ -119,7 +146,9 @@ export function TrendChart({
   // a 16-day month. Distributing the ticks across the range instead includes
   // both ends by construction and never doubles up.
   const lastIndex = labels.length - 1
-  const tickCount = Math.min(labels.length, 8)
+  // Eight dates need about 560px to sit apart. Below that they are thinned
+  // rather than shrunk: four readable labels beat eight overlapping ones.
+  const tickCount = Math.min(labels.length, width < 420 ? 3 : width < 560 ? 5 : 8)
   const ticks = new Set(
     tickCount <= 1
       ? [0]
@@ -127,7 +156,7 @@ export function TrendChart({
   )
 
   return (
-    <figure style={{ margin: 0 }}>
+    <figure style={{ margin: 0 }} ref={box}>
       <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', marginBottom: 10 }}>
         {series.map((line) => (
           <span key={line.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 650 }}>
@@ -143,7 +172,7 @@ export function TrendChart({
       <svg
         viewBox={`0 0 ${width} ${height}`}
         className="billing-chart"
-        style={{ width: '100%', height: 'auto', display: 'block', overflow: 'visible' }}
+        style={{ width: '100%', height, display: 'block', overflow: 'visible' }}
         role="img"
         aria-labelledby={titleId}
       >
@@ -162,7 +191,7 @@ export function TrendChart({
               strokeWidth={1}
             />
             <text x={padding.left - 8} y={y(max * fraction) + 4} textAnchor="end" fontSize={11} fill="#5b6b62">
-              {axisMoney(max * fraction)}
+              {compactMoney(max * fraction)}
             </text>
           </g>
         ))}
@@ -334,7 +363,7 @@ export function FlowChart({
               strokeWidth={1}
             />
             <text x={padding.left - 8} y={y(max * fraction) + 4} textAnchor="end" fontSize={11} fill="#5b6b62">
-              {axisMoney(max * fraction)}
+              {compactMoney(max * fraction)}
             </text>
           </g>
         ))}

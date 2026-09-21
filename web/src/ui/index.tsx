@@ -6,7 +6,9 @@
  * should not feel they have changed application.
  */
 
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
+import { AlertCircle, CheckCircle2, Info, X } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
 // Buttons
@@ -436,22 +438,6 @@ export function moneyPlain(value: number | string | null | undefined): string {
   return new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount)
 }
 
-/**
- * Indian digit grouping, shortened for a label where space is the constraint.
- *
- * Lakhs and crores, not thousands and millions — ₹12.5L is what the figure is
- * called out loud here, and ₹1.2M is a figure nobody would repeat. Only ever
- * for a chart label or a bar; a transaction row shows the whole number, because
- * "₹1.2L" is not an amount anybody can reconcile against a bill.
- */
-export function compactMoney(value: number): string {
-  if (!Number.isFinite(value)) return '—'
-  if (Math.abs(value) >= 10000000) return `₹${(value / 10000000).toFixed(1)}Cr`
-  if (Math.abs(value) >= 100000) return `₹${(value / 100000).toFixed(1)}L`
-  if (Math.abs(value) >= 1000) return `₹${Math.round(value / 1000)}K`
-  return `₹${Math.round(value)}`
-}
-
 /** Day and month, for a list where the year is the same on every row. */
 export function dayMonth(value: string | null | undefined): string {
   if (!value) return '—'
@@ -459,6 +445,48 @@ export function dayMonth(value: string | null | undefined): string {
   if (Number.isNaN(parsed.getTime())) return value
 
   return new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short' }).format(parsed)
+}
+
+/**
+ * The same amount without the paise, for a headline tile or a bar label.
+ *
+ * Still fully grouped (\u20b913,48,560), so it is read as a figure rather than an
+ * approximation — only the two decimals go, because a KPI card that wraps
+ * "\u20b913,48,560.00" onto two lines is harder to read than one that rounds. The
+ * exact amount is always a hover or a table cell away.
+ */
+export function moneyWhole(value: number | string | null | undefined, currency = 'INR'): string {
+  const amount = typeof value === 'string' ? Number.parseFloat(value) : (value ?? 0)
+  if (!Number.isFinite(amount)) return '\u2014'
+
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount)
+}
+
+/**
+ * The same amount, shortened for a chart axis or a chip where space is the
+ * constraint. Lakh and crore, because that is how the figure is read aloud.
+ *
+ * Only ever a LABEL. The exact figure is always within reach — in the tooltip,
+ * the table cell or the screen-reader table — because a rounded amount is not
+ * one anybody should reconcile against.
+ */
+export function compactMoney(value: number | string | null | undefined, currency = '\u20b9'): string {
+  const amount = typeof value === 'string' ? Number.parseFloat(value) : (value ?? 0)
+  if (!Number.isFinite(amount)) return '\u2014'
+
+  const sign = amount < 0 ? '-' : ''
+  const size = Math.abs(amount)
+
+  if (size >= 10000000) return `${sign}${currency}${(size / 10000000).toFixed(1)}Cr`
+  if (size >= 100000) return `${sign}${currency}${(size / 100000).toFixed(1)}L`
+  if (size >= 1000) return `${sign}${currency}${Math.round(size / 1000)}K`
+
+  return `${sign}${currency}${Math.round(size)}`
 }
 
 export function qty(value: number | string | null | undefined): string {
@@ -475,4 +503,101 @@ export function date(value: string | null | undefined): string {
   if (Number.isNaN(parsed.getTime())) return value
 
   return new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }).format(parsed)
+}
+
+// ---------------------------------------------------------------------------
+// Toasts
+// ---------------------------------------------------------------------------
+
+export interface ToastMessage {
+  id: number
+  tone: 'success' | 'danger' | 'info'
+  title: string
+  detail?: string
+}
+
+/**
+ * A short confirmation that does not stop the user working.
+ *
+ * Saving a payment is an ordinary thing somebody does twenty times before
+ * lunch, and a modal for it is twenty extra clicks. A toast says it landed and
+ * gets out of the way — so a SUCCESS dismisses itself, and a FAILURE does not:
+ * a message that disappears before it is read is the same as no message, and
+ * the failure is the one people need to act on.
+ */
+export function useToasts(): {
+  toasts: ToastMessage[]
+  push: (toast: Omit<ToastMessage, 'id'>) => void
+  dismiss: (id: number) => void
+} {
+  const [toasts, setToasts] = useState<ToastMessage[]>([])
+  const nextId = useRef(1)
+
+  const dismiss = useCallback((id: number) => {
+    setToasts((current) => current.filter((toast) => toast.id !== id))
+  }, [])
+
+  const push = useCallback((toast: Omit<ToastMessage, 'id'>) => {
+    const id = nextId.current++
+    // Capped at three. A stack that grows without limit covers the very button
+    // the person is trying to press next.
+    setToasts((current) => [...current, { ...toast, id }].slice(-3))
+  }, [])
+
+  return { toasts, push, dismiss }
+}
+
+export function ToastStack({ toasts, onDismiss }: { toasts: ToastMessage[]; onDismiss: (id: number) => void }) {
+  if (toasts.length === 0) return null
+
+  return (
+    <div className="billing-toasts">
+      {toasts.map((toast) => (
+        <Toast key={toast.id} toast={toast} onDismiss={onDismiss} />
+      ))}
+    </div>
+  )
+}
+
+function Toast({ toast, onDismiss }: { toast: ToastMessage; onDismiss: (id: number) => void }) {
+  const dismissable = toast.tone !== 'danger'
+
+  useEffect(() => {
+    if (!dismissable) return
+    const timer = setTimeout(() => onDismiss(toast.id), 6000)
+    return () => clearTimeout(timer)
+  }, [dismissable, toast.id, onDismiss])
+
+  const Mark = toast.tone === 'success' ? CheckCircle2 : toast.tone === 'danger' ? AlertCircle : Info
+
+  return (
+    <div
+      className={`billing-toast billing-toast--${toast.tone}`}
+      role={toast.tone === 'danger' ? 'alert' : 'status'}
+      aria-live={toast.tone === 'danger' ? 'assertive' : 'polite'}
+    >
+      <Mark size={18} className="billing-toast__mark" aria-hidden />
+      <div className="billing-toast__body">
+        <strong className="billing-toast__title">{toast.title}</strong>
+        {toast.detail && <span className="billing-toast__detail">{toast.detail}</span>}
+      </div>
+      <button type="button" className="billing-toast__close" onClick={() => onDismiss(toast.id)} aria-label="Dismiss">
+        <X size={15} aria-hidden />
+      </button>
+    </div>
+  )
+}
+
+/**
+ * The symbol in front of an amount being TYPED, for the same currency money()
+ * would format it in.
+ *
+ * Derived from Intl rather than written as a literal, so the day a document
+ * arrives in another currency the prefix follows the formatter instead of
+ * contradicting it.
+ */
+export function currencySymbol(currency = 'INR'): string {
+  const parts = new Intl.NumberFormat('en-IN', { style: 'currency', currency, maximumFractionDigits: 0 }).formatToParts(0)
+
+  return parts.find((part) => part.type === 'currency')?.value ?? currency
 }

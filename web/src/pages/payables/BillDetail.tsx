@@ -92,7 +92,7 @@ export function BillDetail({
           value={
             bill.bill_amount === null
               ? <span style={{ color: 'var(--billing-muted)', fontWeight: 400 }}>not stated</span>
-              : `${moneyPlain(bill.bill_amount)}${bill.paid_amount ? ` · ${moneyPlain(bill.paid_amount)} paid` : ''}`
+              : `${moneyPlain(bill.bill_amount)}${bill.received ? ` · ${moneyPlain(bill.received)} paid` : ''}`
           }
         />
       </div>

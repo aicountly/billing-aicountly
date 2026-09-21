@@ -95,6 +95,146 @@ New in this change, and why each is not a second source of truth:
 Both are covered by the release-blocking ownership tests, whose numeric-column
 allow-list now names two columns explicitly rather than one.
 
+## Money to Collect
+
+`/receivables` — `web/src/receivables/`. Written to serve both sides, since
+`v1/receivables` and `v1/payables` return the same shape from the same service,
+and it still can: `DuesScreen side="payable"` renders.
+
+**It no longer serves `/payables`.** That route now has a workspace of its own
+(the next section), built to a separate design and doing on the server what this
+screen does in the browser. The two are not yet reconciled, and which of them
+Money to Collect should end up being is an open product decision rather than an
+accident — see "Where this leaves Money to Collect" below.
+
+This screen reads once, from the endpoint that already existed, and does the
+rest in the browser over the rows it was given:
+
+| Comes from the server | Worked out here |
+|---|---|
+| total, overdue, due today, due this week | the COUNT of bills behind each of those |
+| the five ageing buckets, and whether they reconcile | which bucket each row is in, and how many rows per bucket |
+| every open bill, with its balance and days overdue | days still to run, status, filtering, sorting, paging |
+| the per-party totals | the share each party holds, and the concentration of overdue |
+
+Every derivation is against the response's own `as_on` date rather than the
+browser's clock, so a row can never disagree with the totals above it. The
+arithmetic lives in `src/receivables/model.ts`, which imports nothing and is
+covered by `web/tests/receivables-model.test.ts`.
+
+**Ageing is measured from the due date**, never the bill date, and calendar days
+are counted at UTC midnight on both ends — dividing a millisecond difference by
+86,400,000 turns "due today" into "one day overdue" for anyone an hour off UTC.
+
+**Status is timing, and part-paid is a separate fact.** A bill that is half
+settled and ninety days late is still ninety days late; one badge that could
+only say "Partially paid" would hide the half that decides whether anybody rings
+the customer today. So the row carries both.
+
+**Nothing is settled from this screen.** "Record money received" navigates to the
+receipt screen, which reads the open bills from Books when the party lands and
+posts a receipt Books allocates. There is no status flip in the browser, and the
+bulk action refuses a selection spanning more than one party because a receipt
+is recorded against one.
+
+**The collection health label is two published percentages and two thresholds** —
+the share overdue and the share more than sixty days late — and the card states
+both. There is no score, because a collections figure a user cannot check is a
+figure they should not act on.
+
+Three things this screen wanted and did not get are in
+`BILLING_API_DEPENDENCIES.md`: what a bill was raised for (partly available, and
+shown as "not known" when absent), how a customer is classified, and a document
+route for one bill.
+
+
+## Reports
+
+Ten, all read live: sales, purchase, credit-note and debit-note registers;
+receipt and payment registers; receivables and payables ageing; cash and bank
+summary; document exceptions.
+
+**Two screens, split on purpose.**
+
+`/reports` is discovery. It reads the catalogue and nothing else — no report is
+run, so landing on Reports costs one metadata call however many reports exist.
+Nine category cards, search over name, description, shelf and keywords
+(`Ctrl + /`, `Cmd + /` on a Mac), a module filter, and the reports this person
+opened last or starred. The count on every card and every KPI is derived from
+what the server actually sent; none of them is written into the markup.
+
+`/reports/:reportKey` is the report. That is where the live read happens, with
+the period control, the total, the export and print. It is a separate lazy
+chunk, so the discovery screen does not carry the table and formatting code of
+a report nobody has opened.
+
+`GET v1/reports` describes each entry with a `description`, its `categories` and
+its `source`. Those are facts about the report — which shelves it belongs on and
+which product owns its figures — so they live in `ReportService::CATALOG` beside
+the permission, not in the browser. The screen supplies the icon and the wording
+around them. A catalogue entry that arrives without them is covered by a
+release-blocking test.
+
+Favourites, the recently-opened list and the screen's preferences are kept in
+`localStorage`, per company, as **report keys and a timestamp**. Nothing a report
+said is kept: no rows, no totals, no party names. A key whose report is no longer
+in the catalogue — retired, or a permission withdrawn — is simply not listed.
+
+Scheduling, the custom report builder and export history have no endpoint behind
+them. They are drawn switched off with the reason on them, behind the
+`VITE_FEATURE_REPORT_*` flags in `.env.example`, rather than as buttons that
+accept a click and do nothing. The intelligence panel opens AI Pulse through the
+launcher's own single-sign-on jump; Billing generates no insight and sends no
+figures anywhere.
+
+Export is CSV, built on the server, and needs `export.data` **separately from**
+`reports.view` — a person may be trusted to look a balance up on screen and not
+to walk out with the ledger. The file is the full filtered set; when the read
+could not be completed the export is refused rather than silently short. Every
+text cell is neutralised against spreadsheet formula injection. Where an export
+is offered away from the report itself — the overflow menu on the discovery
+screen — the period it would cover is named on the menu item, so nobody exports
+a month they were never shown.
+
+## The Items screen
+
+`/items` is the catalogue, read through to Aicountly Inventory on the request
+that draws it. **There is no items table in this product**, which is why the
+tabs, the search, the group filter, the sort and the pager all go upstream:
+Billing holds one page of rows and could only ever filter that.
+
+| Part | Where it comes from |
+|---|---|
+| Total / Stock / Service / Inactive | `GET items` with `limit=1`, read for `meta.total` |
+| Low stock | `GET reports/replenishment`, so "low" is Inventory's own reorder level |
+| The list | `GET items`, filtered, sorted and paged by Inventory |
+| The stock column | the list's own quantity, else one batched `GET stock-balances` per page |
+| The group filter | `GET item-groups` |
+
+Every narrowing is a query parameter and nothing else — the tabs **are**
+filters, so `?stock_status=low` and clicking Low Stock land in the same place,
+and a filtered list is a link somebody can send. The list/grid choice is the one
+thing kept out of the URL: it is a preference about how one person reads a
+screen, not a description of what the screen is showing.
+
+Three rules the screen holds to:
+
+* A quantity Inventory did not answer with reads **Unavailable**, never 0. A
+  service reads **—**. The difference between an empty shelf and an unanswered
+  question is the whole point of the column.
+* A type or status Inventory did not state is left blank rather than guessed.
+  An item wrongly badged "Service" is an item nobody checks the stock of.
+* A filter or an order that was asked for and plainly not applied is reported
+  above the list (`meta.upstream`), not papered over. A Low Stock tab that
+  quietly lists everything is the worst thing this screen could do.
+
+**Add item**, **Import** and **Item groups** open Inventory, carrying company,
+branch, year and a return URL — they are doors, not features Billing is
+missing. There is no Deactivate and no Delete on a row, because both would
+change Inventory's record. **Export** is CSV, built on the server from the full
+filtered set, and needs `export.data`, the same separate permission the reports
+use; every text cell goes through the same formula-injection guard.
+
 ## Money to Pay — the payables workspace
 
 `/payables`, permission `payable.view`. Not a dashboard: the bill-by-bill list
@@ -141,17 +281,59 @@ as the reports do.
 the manual path beside it. "View calendar" is a month view of the due dates this
 screen already read; it schedules nothing and saves nothing.
 
-## Reports
+### Where this leaves Money to Collect
 
-Ten, at `/reports`, all read live: sales, purchase, credit-note and debit-note
-registers; receipt and payment registers; receivables and payables ageing; cash
-and bank summary; document exceptions.
+The two screens now answer the same question in two ways: this one filters,
+sorts and pages in the browser over every row the server sent; Money to Pay does
+it on the server over one reading of Books, and adds a category split, a due
+calendar and a period comparison that this one has no equivalent of.
 
-Export is CSV, built on the server, and needs `export.data` **separately from**
-`reports.view` — a person may be trusted to look a balance up on screen and not
-to walk out with the ledger. The file is the full filtered set; when the read
-could not be completed the export is refused rather than silently short. Every
-text cell is neutralised against spreadsheet formula injection.
+That is a duplication, not a design. It is recorded here rather than quietly
+left for somebody to find, and the choice — bring Money to Collect onto the
+payables workspace, take the payables route back onto this screen, or extract
+the parts both want — belongs to whoever owns the receivables design.
+
+## Money → Bank withdrawal
+
+`/bank-cash/withdrawal`, gated on `contra.create` — the same permission the save
+asserts, so a URL typed by hand is refused exactly as the menu entry was
+withheld. A profile without it gets a sentence saying so instead of a form.
+
+What is on it, and where each thing comes from:
+
+| On screen | Source | Notes |
+|---|---|---|
+| Bank account, cash account | `v1/catalog/cash-bank` → Books' `masters/accounts` | The ledgers that may be posted to. Nothing is cached |
+| Which of them is cash and which is bank | `v1/cash-bank`, else the ledger's own `group_name` | Books' own classification either way, never the ledger's name — "Cash Credit A/c" is a bank. Neither available → **both lists show every ledger** rather than a guess |
+| Available balance, estimated balance after | `v1/cash-bank` | `cash.view` / `bank.view` decide whether a balance is shown at all. The estimate is arithmetic on screen and is written nowhere |
+| Last 30 days withdrawals, and the count | `v1/bank-withdrawals/summary` | Billing's own request rows for that account, in the company's timezone. Says so under the figure |
+| Recent bank withdrawals | `v1/bank-withdrawals/recent` | Billing's own posted requests; the account NAMES are read live from Books on the request |
+| The financial year a date must fall in | Manage, via `v1/manage/companyinfo` | Failing to read it costs the check, not the screen |
+
+Saving is `POST v1/transactions/bank_withdrawal` — the call this screen's
+predecessor already made, with the fields that request already accepted
+(`from_account_id`, `to_account_id`, `amount`, `date`, `instrument_no`,
+`narration`). **Books makes the entry.** Billing posts no ledger lines, computes
+no double entry, and keeps no balance; what it keeps is the request row that
+makes a retry safe, which is what the recent list and the 30-day figure are read
+back from.
+
+Two endpoints are new, both `contra.create`, both read-only, and both shaped on
+`v1/expenses/recent`: `GET v1/bank-withdrawals/recent` and
+`GET v1/bank-withdrawals/summary`. Neither is a second cash book — each carries
+a `basis` line that the screen prints, saying it covers what Billing recorded
+and not what was entered directly in Books.
+
+Deliberate refusals on this screen:
+
+* **Repeat from last** copies the two accounts and never the amount or the
+  cheque number. Reusing either is how one withdrawal becomes two.
+* **A possible duplicate warns and never blocks** — two withdrawals of the same
+  round figure on one day is a real thing that happens.
+* **More than the balance warns and never blocks** — an account may be allowed
+  to go overdrawn, and Billing is not the product that knows.
+* **Editing or cancelling a posted withdrawal is not offered**, because the
+  voucher is Books' and there is no Billing route that would do it.
 
 ## Permissions added
 
@@ -182,12 +364,21 @@ approximated.
 
 ## Verification
 
-* `server-php/tests/run.sh` — 72 passing, 0 failing, against a real PostgreSQL
-  and a stub standing in for Books and Inventory.
-* `npm run build` in `web/` — `tsc -b` clean, seven lazy chunks.
-* Visual pass at 1440, 1180, 860 and 414 px across all five dashboards and Money
-  to Pay, via `web/visual.html` — a development-only entry point that mounts the
-  real components against fixtures. `?state=empty|error|slow` reaches the empty,
-  failed and loading states, which are hard to arrange in a real company.
-  `vite build` does not include any of it, and no fake record is written
-  anywhere.
+* `server-php/tests/run.sh` — 116 passing, 0 failing, against a real
+  PostgreSQL and a stub standing in for Books and Inventory. Among them the
+  release-blocking pair, which fail the build if a table or column ever starts
+  holding a voucher, ledger, balance, item or party.
+* `npm test` in `web/` — 96 passing, 0 failing, on node's own runner. Among
+  them the ageing, status, filter, summary and export rules, checked against
+  `src/receivables/model.ts` — a file that imports nothing, which is why no
+  test framework has had to be added to run it.
+* `npm run build` in `web/` — `tsc -b` clean, every screen in its own chunk.
+* Visual pass across every booth screen — the five dashboards, the Items
+  workspace, the expense, bank-withdrawal, sale, credit-note, money-out and
+  money-received screens, Money to Collect and Money to Pay — via
+  `web/visual.html`, a
+  development-only entry point that mounts the real
+  components against fixtures, including their unavailable states
+  (`?fail=balance,withdrawals`, `?state=error`). `vite build` does not include
+  it, and no fake record is written anywhere.
+

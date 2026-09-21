@@ -12,6 +12,15 @@ export interface AsyncState<T> {
   data: T | null
   loading: boolean
   error: string | null
+  /**
+   * The error itself, when there was one.
+   *
+   * `error` is the sentence to show. This is the object behind it, so a screen
+   * that needs to tell "you may not see this" apart from "Books was
+   * unreachable" can narrow it to ApiError and read the status, instead of
+   * matching on the text of a message.
+   */
+  cause: Error | null
   reload: () => void
 }
 
@@ -23,6 +32,7 @@ export function useApi<T>(
   const [data, setData] = useState<T | null>(null)
   const [loading, setLoading] = useState(enabled)
   const [error, setError] = useState<string | null>(null)
+  const [cause, setCause] = useState<Error | null>(null)
   const [token, setToken] = useState(0)
 
   const reload = useCallback(() => setToken((n) => n + 1), [])
@@ -38,6 +48,7 @@ export function useApi<T>(
 
     setLoading(true)
     setError(null)
+    setCause(null)
 
     fetcher(controller.signal)
       .then((result) => {
@@ -47,6 +58,7 @@ export function useApi<T>(
         // An abort is this component going away, not a failure to report.
         if (cancelled || controller.signal.aborted) return
         setError(err.message)
+        setCause(err)
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -59,5 +71,5 @@ export function useApi<T>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, token, enabled])
 
-  return { data, loading, error, reload }
+  return { data, loading, error, cause, reload }
 }

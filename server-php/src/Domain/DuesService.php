@@ -380,13 +380,19 @@ final class DuesService
                 $reference = null;
             }
 
-            // The bill's full value, when Books states one. Only then can a part
-            // payment be told from a bill nobody has paid anything against —
-            // and a value BELOW the balance is not a bill value, it is some
-            // other figure under a name this list guessed at, so it is dropped.
-            $billAmount = BooksReadings::number($row, ['bill_amount', 'invoice_value', 'grand_total', 'total_amount', 'original_amount', 'voucher_amount']);
-            if ($billAmount !== null && $billAmount + 0.005 < $balance) {
-                $billAmount = null;
+            // What the bill was raised for, and what has come in against it —
+            // but ONLY when Books actually said so. Both stay null otherwise:
+            // a received amount derived from the balance alone would be a
+            // guess, and the screen prints null as "not known" rather than as
+            // zero, because zero means nothing has been paid.
+            $gross = self::amount($row, ['bill_amount', 'invoice_amount', 'total_amount', 'bill_value', 'grand_total']);
+
+            // And a "bill value" BELOW the balance outstanding against it is not
+            // a bill value — it is some other figure under a name this list
+            // guessed at. Dropped, so the screen says "not known" rather than
+            // reporting a bill smaller than its own unpaid part.
+            if ($gross !== null && $gross + 0.005 < $balance) {
+                $gross = null;
             }
 
             $bills[] = [
@@ -399,9 +405,11 @@ final class DuesService
                 'bill_date'    => BooksReadings::date($row, ['bill_date', 'voucher_date', 'vch_date']),
                 'due_date'     => $due?->format('Y-m-d'),
                 'balance'      => round($balance, 2),
-                'bill_amount'  => $billAmount === null ? null : round($billAmount, 2),
-                'paid_amount'  => $billAmount === null ? null : round($billAmount - $balance, 2),
-                'partially_paid' => $billAmount !== null && $billAmount - $balance > 0.005,
+                'bill_amount'  => $gross === null ? null : round($gross, 2),
+                'received'     => $gross === null ? null : round(max(0.0, $gross - $balance), 2),
+                // Part paid is the same two figures, said as a fact rather than
+                // left to each screen to work out for itself.
+                'partially_paid' => $gross !== null && $gross - $balance > 0.005,
                 'days_overdue' => $days !== null && $days < 0 ? abs($days) : 0,
                 'days_to_due'  => $days !== null && $days >= 0 ? $days : null,
                 'status'       => self::status($days),
@@ -927,6 +935,32 @@ final class DuesService
                 : 'Reading a bill from a PDF or photo needs a document-extraction service, and none is configured for this '
                     . 'deployment. Entering the bill by hand records exactly the same thing.',
         ];
+    }
+
+    /**
+     * The first of these keys Books actually sent, as a number.
+     *
+     * A key present but empty, or holding something that is not a number, is
+     * treated as absent rather than as zero: this decides whether a column on
+     * the screen reads "not known" or "\u20b90.00", and those are different claims.
+     *
+     * @param array<string, mixed> $row
+     * @param list<string>         $keys
+     */
+    private static function amount(array $row, array $keys): ?float
+    {
+        foreach ($keys as $key) {
+            if (!array_key_exists($key, $row) || $row[$key] === null || $row[$key] === '') {
+                continue;
+            }
+            if (!is_numeric($row[$key])) {
+                continue;
+            }
+
+            return (float) $row[$key];
+        }
+
+        return null;
     }
 
     /**

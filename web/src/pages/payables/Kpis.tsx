@@ -12,7 +12,7 @@
  */
 
 import { ArrowDownRight, ArrowUpRight, CalendarCheck, CalendarDays, Clock, Wallet } from 'lucide-react'
-import { money } from '../../ui'
+import { money, moneyWhole } from '../../ui'
 import { Skeleton } from './parts'
 import type { PayablesComparison, PayablesSummary } from '../../services/types'
 
@@ -39,7 +39,7 @@ function Kpi({ label, value, meta, icon, tone, loading, active, onPick, title }:
         ) : value === null ? (
           <strong className="mtp-kpi__value mtp-kpi__value--unavailable">Unavailable</strong>
         ) : (
-          <strong className="mtp-kpi__value">{money(value)}</strong>
+          <strong className="mtp-kpi__value" title={money(value)}>{moneyWhole(value)}</strong>
         )}
         <span className="mtp-kpi__meta">{loading ? <Skeleton className="mtp-skeleton--label" /> : meta}</span>
       </span>

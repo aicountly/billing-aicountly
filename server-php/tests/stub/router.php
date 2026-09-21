@@ -181,7 +181,7 @@ if (str_contains($path, '/reports/bill-by-bill')) {
     // are written against this one bill and must keep meaning what they meant.
     if (($_GET['party_type'] ?? 'debtor') !== 'creditor') {
         echo json_encode(['data' => [
-            ['bill_no' => 'INV/0001', 'bill_date' => '2026-08-01', 'due_date' => '2026-08-31', 'balance' => 120000.0],
+            ['bill_no' => 'INV/0001', 'bill_date' => '2026-08-01', 'due_date' => '2026-08-31', 'balance' => 120000.0, 'bill_amount' => 150000.0],
         ]]);
         exit;
     }
@@ -207,7 +207,7 @@ if (str_contains($path, '/reports/bill-by-bill')) {
 
     echo json_encode(['data' => [
         ['account_id' => 601, 'account_name' => 'Northern Distributors', 'bill_no' => 'BILL/2001', 'reference_no' => 'PO-4587',
-         'bill_date' => $day(-120), 'due_date' => $day(-95), 'balance' => 40000.0, 'invoice_value' => 60000.0,
+         'bill_date' => $day(-120), 'due_date' => $day(-95), 'balance' => 40000.0, 'bill_amount' => 60000.0,
          'group_name' => 'Raw Materials', 'voucher_id' => 7001],
         ['account_id' => 601, 'account_name' => 'Northern Distributors', 'bill_no' => 'BILL/2002',
          'bill_date' => $day(-80), 'due_date' => $day(-70), 'balance' => 25000.0,
@@ -308,6 +308,29 @@ if (str_contains($path, '/registers')) {
     }
 
     echo json_encode(['data' => $rows, 'meta' => ['total' => count($rows), 'limit' => 500, 'offset' => 0]]);
+    exit;
+}
+
+// The ledger list, narrowed by `nature`. The expense screen reads it twice —
+// once for the heads, once for the cash and bank accounts.
+if (str_contains($path, '/masters/accounts')) {
+    $nature = $_GET['nature'] ?? '';
+    $rows = match ($nature) {
+        'indirect_expenses' => [
+            ['acc_id' => 810, 'acc_name' => 'Office Supplies'],
+            ['acc_id' => 811, 'acc_name' => 'Travel & Conveyance'],
+            ['acc_id' => 819, 'acc_name' => 'Other Expenses'],
+        ],
+        'cash_bank' => [
+            ['acc_id' => 101, 'acc_name' => 'Cash in hand'],
+            ['acc_id' => 102, 'acc_name' => 'HDFC Current'],
+        ],
+        default => [
+            ['acc_id' => 501, 'acc_name' => 'Northern Distributors', 'gstin' => '29AAACB1234F1Z5'],
+        ],
+    };
+
+    echo json_encode(['data' => $rows, 'meta' => ['total' => count($rows), 'limit' => 200, 'offset' => 0]]);
     exit;
 }
 

@@ -14,8 +14,26 @@
  */
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { Bell, ChevronDown, LogOut, Menu, Plus, Settings, User } from 'lucide-react'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import {
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  Bell,
+  ChartColumn,
+  ChevronDown,
+  Coins,
+  FileChartColumn,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  Package,
+  Plus,
+  Settings,
+  ShoppingCart,
+  Sprout,
+  User,
+  Users,
+} from 'lucide-react'
 import { useAuth } from '../auth/AuthProvider'
 import { AppLauncher } from '../components/AppLauncher'
 import { useBilling } from '../context/BillingContext'
@@ -36,7 +54,29 @@ const QUICK_ACTIONS = [
   { label: 'Bank deposit', path: '/bank-cash/deposit', permission: 'contra.create' },
   { label: 'Bank withdrawal', path: '/bank-cash/withdrawal', permission: 'contra.create' },
   { label: 'Credit note', path: '/more/credit-note', permission: 'credit_note.create' },
+  { label: 'Debit note', path: '/more/debit-note', permission: 'debit_note.create' },
 ] as const
+
+/**
+ * A mark for each section, by the key the SERVER gave the entry.
+ *
+ * Presentation only. Nothing here decides whether a section is drawn — the
+ * menu arrives already filtered, and an entry whose key is not in this map
+ * simply gets no icon rather than being hidden, so adding a section on the
+ * server never quietly removes it from the sidebar here.
+ */
+const SECTION_ICONS: Record<string, ReactNode> = {
+  dashboard: <LayoutDashboard size={17} aria-hidden />,
+  sales: <ChartColumn size={17} aria-hidden />,
+  purchases: <ShoppingCart size={17} aria-hidden />,
+  money: <Coins size={17} aria-hidden />,
+  receivables: <ArrowDownToLine size={17} aria-hidden />,
+  payables: <ArrowUpFromLine size={17} aria-hidden />,
+  parties: <Users size={17} aria-hidden />,
+  items: <Package size={17} aria-hidden />,
+  reports: <FileChartColumn size={17} aria-hidden />,
+  more: <Settings size={17} aria-hidden />,
+}
 
 export function AppShell() {
   const { session, scope } = useBilling()
@@ -58,6 +98,9 @@ export function AppShell() {
         <Navigation menu={menu} />
         {session && (
           <div className="billing-sidebar__footer">
+            <span className="billing-sidebar__footer-mark" aria-hidden="true">
+              <Sprout size={16} />
+            </span>
             <div style={{ fontWeight: 650, color: 'var(--billing-text)' }}>Simple billing</div>
             <div>for a stronger tomorrow.</div>
             {scope && <div style={{ marginTop: 8 }}>Made for India · Built for your business</div>}
@@ -126,38 +169,62 @@ function Brand() {
 function Navigation({ menu }: { menu: MenuEntry[] }) {
   const location = useLocation()
 
+  /**
+   * A section that CLAIMS this path as one of its own beats a section that
+   * merely shares its prefix.
+   *
+   * Some screens live under a path belonging to another section — the expense
+   * form is `/more/expense` and the debit note is `/more/debit-note`, and both
+   * belong to Purchases — and without this both Purchases and Settings light
+   * up, which tells the user they are in two places at once.
+   */
+  const claimed = menu.some((entry) =>
+    (entry.children ?? []).some(
+      (child) => location.pathname === child.path || location.pathname.startsWith(`${child.path}/`),
+    ),
+  )
+
   return (
     <nav aria-label="Sections" style={{ display: 'grid', gap: 2 }}>
       {menu.map((entry) => {
         const children = entry.children ?? []
+        const owns = children.some(
+          (child) => location.pathname === child.path || location.pathname.startsWith(`${child.path}/`),
+        )
         // A section expands when you are inside it. Expanding on click as well
         // would mean a section whose own page is one tap away needs two.
         const inside =
           location.pathname === entry.path ||
-          children.some((child) => location.pathname.startsWith(child.path)) ||
-          (entry.path !== '/' && location.pathname.startsWith(entry.path))
+          owns ||
+          (!claimed && entry.path !== '/' && location.pathname.startsWith(entry.path))
 
         return (
           <div key={entry.key}>
-            <NavLink
-              to={entry.path}
-              end={entry.path === '/'}
-              className="billing-nav__link"
-              aria-current={inside ? 'page' : undefined}
-            >
+            {/* Link, not NavLink: NavLink decides "current" by prefix and
+                swallows the aria-current prop, which is how one screen ends up
+                marked in two sections. What is current is worked out above. */}
+            <Link to={entry.path} className="billing-nav__link" aria-current={inside ? 'page' : undefined}>
+              <span className="billing-nav__icon">{SECTION_ICONS[entry.key] ?? null}</span>
               {entry.label}
-            </NavLink>
+            </Link>
             {inside && children.length > 0 && (
               <div className="billing-nav__children">
                 {children.map((child) => (
-                  <NavLink
+                  <Link
                     key={child.path}
                     to={child.path}
                     className="billing-nav__child"
-                    aria-current={location.pathname === child.path ? 'page' : undefined}
+                    // Prefix rather than equality, so a screen's own detail
+                    // route (…/expense/12) keeps its entry lit instead of
+                    // leaving the section open with nothing marked inside it.
+                    aria-current={
+                      location.pathname === child.path || location.pathname.startsWith(`${child.path}/`)
+                        ? 'page'
+                        : undefined
+                    }
                   >
                     {child.label}
-                  </NavLink>
+                  </Link>
                 ))}
               </div>
             )}

@@ -102,9 +102,22 @@ export default function MoneyToPay() {
     })
   }, [])
 
+  /**
+   * Open the payment screen with the supplier already chosen.
+   *
+   * `account_id` / `account_name` / `amount` is the contract Money to Collect
+   * already links with, and the money screen already reads. A second spelling
+   * of the same three values would work until somebody changed one of them.
+   */
   const recordPayment = useCallback(
-    (bill: { account_id: number; account_name: string }) =>
-      navigate(`/money-out/new?party_account_id=${bill.account_id}&party_name=${encodeURIComponent(bill.account_name)}`),
+    (bill: { account_id: number; account_name: string; balance?: number }) => {
+      const params = new URLSearchParams({
+        account_id: String(bill.account_id),
+        account_name: bill.account_name,
+      })
+      if (bill.balance !== undefined) params.set('amount', String(bill.balance))
+      navigate(`/money-out/new?${params.toString()}`)
+    },
     [navigate],
   )
 

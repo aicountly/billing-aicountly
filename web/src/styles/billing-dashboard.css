@@ -275,6 +275,11 @@
   box-shadow: var(--billing-shadow-lg);
 }
 
+/* A menu opened from inside `.billing-table-scroll` cannot be absolutely
+   positioned: that scroller clips it, and the menu appears cut in half or not
+   at all. Anchored menus are placed in the viewport by the component instead. */
+.billing-menu--anchored { position: fixed; right: auto; top: auto; min-width: 12rem; }
+
 .billing-menu__item {
   display: flex;
   align-items: center;
@@ -466,7 +471,11 @@
 
 .billing-metric__content {
   width: 100%;
-  min-height: 152px;
+  /* Shorter than it was: the overview's cards now carry their time basis in
+     the one line under the figure instead of in a chip below it, and a card
+     sized for the chip leaves a band of empty white where it used to be. The
+     four still share a height, so the row reads as a row. */
+  min-height: 138px;
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -517,7 +526,19 @@
 .billing-metric__description,
 .billing-trend { display: block; font-size: 12px; color: var(--billing-muted); }
 
-.billing-metric__foot { margin-top: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* Two lines and then an ellipsis. The full sentence is the card's title
+   attribute and is read out in full by a screen reader, so nothing is lost —
+   but a four-line definition pushes the figure above it out of the row. */
+.billing-metric__description {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  margin-bottom: auto;
+}
+
+.billing-metric__foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 .billing-trend { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; }
 .billing-trend--positive { color: #216b18; }
@@ -656,7 +677,10 @@
 
 .billing-table { width: 100%; border-collapse: collapse; text-align: left; }
 
-.billing-table th {
+/* Only the COLUMN headers get the tint. A row header — the invoice number in
+   the first cell of each row — is a `th` too, and shading it turns the left
+   edge of the table into a grey band that reads as a selected column. */
+.billing-table thead th {
   padding: 10px 12px;
   background: var(--billing-surface-2);
   color: var(--billing-muted);
@@ -665,7 +689,19 @@
   white-space: nowrap;
 }
 
-.billing-table td { padding: 13px 12px; border-bottom: 1px solid #edf1ed; vertical-align: middle; }
+.billing-table td,
+.billing-table tbody th {
+  padding: 13px 12px;
+  border-bottom: 1px solid #edf1ed;
+  vertical-align: middle;
+  /* The scroller around this table exists so a narrow screen scrolls the
+     table rather than the page. Left to wrap, the columns squeeze instead and
+     a customer name becomes three stacked words — so cells keep their line and
+     the scroller does its job. */
+  white-space: nowrap;
+}
+
+.billing-table tbody th { font-weight: 650; text-align: left; }
 .billing-table tbody tr:last-child td { border-bottom: 0; }
 .billing-table tbody tr:hover { background: #fbfdfb; }
 
@@ -741,12 +777,17 @@
 
 .billing-quick-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 
+.billing-quick-action > span:last-child { min-width: 0; }
+
 .billing-quick-action {
   min-height: 76px;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 15px;
+  /* Tight on purpose. These sit two-up in the narrow column beside the invoice
+     table, and every pixel the mark and the padding take is a pixel "Record
+     payment" has to wrap into. */
+  gap: 10px;
+  padding: 14px;
   border: 1px solid var(--billing-border);
   border-radius: 12px;
   background: #fff;
@@ -759,12 +800,12 @@
 
 .billing-quick-action:hover { background: var(--billing-surface-2); text-decoration: none; }
 .billing-quick-action__mark {
-  width: 38px; height: 38px;
+  width: 34px; height: 34px;
   display: inline-flex; align-items: center; justify-content: center;
   border-radius: 10px; background: var(--billing-mint); color: var(--billing-action);
   flex-shrink: 0;
 }
-.billing-quick-action__label { font-weight: 650; display: block; }
+.billing-quick-action__label { font-weight: 650; display: block; font-size: 13.5px; }
 .billing-quick-action__hint { display: block; font-size: 12px; color: var(--billing-muted); }
 
 /* ----------------------------------------------------------------- forms */
@@ -789,7 +830,7 @@
 
 /* ---------------------------------------------------------------- states */
 
-.billing-chart { min-height: 260px; }
+.billing-chart { min-height: 280px; }
 
 .billing-empty-state,
 .billing-error-state,
@@ -893,7 +934,240 @@
 
 .billing-drawer__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
 
+/* ------------------------------------------------- sidebar section marks */
+
+/* Presentation only — see SECTION_ICONS in AppShell. A section whose key has
+   no icon keeps its label and its spacing rather than shifting left, so the
+   column stays a column. */
+.billing-nav__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.billing-sidebar__footer-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  margin-bottom: 10px;
+  border-radius: 9px;
+  background: var(--billing-mint);
+  color: var(--billing-action);
+}
+
+/* ------------------------------------------------------ the date window */
+
+.billing-daterange {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 11px;
+  border: 1px solid var(--billing-border);
+  border-radius: 9px;
+  background: var(--billing-surface);
+  color: var(--billing-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.billing-daterange svg { color: var(--billing-action); flex-shrink: 0; }
+
+/* -------------------------------------------------------- briefing strip */
+
+.billing-briefing {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px 18px;
+  margin-bottom: 22px;
+  border: 1px solid #d6e9d2;
+  border-radius: var(--billing-radius);
+  background: linear-gradient(120deg, #f0faed, #ffffff 78%);
+}
+
+.billing-briefing__mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  background: var(--billing-mint);
+  color: var(--billing-action);
+}
+
+.billing-briefing__body { flex: 1 1 auto; min-width: 0; display: grid; gap: 6px; }
+
+.billing-briefing__headline { margin: 0; line-height: 1.5; }
+.billing-briefing__headline strong { font-weight: 700; }
+
+.billing-briefing__divider {
+  display: inline-block;
+  width: 1px;
+  height: 12px;
+  margin: 0 10px;
+  vertical-align: -1px;
+  background: var(--billing-border-strong);
+}
+
+.billing-briefing__movement { margin: 0; font-size: 13px; font-weight: 650; }
+.billing-briefing__movement--positive { color: #216b18; }
+.billing-briefing__movement--warning { color: var(--billing-warning); }
+
+.billing-briefing__basis { margin: 0; font-size: 12px; color: var(--billing-muted); }
+
+/* The provenance line and the offer to write it up read as one sentence, so
+   they sit on one line and wrap together rather than stacking into a
+   four-line strip. */
+.billing-briefing__foot {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+
+.billing-briefing > .billing-button { flex-shrink: 0; white-space: nowrap; }
+
+.billing-briefing__assistant { margin: 0; font-size: 12.5px; color: var(--billing-muted); }
+.billing-briefing__assistant p { margin: 0 0 4px; }
+.billing-briefing__assistant strong { color: var(--billing-text); }
+
+.billing-briefing__ask {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--billing-action);
+  font-size: 12.5px;
+  font-weight: 650;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.billing-briefing__ask:hover { color: var(--billing-action-hover); }
+
+/* -------------------------------------------------- links inside panels */
+
+/* A link, drawn as a link. There are several of these in a column and four
+   filled buttons down one side of a panel make every one of them look like
+   the main thing to do. */
+.billing-panel__link,
+.billing-suggestion__go,
+.billing-record-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--billing-action);
+  font-weight: 650;
+  text-align: left;
+  cursor: pointer;
+}
+
+.billing-suggestion__go {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.billing-panel__link:hover,
+.billing-suggestion__go:hover,
+.billing-record-link:hover {
+  color: var(--billing-action-hover);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.billing-table__id { font-weight: 650; color: var(--billing-text); white-space: nowrap; }
+
+.billing-heading-error { color: var(--billing-danger); font-size: 12px; max-width: 22rem; }
+
+.billing-source-note { margin: 0; color: var(--billing-muted); font-size: 12px; }
+
+/* A label beside its control rather than above it, for the one-line pickers
+   that sit in a panel heading. The label stays visible: a bare select in a
+   heading is a control whose meaning is guessed from its current value. */
+.billing-field--inline {
+  grid-auto-flow: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.billing-field--inline label { font-size: 12px; font-weight: 600; color: var(--billing-muted); white-space: nowrap; }
+
+.billing-scope-select--bordered {
+  min-height: 36px;
+  max-width: 9rem;
+  border-color: var(--billing-border-strong);
+}
+
+/* ----------------------------------------------------------------- toasts */
+
+.billing-toasts {
+  position: fixed;
+  z-index: 90;
+  right: 18px;
+  bottom: 18px;
+  display: grid;
+  gap: 10px;
+  width: min(24rem, calc(100vw - 36px));
+}
+
+.billing-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 13px 14px;
+  border: 1px solid var(--billing-border);
+  border-radius: 12px;
+  background: var(--billing-surface);
+  box-shadow: var(--billing-shadow-lg);
+}
+
+.billing-toast--success { border-color: #bfe3b8; }
+.billing-toast--danger { border-color: var(--billing-danger); }
+
+.billing-toast__mark { flex-shrink: 0; margin-top: 1px; }
+.billing-toast--success .billing-toast__mark { color: var(--success); }
+.billing-toast--danger .billing-toast__mark { color: var(--billing-danger); }
+.billing-toast--info .billing-toast__mark { color: var(--billing-action); }
+
+.billing-toast__body { min-width: 0; flex: 1 1 auto; }
+.billing-toast__title { display: block; font-weight: 650; }
+.billing-toast__detail { display: block; margin-top: 2px; color: var(--billing-muted); font-size: 13px; }
+
+.billing-toast__close {
+  flex-shrink: 0;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: var(--billing-muted);
+  cursor: pointer;
+  line-height: 1;
+}
+
 /* ------------------------------------------------------------ responsive */
+
+/* A 1366-wide laptop is the commonest screen this product is used on, and at
+   that width the three scope selects plus the search box wrapped the New
+   button and the avatar onto a second row. Narrowing the controls keeps the
+   bar one row; nothing above 1440 is touched. */
+@media (max-width: 1440px) {
+  .billing-scope-select { max-width: 10.5rem; }
+  .billing-search { flex: 1 1 12rem; min-width: 8rem; max-width: 20rem; }
+}
 
 @media (max-width: 1200px) {
   .billing-app { grid-template-columns: 200px minmax(0, 1fr); }
@@ -908,6 +1182,7 @@
 
 @media (max-width: 900px) {
   .billing-app { grid-template-columns: minmax(0, 1fr); }
+  .billing-actions { width: 100%; }
   .billing-sidebar { display: none; }
   .billing-drawer-trigger { display: inline-flex; }
   .billing-contextbar { padding: 10px 16px; }
@@ -917,6 +1192,7 @@
 }
 
 @media (max-width: 560px) {
+  .billing-toasts { right: 12px; left: 12px; bottom: 12px; width: auto; }
   .billing-main { padding-inline: 14px; }
   .billing-dashboard-nav { gap: 18px; }
   .billing-metrics,
@@ -926,6 +1202,12 @@
   .billing-panel { padding: 16px; }
   .billing-panel--flush .billing-panel__heading { padding-inline: 16px; }
   .billing-suggestion { align-items: flex-start; flex-direction: column; }
+  .billing-briefing { flex-direction: column; gap: 12px; padding: 16px; }
+  .billing-briefing__divider { display: none; }
+  .billing-briefing__headline strong { display: block; margin-bottom: 2px; }
+  .billing-daterange { width: 100%; justify-content: flex-start; }
+  .billing-field--inline { grid-auto-flow: row; gap: 4px; }
+  .billing-scope-select--bordered { max-width: none; }
   .billing-quick-actions { grid-template-columns: minmax(0, 1fr); }
   .billing-button { min-height: 44px; }
   .billing-scope-select { max-width: 9rem; }
@@ -947,4 +1229,155 @@
   .billing-actions { display: none; }
   .billing-app { grid-template-columns: minmax(0, 1fr); }
   .billing-panel { break-inside: avoid; box-shadow: none; }
+}
+
+/* ------------------------------------------------------------- type-ahead */
+
+/* components/Combo.tsx. It lives in the shared sheet because the bill screen
+   and the purchase grid both use it, and a search box that looks different on
+   two screens reads as two products. */
+
+.billing-combo { position: relative; min-width: 0; }
+
+.billing-combo__field { position: relative; display: flex; align-items: center; }
+
+.billing-combo__icon {
+  position: absolute;
+  left: 11px;
+  color: var(--billing-muted);
+  pointer-events: none;
+}
+
+.billing-combo__input {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 34px 0 32px;
+  border: 1px solid var(--billing-border-strong);
+  border-radius: 9px;
+  background: var(--billing-surface);
+  color: var(--billing-text);
+  outline: none;
+}
+
+.billing-combo__input:focus {
+  border-color: var(--billing-action);
+  box-shadow: 0 0 0 3px rgb(24 122 18 / 11%);
+}
+
+.billing-combo--compact .billing-combo__input {
+  min-height: 36px;
+  padding-left: 29px;
+  border-color: var(--billing-border);
+  border-radius: 7px;
+}
+
+.billing-combo--invalid .billing-combo__input,
+.billing-combo--invalid .billing-combo__input:focus { border-color: var(--billing-danger); }
+.billing-combo--invalid .billing-combo__input:focus { box-shadow: 0 0 0 3px rgb(180 35 24 / 12%); }
+
+.billing-combo__busy { position: absolute; right: 11px; color: var(--billing-muted); }
+
+.billing-combo__clear {
+  position: absolute;
+  right: 7px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--billing-muted);
+  cursor: pointer;
+}
+
+.billing-combo__clear:hover { background: var(--billing-surface-2); color: var(--billing-text); }
+
+.billing-combo__list {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  min-width: 260px;
+  max-height: 19rem;
+  overflow-y: auto;
+  padding: 4px;
+  margin: 0;
+  list-style: none;
+  border: 1px solid var(--billing-border-strong);
+  border-radius: var(--billing-radius-sm);
+  background: var(--billing-surface);
+  box-shadow: var(--billing-shadow-lg);
+}
+
+.billing-combo__option {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.billing-combo__option[aria-selected='true'] { background: var(--billing-mint); }
+
+.billing-combo__option-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.billing-combo__option-name { font-weight: 650; font-size: 13px; }
+
+.billing-combo__option-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: 2px;
+  color: var(--billing-muted);
+  font-size: 11.5px;
+}
+
+.billing-combo__status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  color: var(--billing-muted);
+  font-size: 13px;
+}
+
+.billing-combo__status--error { color: var(--billing-danger); }
+
+.billing-combo__retry {
+  border: 0;
+  background: none;
+  color: var(--billing-action);
+  font-weight: 650;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* Portalled: measured against the viewport, so a grid's own sideways scrolling
+   cannot clip the list. `left`, `right` and `top` are set from the anchor. */
+.billing-combo__list--floating {
+  position: fixed;
+  top: auto;
+  right: auto;
+  z-index: 60;
+}
+
+/* ------------------------------------------------------- drawer, on the right */
+
+/* Same dialog, anchored to the other edge — used by panels that belong beside
+   the content rather than in place of the navigation. */
+.billing-drawer--right {
+  inset: 0 0 0 auto;
+  width: min(92vw, 420px);
+  border-right: 0;
+  border-left: 1px solid var(--billing-border);
 }

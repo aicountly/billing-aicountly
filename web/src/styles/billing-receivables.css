@@ -1,0 +1,816 @@
+/* ---------------------------------------------------------------------------
+   Money to Collect / Money to Pay.
+
+   Tokens come from index.css — this file adds no colour of its own beyond the
+   five tinted card washes, which are the only place this screen needs a hue the
+   rest of the product does not already have. Everything is namespaced
+   `billing-dues-` and nothing styles a bare element selector, so adding it to
+   the bundle cannot reach a screen that did not ask for it.
+
+   Border-first, not shadow-first: an accounting screen is dense by necessity
+   and a drop shadow under every one of forty surfaces reads as fog.
+   --------------------------------------------------------------------------- */
+
+.billing-dues {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding-bottom: 8px;
+}
+
+/* ------------------------------------------------------------------ header */
+
+.billing-dues__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+  margin-block: 22px 2px;
+}
+
+.billing-dues__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.billing-dues__header h1 {
+  margin: 0;
+  font-size: clamp(23px, 2vw, 28px);
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  font-weight: 750;
+}
+
+.billing-dues__lede {
+  margin: 6px 0 0;
+  max-width: 62ch;
+  color: var(--billing-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.billing-dues__header-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.billing-dues__status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--billing-muted);
+  font-size: 12px;
+}
+
+/* A help bubble, opened from the (i) beside the title. */
+.billing-dues__about {
+  position: relative;
+  padding: 14px 16px;
+  border: 1px solid var(--billing-mint-strong);
+  border-radius: 12px;
+  background: var(--billing-mint);
+  color: var(--billing-text);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.billing-dues__about p { margin: 0 0 8px; }
+.billing-dues__about p:last-child { margin-bottom: 0; }
+
+/* ------------------------------------------------------------- KPI cards */
+
+.billing-dues__kpis {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.billing-dues-kpi {
+  min-width: 0;
+  border: 1px solid var(--billing-border-soft, #eef1f3);
+  border-radius: 13px;
+  background: var(--billing-surface);
+  box-shadow: 0 1px 2px rgb(16 24 40 / 4%);
+  overflow: hidden;
+}
+
+.billing-dues-kpi__inner {
+  width: 100%;
+  min-height: 104px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 15px 16px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+button.billing-dues-kpi__inner { cursor: pointer; }
+
+button.billing-dues-kpi__inner:hover { background: rgb(255 255 255 / 45%); }
+
+.billing-dues-kpi--total   { background: #f1fbf2; }
+.billing-dues-kpi--overdue { background: #fff4f4; }
+.billing-dues-kpi--today   { background: #f2f7ff; }
+.billing-dues-kpi--week    { background: #f7f3ff; }
+.billing-dues-kpi--count   { background: #f0fbf8; }
+
+.billing-dues-kpi__mark {
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: rgb(255 255 255 / 76%);
+  color: var(--billing-action);
+}
+
+.billing-dues-kpi--overdue .billing-dues-kpi__mark { color: var(--billing-danger); }
+.billing-dues-kpi--today   .billing-dues-kpi__mark { color: #2563eb; }
+.billing-dues-kpi--week    .billing-dues-kpi__mark { color: #7c3aed; }
+
+.billing-dues-kpi__body { min-width: 0; }
+
+.billing-dues-kpi__label {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--billing-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.billing-dues-kpi__value {
+  display: block;
+  font-size: clamp(18px, 1.5vw, 23px);
+  line-height: 1.16;
+  letter-spacing: -0.025em;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  /* An amount broken over two lines reads as two numbers. It shrinks to fit
+     instead, and the exact figure is on the card's own tooltip. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.billing-dues-kpi__value--unavailable {
+  font-size: 17px;
+  font-weight: 650;
+  color: var(--billing-muted);
+}
+
+.billing-dues-kpi__meta {
+  display: block;
+  margin-top: 5px;
+  color: var(--billing-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.billing-dues-kpi__meta--up   { color: var(--billing-danger); font-weight: 650; }
+.billing-dues-kpi__meta--down { color: #216b18; font-weight: 650; }
+
+/* --------------------------------------------------------------- analytics */
+
+.billing-dues__analytics {
+  display: grid;
+  grid-template-columns: minmax(0, 1.62fr) minmax(280px, 1fr) minmax(224px, 0.66fr);
+  gap: 12px;
+  align-items: stretch;
+}
+
+.billing-dues-card {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 15px 16px;
+  border: 1px solid var(--billing-border);
+  border-radius: 14px;
+  background: var(--billing-surface);
+  box-shadow: 0 1px 2px rgb(16 24 40 / 4%);
+}
+
+.billing-dues-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.billing-dues-card__head h2 {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  font-weight: 700;
+}
+
+.billing-dues-card__head p {
+  margin: 4px 0 0;
+  color: var(--billing-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.billing-dues-card__body { flex: 1 1 auto; min-width: 0; }
+
+/* ------------------------------------------------------------------ charts */
+
+.billing-dues-chart {
+  width: 100%;
+  height: auto;
+  display: block;
+  overflow: visible;
+}
+
+.billing-dues-chart__bar { transition: opacity 160ms ease; }
+.billing-dues-chart__hit { cursor: pointer; }
+.billing-dues-chart__hit:hover + .billing-dues-chart__bar,
+.billing-dues-chart__bar:hover { opacity: 0.82; }
+
+.billing-dues-chart__caption {
+  margin-top: 8px;
+  min-height: 1.35em;
+  color: var(--billing-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.billing-dues-donut {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px 16px;
+  flex-wrap: wrap;
+}
+
+.billing-dues-donut__figure { flex: 0 0 auto; }
+
+/* 15rem is the point below which a party name would be ellipsised to
+   uselessness. Under that the legend wraps beneath the ring and takes the
+   whole card, which fits "Global Marketing Pvt Ltd" without cutting it. */
+.billing-dues-donut__legend {
+  flex: 1 1 15rem;
+  /* `min-width: 0` alone lets the legend shrink below its basis instead of
+     wrapping, which is what was cutting the names. This makes it wrap first
+     and only then shrink, and `100%` keeps it from overflowing once wrapped. */
+  min-width: min(14rem, 100%);
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Without this the list item keeps its content width, the name never
+   ellipsises, and the share column is pushed off the edge of the card. */
+.billing-dues-donut__legend > li { min-width: 0; }
+
+.billing-dues-donut__row {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  width: 100%;
+  padding: 3px 4px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  font-size: 12px;
+}
+
+button.billing-dues-donut__row { cursor: pointer; }
+button.billing-dues-donut__row:hover { background: var(--billing-surface-2); }
+
+.billing-dues-donut__dot {
+  flex: 0 0 9px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  align-self: center;
+}
+
+.billing-dues-donut__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.billing-dues-donut__amount { font-variant-numeric: tabular-nums; font-weight: 650; white-space: nowrap; }
+.billing-dues-donut__share { color: var(--billing-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* ----------------------------------------------------------- quick actions */
+
+.billing-dues-actions { display: grid; gap: 7px; }
+
+.billing-dues-action {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 38px;
+  padding: 7px 11px;
+  border: 1px solid var(--billing-border);
+  border-radius: 10px;
+  background: var(--billing-surface);
+  color: var(--billing-text);
+  font-size: 12.5px;
+  font-weight: 650;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+
+.billing-dues-action:hover:not(:disabled) {
+  border-color: var(--billing-mint-strong);
+  background: var(--billing-mint);
+}
+
+.billing-dues-action:disabled { opacity: 0.5; cursor: not-allowed; }
+.billing-dues-action__mark { color: var(--billing-action); flex-shrink: 0; display: inline-flex; }
+.billing-dues-action__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+/* --------------------------------------------------------------- insights */
+
+.billing-dues-insights { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+
+.billing-dues-insight {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--billing-border);
+  border-radius: 10px;
+  background: var(--billing-surface);
+  color: inherit;
+  font: inherit;
+  font-size: 12.5px;
+  line-height: 1.5;
+  text-align: left;
+}
+
+button.billing-dues-insight { cursor: pointer; }
+button.billing-dues-insight:hover { background: var(--billing-surface-2); }
+
+.billing-dues-insight__mark { flex-shrink: 0; margin-top: 1px; }
+.billing-dues-insight--info .billing-dues-insight__mark { color: var(--billing-action); }
+.billing-dues-insight--warning .billing-dues-insight__mark { color: var(--billing-warning); }
+.billing-dues-insight--danger .billing-dues-insight__mark { color: var(--billing-danger); }
+
+.billing-dues-health {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  margin-bottom: 10px;
+}
+
+.billing-dues-health--healthy   { background: #eaf7e7; color: #216b18; }
+.billing-dues-health--watch     { background: var(--billing-warning-bg); color: #855000; }
+.billing-dues-health--attention { background: var(--billing-danger-bg); color: var(--billing-danger); }
+
+.billing-dues-health__label { font-weight: 750; white-space: nowrap; }
+.billing-dues-health__because { color: var(--billing-text); font-size: 12px; line-height: 1.45; }
+
+/* ------------------------------------------------------------------ table */
+
+.billing-dues-list {
+  min-width: 0;
+  border: 1px solid var(--billing-border);
+  border-radius: 14px;
+  background: var(--billing-surface);
+  box-shadow: 0 1px 2px rgb(16 24 40 / 4%);
+  overflow: hidden;
+}
+
+.billing-dues-toolbar {
+  display: grid;
+  grid-template-columns: minmax(240px, 1.5fr) repeat(3, minmax(126px, 0.6fr)) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 13px;
+  border-bottom: 1px solid var(--billing-border);
+}
+
+.billing-dues-search { position: relative; min-width: 0; }
+
+.billing-dues-search__icon {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--billing-muted);
+  pointer-events: none;
+}
+
+.billing-dues-search input,
+.billing-dues-toolbar select,
+.billing-dues-field input,
+.billing-dues-field select {
+  width: 100%;
+  min-height: 38px;
+  padding: 7px 11px;
+  border: 1px solid var(--billing-border);
+  border-radius: 9px;
+  background: var(--billing-surface);
+  color: var(--billing-text);
+  font-size: 12.5px;
+}
+
+.billing-dues-search input { padding-left: 33px; }
+
+.billing-dues-chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 10px 13px;
+  border-bottom: 1px solid var(--billing-border);
+  background: var(--billing-surface-2);
+}
+
+.billing-dues-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 3px 6px 3px 10px;
+  border: 1px solid var(--billing-mint-strong);
+  border-radius: 999px;
+  background: var(--billing-mint);
+  color: var(--billing-action);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.billing-dues-chip button {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.billing-dues-chip button:hover { background: var(--billing-mint-strong); }
+
+.billing-dues-more {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+  padding: 14px 13px;
+  border-bottom: 1px solid var(--billing-border);
+  background: var(--billing-surface-2);
+}
+
+.billing-dues-field { display: grid; gap: 5px; min-width: 0; }
+.billing-dues-field label { font-size: 12px; font-weight: 650; color: var(--billing-muted); }
+.billing-dues-more__foot { grid-column: 1 / -1; display: flex; gap: 8px; justify-content: flex-end; }
+
+.billing-dues-list__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-height: 46px;
+  padding: 8px 13px;
+  border-bottom: 1px solid var(--billing-border);
+}
+
+.billing-dues-list__head h2 { margin: 0; font-size: 14px; font-weight: 700; }
+.billing-dues-list__head h2 span { color: var(--billing-muted); font-weight: 500; }
+.billing-dues-list__subtotal { display: block; margin-top: 2px; color: var(--billing-muted); font-size: 12px; font-weight: 400; }
+
+.billing-dues-pager {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--billing-muted);
+  font-size: 12px;
+}
+
+.billing-dues-pager select {
+  min-height: 32px;
+  padding: 3px 7px;
+  border: 1px solid var(--billing-border);
+  border-radius: 8px;
+  background: var(--billing-surface);
+  color: var(--billing-text);
+  font-size: 12px;
+}
+
+.billing-dues-pager__button {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--billing-border);
+  border-radius: 8px;
+  background: var(--billing-surface);
+  color: var(--billing-text);
+  cursor: pointer;
+}
+
+.billing-dues-pager__button:disabled { opacity: 0.45; cursor: not-allowed; }
+.billing-dues-pager__button:hover:not(:disabled) { background: var(--billing-surface-2); }
+
+/* The bulk bar replaces the list heading rather than appearing above it: two
+   rows of controls that mean different things is how the wrong one gets used. */
+.billing-dues-bulk {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-height: 46px;
+  padding: 8px 13px;
+  border-bottom: 1px solid var(--billing-mint-strong);
+  background: var(--billing-mint);
+}
+
+.billing-dues-bulk__count { font-size: 13px; font-weight: 700; color: var(--billing-action); }
+.billing-dues-bulk__actions { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
+
+.billing-dues-scroll {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+}
+
+.billing-dues-table {
+  width: 100%;
+  min-width: 1080px;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12.5px;
+}
+
+.billing-dues-table th,
+.billing-dues-table td {
+  height: 46px;
+  padding: 7px 11px;
+  border-bottom: 1px solid #edf1ed;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.billing-dues-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--billing-surface-2);
+  color: var(--billing-muted);
+  font-size: 11.5px;
+  font-weight: 700;
+  text-align: left;
+}
+
+.billing-dues-table tbody tr:last-child td { border-bottom: 0; }
+.billing-dues-table tbody tr:hover { background: #fbfdfb; }
+.billing-dues-table tbody tr[data-selected='true'] { background: var(--billing-mint); }
+
+.billing-dues-table .billing-dues-num { text-align: right; font-variant-numeric: tabular-nums; }
+.billing-dues-table th.billing-dues-num { text-align: right; }
+.billing-dues-table .billing-dues-strong { font-weight: 700; }
+
+.billing-dues-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.billing-dues-sort:hover { color: var(--billing-text); background: rgb(0 0 0 / 4%); }
+
+.billing-dues-party { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.billing-dues-party__name { font-weight: 650; }
+.billing-dues-party__meta { color: var(--billing-muted); font-size: 11px; }
+
+.billing-dues-days--safe { color: #216b18; }
+.billing-dues-days--today { color: var(--billing-warning); font-weight: 700; }
+.billing-dues-days--late { color: var(--billing-danger); font-weight: 700; }
+.billing-dues-days--none { color: var(--billing-muted); }
+
+.billing-dues-unknown { color: var(--billing-muted); }
+
+.billing-dues-rowmenu { position: relative; display: flex; justify-content: flex-end; }
+
+.billing-dues-rowmenu__trigger {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--billing-muted);
+  cursor: pointer;
+}
+
+.billing-dues-rowmenu__trigger:hover { background: #f2f4f7; color: var(--billing-text); }
+
+.billing-dues-rowmenu__list {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 40;
+  min-width: 14rem;
+  padding: 5px;
+  background: var(--billing-surface);
+  border: 1px solid var(--billing-border);
+  border-radius: 11px;
+  box-shadow: var(--billing-shadow-lg);
+}
+
+.billing-dues-rowmenu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 9px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.billing-dues-rowmenu__item:hover { background: var(--billing-surface-2); }
+.billing-dues-rowmenu__sep { height: 1px; margin: 4px 2px; background: var(--billing-border); }
+
+/* ------------------------------------------------------------ mobile cards */
+
+.billing-dues-cards { display: none; padding: 10px; gap: 10px; }
+
+.billing-dues-mcard {
+  border: 1px solid var(--billing-border);
+  border-radius: 12px;
+  background: var(--billing-surface);
+  overflow: hidden;
+}
+
+.billing-dues-mcard[data-selected='true'] { border-color: var(--billing-mint-strong); background: var(--billing-mint); }
+
+.billing-dues-mcard__top {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px 12px;
+}
+
+.billing-dues-mcard__body { flex: 1 1 auto; min-width: 0; }
+.billing-dues-mcard__row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.billing-dues-mcard__party { color: var(--billing-muted); font-size: 12px; margin-top: 1px; }
+.billing-dues-mcard__amount { font-weight: 750; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.billing-dues-mcard__meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 7px; font-size: 12px; color: var(--billing-muted); }
+
+.billing-dues-mcard__more {
+  display: grid;
+  gap: 6px;
+  padding: 0 12px 12px;
+  font-size: 12.5px;
+}
+
+.billing-dues-mcard__more dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; }
+.billing-dues-mcard__more dt { color: var(--billing-muted); }
+.billing-dues-mcard__more dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+
+.billing-dues-mcard__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 38px;
+  padding: 8px;
+  border: 0;
+  border-top: 1px solid var(--billing-border);
+  background: transparent;
+  color: var(--billing-action);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+/* ----------------------------------------------------------------- states */
+
+.billing-dues-empty {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 44px 20px;
+  text-align: center;
+  color: var(--billing-muted);
+}
+
+.billing-dues-empty__mark {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--billing-mint);
+  color: var(--billing-action);
+}
+
+.billing-dues-empty__title { color: var(--billing-text); font-size: 15px; font-weight: 700; }
+.billing-dues-empty p { margin: 0; max-width: 42ch; font-size: 13px; line-height: 1.5; }
+
+.billing-dues-skeleton { display: block; border-radius: 7px; background: #e9efea; animation: billing-pulse 1.4s ease-in-out infinite; }
+.billing-dues-skeleton--kpi { width: 62%; height: 24px; margin-top: 2px; }
+.billing-dues-skeleton--meta { width: 42%; height: 11px; margin-top: 8px; }
+.billing-dues-skeleton--chart { width: 100%; height: 186px; border-radius: 11px; }
+.billing-dues-skeleton--cell { display: inline-block; width: 100%; height: 12px; }
+
+/* ------------------------------------------------------------ responsive */
+
+@media (max-width: 1380px) {
+  .billing-dues__kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .billing-dues__analytics { grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); }
+  .billing-dues__analytics > :nth-child(3) { grid-column: 1 / -1; }
+  .billing-dues-actions { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+  .billing-dues-toolbar { grid-template-columns: minmax(220px, 1.4fr) repeat(3, minmax(120px, 0.7fr)); }
+  .billing-dues-toolbar > :last-child { grid-column: 1 / -1; justify-self: start; }
+}
+
+@media (max-width: 1024px) {
+  .billing-dues__kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .billing-dues__analytics { grid-template-columns: minmax(0, 1fr); }
+  .billing-dues__analytics > :nth-child(3) { grid-column: auto; }
+  .billing-dues-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .billing-dues-toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .billing-dues-search { grid-column: 1 / -1; }
+  .billing-dues__header { align-items: stretch; flex-direction: column; }
+  .billing-dues__header-actions { justify-content: flex-start; }
+}
+
+@media (max-width: 720px) {
+  .billing-dues__header h1 { font-size: 23px; }
+  .billing-dues__kpis {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    padding-bottom: 4px;
+    margin-inline: -2px;
+    padding-inline: 2px;
+  }
+  .billing-dues-kpi { flex: 0 0 auto; min-width: 232px; scroll-snap-align: start; }
+  .billing-dues-toolbar { grid-template-columns: minmax(0, 1fr); }
+  .billing-dues-actions { grid-template-columns: minmax(0, 1fr); }
+  .billing-dues-donut { justify-content: center; }
+
+  /* A ten-column ledger squeezed onto a phone is a ledger nobody reads. The
+     same rows are drawn as cards below, from the same data and the same page. */
+  .billing-dues-scroll { display: none; }
+  .billing-dues-cards { display: grid; }
+  .billing-dues-list__head { align-items: flex-start; flex-direction: column; }
+}
+
+@media print {
+  .billing-dues__header-actions,
+  .billing-dues-toolbar,
+  .billing-dues-chips,
+  .billing-dues-more,
+  .billing-dues-pager,
+  .billing-dues-rowmenu { display: none; }
+  .billing-dues-card,
+  .billing-dues-list { break-inside: avoid; box-shadow: none; }
+  .billing-dues-scroll { display: block; overflow: visible; }
+  .billing-dues-cards { display: none; }
+}
