@@ -154,6 +154,86 @@ to walk out with the ledger. The file is the full filtered set; when the read
 could not be completed the export is refused rather than silently short. Every
 text cell is neutralised against spreadsheet formula injection.
 
+## The Items screen
+
+`/items` is the catalogue, read through to Aicountly Inventory on the request
+that draws it. **There is no items table in this product**, which is why the
+tabs, the search, the group filter, the sort and the pager all go upstream:
+Billing holds one page of rows and could only ever filter that.
+
+| Part | Where it comes from |
+|---|---|
+| Total / Stock / Service / Inactive | `GET items` with `limit=1`, read for `meta.total` |
+| Low stock | `GET reports/replenishment`, so "low" is Inventory's own reorder level |
+| The list | `GET items`, filtered, sorted and paged by Inventory |
+| The stock column | the list's own quantity, else one batched `GET stock-balances` per page |
+| The group filter | `GET item-groups` |
+
+Every narrowing is a query parameter and nothing else — the tabs **are**
+filters, so `?stock_status=low` and clicking Low Stock land in the same place,
+and a filtered list is a link somebody can send. The list/grid choice is the one
+thing kept out of the URL: it is a preference about how one person reads a
+screen, not a description of what the screen is showing.
+
+Three rules the screen holds to:
+
+* A quantity Inventory did not answer with reads **Unavailable**, never 0. A
+  service reads **—**. The difference between an empty shelf and an unanswered
+  question is the whole point of the column.
+* A type or status Inventory did not state is left blank rather than guessed.
+  An item wrongly badged "Service" is an item nobody checks the stock of.
+* A filter or an order that was asked for and plainly not applied is reported
+  above the list (`meta.upstream`), not papered over. A Low Stock tab that
+  quietly lists everything is the worst thing this screen could do.
+
+**Add item**, **Import** and **Item groups** open Inventory, carrying company,
+branch, year and a return URL — they are doors, not features Billing is
+missing. There is no Deactivate and no Delete on a row, because both would
+change Inventory's record. **Export** is CSV, built on the server from the full
+filtered set, and needs `export.data`, the same separate permission the reports
+use; every text cell goes through the same formula-injection guard.
+## Money → Bank withdrawal
+
+`/bank-cash/withdrawal`, gated on `contra.create` — the same permission the save
+asserts, so a URL typed by hand is refused exactly as the menu entry was
+withheld. A profile without it gets a sentence saying so instead of a form.
+
+What is on it, and where each thing comes from:
+
+| On screen | Source | Notes |
+|---|---|---|
+| Bank account, cash account | `v1/catalog/cash-bank` → Books' `masters/accounts` | The ledgers that may be posted to. Nothing is cached |
+| Which of them is cash and which is bank | `v1/cash-bank`, else the ledger's own `group_name` | Books' own classification either way, never the ledger's name — "Cash Credit A/c" is a bank. Neither available → **both lists show every ledger** rather than a guess |
+| Available balance, estimated balance after | `v1/cash-bank` | `cash.view` / `bank.view` decide whether a balance is shown at all. The estimate is arithmetic on screen and is written nowhere |
+| Last 30 days withdrawals, and the count | `v1/bank-withdrawals/summary` | Billing's own request rows for that account, in the company's timezone. Says so under the figure |
+| Recent bank withdrawals | `v1/bank-withdrawals/recent` | Billing's own posted requests; the account NAMES are read live from Books on the request |
+| The financial year a date must fall in | Manage, via `v1/manage/companyinfo` | Failing to read it costs the check, not the screen |
+
+Saving is `POST v1/transactions/bank_withdrawal` — the call this screen's
+predecessor already made, with the fields that request already accepted
+(`from_account_id`, `to_account_id`, `amount`, `date`, `instrument_no`,
+`narration`). **Books makes the entry.** Billing posts no ledger lines, computes
+no double entry, and keeps no balance; what it keeps is the request row that
+makes a retry safe, which is what the recent list and the 30-day figure are read
+back from.
+
+Two endpoints are new, both `contra.create`, both read-only, and both shaped on
+`v1/expenses/recent`: `GET v1/bank-withdrawals/recent` and
+`GET v1/bank-withdrawals/summary`. Neither is a second cash book — each carries
+a `basis` line that the screen prints, saying it covers what Billing recorded
+and not what was entered directly in Books.
+
+Deliberate refusals on this screen:
+
+* **Repeat from last** copies the two accounts and never the amount or the
+  cheque number. Reusing either is how one withdrawal becomes two.
+* **A possible duplicate warns and never blocks** — two withdrawals of the same
+  round figure on one day is a real thing that happens.
+* **More than the balance warns and never blocks** — an account may be allowed
+  to go overdrawn, and Billing is not the product that knows.
+* **Editing or cancelling a posted withdrawal is not offered**, because the
+  voucher is Books' and there is no Billing route that would do it.
+
 ## Permissions added
 
 | Permission | Grants |
@@ -183,15 +263,17 @@ approximated.
 
 ## Verification
 
-* `server-php/tests/run.sh` — 64 passing, 0 failing, against a real PostgreSQL
-  and a stub standing in for Books and Inventory.
+* `server-php/tests/run.sh` — 95 passing, 0 failing, against a real
+  PostgreSQL and a stub standing in for Books and Inventory. Among them the
+  release-blocking pair, which fail the build if a table or column ever starts
+  holding a voucher, ledger, balance, item or party.
 * `npm test` in `web/` — the ageing, status, filter, summary and export rules,
   run by node's own test runner against `src/receivables/model.ts`. No test
   framework is installed; that file imports nothing, so node runs it directly.
-* `npm run build` in `web/` — `tsc -b` clean, seven lazy chunks.
-* Visual pass at 1920, 1366, 820 and 414 px across the five dashboards and both
-  dues screens, via `web/visual.html` — a development-only entry point that
-  mounts the real components against fixtures. `vite build` does not include it,
-  and no fake record is written anywhere. `?state=empty|error|slow` exercises the
-  three states the screens must survive, and `?as=biller` the permission-limited
-  profile.
+* `npm run build` in `web/` — `tsc -b` clean, thirteen lazy chunks.
+* Visual pass across the five dashboards, the Items workspace, the expense,
+  bank-withdrawal, sale, credit-note and money screens and both dues screens,
+  via `web/visual.html` — a development-only entry point that mounts the real
+  components against fixtures, including their unavailable states
+  (`?fail=balance,withdrawals`, `?state=error`). `vite build` does not include
+  it, and no fake record is written anywhere.

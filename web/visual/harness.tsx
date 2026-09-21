@@ -11,9 +11,13 @@
  * none of this reaches the deployed bundle.
  *
  *   /visual.html?screen=overview&as=owner
- *   /visual.html?screen=receivables&state=empty
- *   /visual.html?screen=receivables&state=error
- *   /visual.html?screen=receivables&as=biller     (no receipt or reminder rights)
+ *   /visual.html?screen=bank-withdrawal&fail=balance
+ *   /visual.html?screen=dues&state=empty|error|slow
+ *   /visual.html?screen=dues&as=biller            (no receipt or reminder rights)
+ *   /visual.html?screen=items&at=stock_status%3Dlow
+ *   /visual.html?screen=dues&router=browser       (the real router and the real
+ *                                                  back button, for the filters
+ *                                                  that live in the address bar)
  */
 
 import { StrictMode } from 'react'
@@ -28,6 +32,12 @@ import Receivables from '../src/dashboards/Receivables'
 import Payables from '../src/dashboards/Payables'
 import CashCompliance from '../src/dashboards/CashCompliance'
 import { DuesScreen } from '../src/receivables/DuesScreen'
+import { MoneyScreen } from '../src/pages/money/MoneyScreen'
+import ExpensePage from '../src/pages/expense/ExpensePage'
+import ItemsPage from '../src/pages/items/ItemsPage'
+import BankWithdrawalPage from '../src/pages/bank-withdrawal/BankWithdrawalPage'
+import SalesBillPage from '../src/pages/sale/SalesBillPage'
+import CreditNotePage from '../src/pages/credit-note/CreditNotePage'
 import { saveSession, setAuthToken } from '../src/auth/tokens'
 import { setScope } from '../src/services/api'
 import * as fixtures from './fixtures'
@@ -44,6 +54,50 @@ const state = params.get('state') ?? 'normal'
 // which lets the sidebar highlight the route each screen really sits on.
 const realRouter = params.get('router') === 'browser'
 
+/**
+ * Endpoints to answer with a 503, as `?fail=recent,categories`.
+ *
+ * Photographing what a screen does when one of its panels cannot load is the
+ * other half of what this booth is for: the expense form has to stay usable
+ * when the recent list does not arrive, and that is only checkable if the
+ * booth can refuse to answer.
+ */
+const failing = new Set((params.get('fail') ?? '').split(',').filter(Boolean))
+
+/**
+ * The screen's OWN query string, as `?at=stock_status%3Dlow`.
+ *
+ * Screens that keep their state in the address bar — the Items workspace does —
+ * cannot be photographed in their filtered, sorted or paged states without it,
+ * because the booth mounts them in a MemoryRouter and the browser's query
+ * string never reaches the app's router.
+ */
+const at = params.get('at') ?? ''
+
+const FAILABLE: Array<[string, RegExp]> = [
+  ['recent', /v1\/expenses\/recent/],
+  ['categories', /v1\/catalog\/expense-accounts/],
+  ['paid-from', /v1\/catalog\/cash-bank/],
+  ['parties', /v1\/catalog\/parties/],
+  ['capabilities', /v1\/expenses\/capabilities/],
+  ['items', /v1\/catalog\/items(\?|$)/],
+  ['stats', /v1\/catalog\/items\/stats/],
+  ['groups', /v1\/catalog\/item-groups/],
+  ['tax', /v1\/catalog\/tax-categories/],
+  ['stock', /v1\/catalog\/stock/],
+  ['open-bills', /v1\/open-bills/],
+  ['bills', /v1\/original-documents(\?|$)/],
+  ['bill-lines', /v1\/original-documents\/\d+/],
+  ['warehouses', /v1\/catalog\/warehouses/],
+  ['trend', /v1\/credit-notes\/trend/],
+  ['issue', /v1\/transactions\/credit_note/],
+  // The withdrawal screen's two sidebar panels and its balance, each of which
+  // has to be able to fail without taking the form down with it.
+  ['balance', /\/v1\/cash-bank(\?|$)/],
+  ['withdrawals', /v1\/bank-withdrawals\/recent/],
+  ['withdrawal-summary', /v1\/bank-withdrawals\/summary/],
+]
+
 const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
   overview: { path: '/dashboard/overview', element: <Overview /> },
   biller: { path: '/dashboard/biller', element: <BillerDesk /> },
@@ -54,6 +108,13 @@ const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
   // The bill-by-bill screens. `/receivables` is the one the menu points at.
   dues: { path: '/receivables', element: <DuesScreen side="receivable" /> },
   'dues-payable': { path: '/payables', element: <DuesScreen side="payable" /> },
+  'money-out': { path: '/money-out/new', element: <MoneyScreen direction="out" /> },
+  'money-in': { path: '/money-in/new', element: <MoneyScreen direction="in" /> },
+  expense: { path: '/more/expense', element: <ExpensePage /> },
+  items: { path: '/items', element: <ItemsPage /> },
+  sale: { path: '/sales/new', element: <SalesBillPage /> },
+  'credit-note': { path: '/more/credit-note', element: <CreditNotePage /> },
+  'bank-withdrawal': { path: '/bank-cash/withdrawal', element: <BankWithdrawalPage /> },
 }
 
 const DUES = /v1\/(receivables|payables)(\?|$)/
@@ -88,14 +149,52 @@ const RESPONSES: Array<[RegExp, unknown | ((url: string) => unknown)]> = [
     { item_id: 2, item_name: 'Blue Ball Pen', item_sku: 'PEN-BL', unit_id: 1, hsn_sac: '9608', mrp: '12' },
     { item_id: 3, item_name: 'Stapler', item_sku: 'STP-01', unit_id: 1, hsn_sac: '8472', mrp: '450' },
   ]],
+  [/v1\/transactions\/(payment|receipt)/, fixtures.savedPayment],
+  [/v1\/transactions\/sale/, fixtures.savedSale],
+  [/v1\/money\/party-context/, fixtures.moneyPartyContext],
+  [/v1\/money\/recent/, fixtures.moneyRecent],
+  [/v1\/open-bills/, fixtures.openBills],
+  [/v1\/original-documents\/\d+/, fixtures.originalDocument],
+  [/v1\/original-documents/, fixtures.originalDocuments],
+  [/v1\/credit-notes\/trend/, fixtures.creditNoteTrend],
+  [/v1\/catalog\/warehouses/, fixtures.warehouses],
+  [/v1\/transactions\/credit_note/, fixtures.savedCreditNote],
+  [/v1\/catalog\/expense-accounts/, fixtures.expenseAccounts],
+  [/v1\/catalog\/tax-categories/, fixtures.taxCategories],
+  [/v1\/catalog\/items\/stats/, fixtures.catalogItemStats],
+  [/v1\/catalog\/item-groups/, fixtures.catalogItemGroups],
+  [/v1\/expenses\/recent/, fixtures.recentExpenses],
+  [/v1\/transactions\/expense/, fixtures.savedExpense],
+  [/v1\/expenses\/capabilities/, fixtures.expenseCapabilities],
+  // One entry, shared: this list is matched in order and a second
+  // cash-bank pattern below would never be reached.
+  [/v1\/catalog\/cash-bank/, fixtures.cashBankAccounts],
+  // The BALANCES are a different endpoint, and its pattern is anchored so it
+  // cannot swallow the catalog URL above.
+  [/\/v1\/cash-bank(\?|$)/, fixtures.cashBankBalances],
+  [/v1\/bank-withdrawals\/recent/, fixtures.recentWithdrawals],
+  [/v1\/bank-withdrawals\/summary/, fixtures.withdrawalSummary],
+  [/v1\/transactions\/bank_withdrawal/, fixtures.savedWithdrawal],
   [/v1\/manage\/companies/, { data: [{ cmp_id: 1, cmp_name: 'Sharma Enterprises' }], meta: { total: 1 } }],
   [/v1\/manage\/companyinfo/, {
     cmp_id: 1,
     cmp_name: 'Sharma Enterprises',
-    fy_list: [{ fy_id: 4, fy_name: 'FY 2026–27' }],
+    gstin: '27AAACS1234F1Z5',
+    ro_address: 'Unit 4, Sai Industrial Estate\nAndheri East, Mumbai, Maharashtra\n400093',
+    fy_list: [{ fy_id: 4, fy_name: 'FY 2026-27', fy_start: '2026-04-01', fy_end: '2027-03-31' }],
     branch_list: [{ bo_id: 1, bo_name: 'Main Branch', is_head_office: true }],
   }],
 ]
+
+/**
+ * Every item the booth knows, across both screens' fixtures.
+ *
+ * The two lists carry different fields — one has barcodes, the other does not
+ * — so they are read loosely here rather than being forced into one shape the
+ * real Inventory payload does not have either.
+ */
+type LooseItem = Record<string, string | number | null | undefined>
+const everyItem = (): LooseItem[] => [...fixtures.catalogItems, ...fixtures.saleItems] as unknown as LooseItem[]
 
 const originalFetch = window.fetch.bind(window)
 
@@ -115,6 +214,137 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Res
       { error: { code: 'books_unavailable', message: 'Could not reach Smart Books to work out money to collect. Please retry.' } },
       503,
     )
+  }
+
+  for (const [key, pattern] of FAILABLE) {
+    if (failing.has(key) && pattern.test(url)) {
+      return new Response(JSON.stringify({ error: { code: 'upstream_unavailable', message: 'Not answering, by request.' } }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+  }
+
+  /**
+   * The item list really filters, sorts and pages.
+   *
+   * Which is the only way the tabs, the search box, the sort arrows, the pager
+   * and BOTH empty states can be photographed — a fixture that answers the same
+   * ten rows to every request proves the table draws and nothing else.
+   */
+  if (/v1\/catalog\/items(\?|$)/.test(url)) {
+    const params = new URL(url, window.location.origin).searchParams
+    const term = (params.get('q') ?? '').toLowerCase()
+    const type = params.get('type')
+    const status = params.get('status')
+    const stockStatus = params.get('stock_status')
+    const groupId = params.get('group_id')
+    const sort = params.get('sort')
+    const descending = params.get('order') === 'desc'
+    const limit = Number(params.get('limit') ?? 25)
+    const offset = Number(params.get('offset') ?? 0)
+
+    let rows = fixtures.catalogItems.filter((item) => {
+      if (term && ![item.item_name, item.item_sku, item.hsn_sac].some((field) => (field ?? '').toLowerCase().includes(term))) return false
+      if (type && item.type !== type) return false
+      if (status === 'active' && item.is_active === false) return false
+      if (status === 'inactive' && item.is_active !== false) return false
+      if (stockStatus && item.stock.state !== stockStatus) return false
+      if (groupId && String(item.group?.id ?? '') !== groupId) return false
+      return true
+    })
+
+    if (sort) {
+      const value = (item: (typeof rows)[number]): string | number => {
+        if (sort === 'sku') return item.item_sku ?? ''
+        if (sort === 'hsn_sac') return item.hsn_sac ?? ''
+        if (sort === 'rate') return item.rate ?? 0
+        if (sort === 'stock') return item.stock.available ?? 0
+        if (sort === 'status') return item.is_active === false ? 0 : 1
+        return item.item_name
+      }
+      rows = [...rows].sort((a, b) => {
+        const left = value(a)
+        const right = value(b)
+        const comparison = typeof left === 'string' && typeof right === 'string' ? left.localeCompare(right) : Number(left) - Number(right)
+        return descending ? -comparison : comparison
+      })
+    }
+
+    const total = rows.length
+    const page = rows.slice(offset, offset + limit)
+
+    return new Response(
+      JSON.stringify({
+        data: page,
+        meta: {
+          total,
+          limit,
+          offset,
+          source: 'inventory',
+          upstream: { filters_ignored: [], sort_applied: sort ? true : null },
+        },
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    )
+  }
+
+  // Item search really searches, so a line can be added by hand in the booth
+  // and "no matches" is reachable. One list for both screens: the credit note
+  // credits what a bill sold, so the two booths have to agree about items.
+  if (/v1\/catalog\/items\/search/.test(url)) {
+    const term = (new URL(url, window.location.origin).searchParams.get('q') ?? '').toLowerCase()
+    const rows = everyItem().filter(
+      (row) => (row.item_name ?? '').toLowerCase().includes(term) || (row.item_sku ?? '').toLowerCase().includes(term),
+    )
+    return new Response(JSON.stringify({ data: rows, meta: { total: rows.length, limit: 20, offset: 0 } }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  // Scan: a real barcode where the fixture carries one, an SKU otherwise —
+  // the credit note booth scans by SKU. Anything else 404s, which is the path
+  // the bill screen falls back to the ordinary search on.
+  if (/v1\/catalog\/items\/barcode\//.test(url)) {
+    const code = decodeURIComponent(url.split('/barcode/')[1]?.split('?')[0] ?? '').toLowerCase()
+    const item = everyItem().find(
+      (row) => (row.barcode ?? '').toLowerCase() === code || (row.item_sku ?? '').toLowerCase() === code,
+    )
+    return new Response(JSON.stringify(item ? { data: item } : { error: { code: 'not_found', message: 'No such code.' } }), {
+      status: item ? 200 : 404,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  // Party search really searches, so the empty state is reachable here too.
+  if (/v1\/catalog\/parties/.test(url)) {
+    const term = (new URL(url, window.location.origin).searchParams.get('q') ?? '').toLowerCase()
+    const side = new URL(url, window.location.origin).searchParams.get('side') ?? 'customer'
+    const pool = side === 'supplier' ? fixtures.suppliers : fixtures.customers
+    const rows = pool.filter((row) => row.acc_name.toLowerCase().includes(term))
+    return new Response(JSON.stringify({ data: rows, meta: { total: rows.length, limit: 20, offset: 0 } }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  if (/v1\/catalog\/stock/.test(url)) {
+    const itemId = Number(new URL(url, window.location.origin).searchParams.get('item_id') ?? 0)
+    return new Response(JSON.stringify({ data: fixtures.availability[itemId] ?? {} }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  // One item by id, as the biller desk and the global search link into the bill.
+  const byId = /v1\/catalog\/items\/(\d+)/.exec(url)
+  if (byId) {
+    const hit = everyItem().find((row) => row.item_id === Number(byId[1]))
+    return new Response(JSON.stringify(hit ? { data: hit } : { error: { code: 'not_found', message: 'No such item.' } }), {
+      status: hit ? 200 : 404,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 
   for (const [pattern, payload] of RESPONSES) {
@@ -152,6 +382,7 @@ try {
 }
 
 const target = SCREENS[screen] ?? SCREENS.overview
+const entry = at === '' ? target.path : `${target.path}?${at}`
 
 const routes = (
   <Routes>
@@ -168,7 +399,7 @@ createRoot(document.getElementById('root')!).render(
         {realRouter ? (
           <BrowserRouter>{routes}</BrowserRouter>
         ) : (
-          <MemoryRouter initialEntries={[target.path]}>{routes}</MemoryRouter>
+          <MemoryRouter initialEntries={[entry]}>{routes}</MemoryRouter>
         )}
       </BillingProvider>
     </AuthProvider>

@@ -60,8 +60,27 @@ export const ownerSession: BillingSession = {
         { label: 'Credit note', path: '/more/credit-note' },
       ],
     },
-    { key: 'purchases', label: 'Purchases', path: '/purchases', children: [] },
-    { key: 'money', label: 'Money', path: '/money-in', children: [] },
+    {
+      key: 'purchases',
+      label: 'Purchases',
+      path: '/purchases',
+      children: [
+        { label: 'New purchase', path: '/purchases/new' },
+        { label: 'Debit note', path: '/more/debit-note' },
+        { label: 'Expense', path: '/more/expense' },
+      ],
+    },
+    {
+      key: 'money',
+      label: 'Money',
+      path: '/money-in',
+      children: [
+        { label: 'Money received', path: '/money-in/new' },
+        { label: 'Money paid', path: '/money-out/new' },
+        { label: 'Bank deposit', path: '/bank-cash/deposit' },
+        { label: 'Bank withdrawal', path: '/bank-cash/withdrawal' },
+      ],
+    },
     { key: 'receivables', label: 'Money to Collect', path: '/receivables', children: [] },
     { key: 'payables', label: 'Money to Pay', path: '/payables', children: [] },
     { key: 'parties', label: 'Parties', path: '/parties', children: [] },
@@ -343,7 +362,7 @@ export const payables: PayablesDashboard = {
           peer_bills: [],
         },
         {
-          row_key: 'bill-2', voucher_id: 4505, voucher_uuid: 'p-5', supplier: 'Aarti Plastics', supplier_id: 603,
+          row_key: 'bill-2', voucher_id: 4505, voucher_uuid: 'p-5', supplier: 'Shree Stationers', supplier_id: 603,
           bill_no: null, bill_date: '2026-09-12', recorded_on: '2026-09-13', amount: 11800, document_no: 'PUR/0005',
           flags: [{ code: 'missing_bill_no', tone: 'warning', label: 'Missing bill number', detail: "The supplier's own invoice number is not recorded.", peers: [] }],
           peer_bills: [],
@@ -422,8 +441,8 @@ export const compliance: ComplianceDashboard = {
       dependency: { owner: 'Smart Books', needs: 'A bank-reconciliation read API.', document: 'docs/BILLING_API_DEPENDENCIES.md' },
     },
     accounts: [
-      { account_id: 9001, account_name: 'Cash in hand', balance: 42500, kind: 'cash' },
-      { account_id: 9002, account_name: 'HDFC Current', balance: 282000, kind: 'bank' },
+      { account_id: 101, account_name: 'Cash in hand', balance: 42500, kind: 'cash' },
+      { account_id: 102, account_name: 'HDFC Bank · 4471', balance: 282000, kind: 'bank' },
     ],
     can_move_money: true,
     can_take_money: true,
@@ -580,3 +599,730 @@ export const receivableDuesEarlier = buildDues(
 )
 
 export const duesEmpty = buildDues('Money to collect', DUES_AS_ON, [])
+
+// ---------------------------------------------------------------------------
+// Money paid / money received
+// ---------------------------------------------------------------------------
+
+export const openBills = {
+  account_id: 601,
+  source: 'books',
+  bills: [
+    { bill_no: 'AP-9021', bill_date: '2026-08-12', due_date: '2026-09-11', balance: 11800, voucher_id: 4504, voucher_uuid: 'vch-p4' },
+    { bill_no: 'AP-9044', bill_date: '2026-08-28', due_date: '2026-09-27', balance: 26500, voucher_id: 4508, voucher_uuid: 'vch-p8' },
+    { bill_no: 'AP-9070', bill_date: '2026-09-09', due_date: '2026-10-09', balance: 9400, voucher_id: 4512, voucher_uuid: 'vch-p12' },
+  ],
+}
+
+export const moneyPartyContext = {
+  party_account_id: 601,
+  direction: 'out',
+  looked_back_days: 180,
+  from: '2026-03-23',
+  to: '2026-09-19',
+  available: true,
+  complete: true,
+  entries_in_window: 6,
+  last: { date: '2026-08-22', amount: 18000, document_no: 'PAY/0044', voucher_id: 4290, days_ago: 28 },
+  source: 'books',
+}
+
+export const moneyRecent = {
+  direction: 'out',
+  period: {
+    key: 'month',
+    label: 'September 2026',
+    from: '2026-09-01',
+    to: '2026-09-19',
+    previous_from: '2026-08-13',
+    previous_to: '2026-08-31',
+    previous_label: 'the previous 19 days',
+  },
+  available: true,
+  reason: null,
+  complete: true,
+  source: 'books',
+  note: 'Read from Smart Books as this screen opened. Billing keeps no copy.',
+  summary: {
+    available: true,
+    reason: null,
+    total: 124500,
+    count: 8,
+    average: 15562.5,
+    largest: { amount: 48000, party: 'Mahalaxmi Distributors', party_id: 602, date: '2026-09-12', voucher_id: 4305 },
+    comparison: {
+      available: true,
+      percent: 12.4,
+      direction: 'up',
+      label: '+12.4% vs the previous 19 days',
+      tone: 'warning',
+      previous: 110800,
+    },
+  },
+  rows: [
+    {
+      voucher_id: 4310, voucher_uuid: 'vch-p10', document_no: 'PAY/0051', date: '2026-09-19',
+      party: 'Office Rent', party_id: 701, amount: 50000, status: null,
+      request_id: 221, kind: 'expense', account_id: 102, account_name: 'HDFC Bank · 4471',
+      payment_mode: 'bank_transfer', reference_no: 'UTR123456789', narration: 'September rent',
+      created_by: 'demo-owner', recorded_here: true,
+    },
+    {
+      voucher_id: 4309, voucher_uuid: 'vch-p9', document_no: 'PAY/0050', date: '2026-09-18',
+      party: 'Shree Stationers', party_id: 601, amount: 25000, status: null,
+      request_id: 219, kind: 'payment', account_id: 102, account_name: 'HDFC Bank · 4471',
+      payment_mode: 'upi', reference_no: '8901234567', narration: 'Material payment against AP-9021 and part of AP-9044',
+      created_by: 'someone-else', recorded_here: true,
+    },
+    {
+      voucher_id: 4308, voucher_uuid: 'vch-p8', document_no: 'PAY/0049', date: '2026-09-17',
+      party: 'Electricity Board', party_id: 702, amount: 12450, status: null,
+      request_id: null, kind: null, account_id: null, account_name: null,
+      payment_mode: null, reference_no: null, narration: null,
+      created_by: null, recorded_here: false,
+    },
+    {
+      voucher_id: 4307, voucher_uuid: 'vch-p7', document_no: 'PAY/0048', date: '2026-09-15',
+      party: 'R.K. Industries', party_id: 603, amount: 18000, status: null,
+      request_id: 214, kind: 'payment', account_id: 103, account_name: 'ICICI Current · 9082',
+      payment_mode: 'cheque', reference_no: '245678', narration: 'Against bill no. 456',
+      created_by: 'demo-owner', recorded_here: true,
+    },
+    {
+      voucher_id: 4305, voucher_uuid: 'vch-p5', document_no: 'PAY/0047', date: '2026-09-12',
+      party: 'Mahalaxmi Distributors', party_id: 602, amount: 48000, status: null,
+      request_id: 208, kind: 'payment', account_id: 101, account_name: 'Cash in hand',
+      payment_mode: 'cash', reference_no: null, narration: null,
+      created_by: 'demo-owner', recorded_here: true,
+    },
+  ],
+}
+
+/** What the API answers when the harness "saves" an entry. */
+export const savedPayment = {
+  request_id: 999,
+  request_uuid: 'demo-request',
+  kind: 'payment',
+  status: 'POSTED',
+  party_account_id: 601,
+  transaction_date: '2026-09-19',
+  payload: {},
+  books_voucher_id: 4399,
+  books_voucher_uuid: 'vch-p99',
+  books_voucher_no: 'PAY/0052',
+  last_error: null,
+  created_at: '2026-09-19T10:00:00Z',
+}
+
+// ---------------------------------------------------------------------------
+// Purchases → Expense
+// ---------------------------------------------------------------------------
+
+/** Expense heads, as Books' account list returns them. */
+export const expenseAccounts = [
+  { acc_id: 810, acc_name: 'Office Supplies' },
+  { acc_id: 811, acc_name: 'Travel & Conveyance' },
+  { acc_id: 812, acc_name: 'Rent' },
+  { acc_id: 813, acc_name: 'Electricity & Utilities' },
+  { acc_id: 814, acc_name: 'Professional Fees' },
+  { acc_id: 815, acc_name: 'Marketing & Advertising' },
+  { acc_id: 816, acc_name: 'Repairs & Maintenance' },
+  { acc_id: 817, acc_name: 'Printing & Stationery' },
+  { acc_id: 818, acc_name: 'Staff Welfare' },
+  { acc_id: 819, acc_name: 'Other Expenses' },
+]
+
+// One list for both money screens and the expense screen: the harness matches
+// RESPONSES in order, so a second entry for v1/catalog/cash-bank would never
+// be reached. `group_name` is what the money screens show under "Paid from".
+export const cashBankAccounts = [
+  { acc_id: 101, acc_name: 'Cash in hand', group_name: 'Cash-in-hand' },
+  { acc_id: 102, acc_name: 'HDFC Bank · 4471', group_name: 'Bank Accounts', account_no: '502000124471' },
+  { acc_id: 103, acc_name: 'ICICI Current · 9082', group_name: 'Bank Accounts', account_no: '123456789082' },
+  { acc_id: 104, acc_name: 'Petty cash — counter', group_name: 'Cash-in-hand' },
+]
+
+export const taxCategories = [
+  // The rate is what Books returns alongside the name. The bill screen reads it
+  // to draw its GST estimate and leaves the estimate out when it is absent, so
+  // both halves of that are reachable in the booth.
+  { tax_cat_id: 1, tax_cat_name: 'GST 18%', tax_rate: 18 },
+  { tax_cat_id: 2, tax_cat_name: 'GST 12%', tax_rate: 12 },
+  { tax_cat_id: 3, tax_cat_name: 'GST 5%', tax_rate: 5 },
+  { tax_cat_id: 4, tax_cat_name: 'Exempt', tax_rate: 0 },
+]
+
+/** Customers, as Books' account list describes them. 27 = Maharashtra, 03 = Punjab. */
+/** Items, as Inventory describes them. */
+export const saleItems = [
+  {
+    item_id: 301,
+    item_name: 'Premium Copier Paper A4 · 75 GSM',
+    item_sku: 'PW-001',
+    unit_id: 1,
+    unit_name: 'Ream',
+    hsn_sac: '4802',
+    barcode: '8901234567890',
+    mrp: '320',
+    sale_rate: 285,
+    tax_cat_id: 1,
+  },
+  {
+    item_id: 302,
+    item_name: 'Gel Pen · Blue (Box of 20)',
+    item_sku: 'PEN-BL-20',
+    unit_id: 2,
+    unit_name: 'Box',
+    hsn_sac: '9608',
+    barcode: '8901234567906',
+    mrp: '240',
+    sale_rate: 210,
+    tax_cat_id: 1,
+  },
+  {
+    item_id: 303,
+    item_name: 'Heavy Duty Stapler',
+    item_sku: 'STP-01',
+    unit_id: 3,
+    unit_name: 'Nos',
+    hsn_sac: '8472',
+    barcode: '8901234567913',
+    mrp: '520',
+    sale_rate: 450,
+    tax_cat_id: 2,
+  },
+  {
+    item_id: 304,
+    item_name: 'Annual Maintenance — Printers',
+    item_sku: 'AMC-PRN',
+    unit_id: 3,
+    unit_name: 'Nos',
+    hsn_sac: '998719',
+    mrp: '12000',
+    sale_rate: 12000,
+    tax_cat_id: 1,
+  },
+]
+
+/** What Inventory says is on the shelf, by item id. */
+export const availability: Record<number, { item_id: number; available_qty: number }> = {
+  301: { item_id: 301, available_qty: 42 },
+  302: { item_id: 302, available_qty: 4 },
+  303: { item_id: 303, available_qty: 0 },
+  304: { item_id: 304, available_qty: 0 },
+}
+
+/** What `POST v1/transactions/sale` hands back. */
+export const savedSale = {
+  request_id: 4410,
+  request_uuid: '8b1f2c60-1f7f-4d3d-9f1b-2f9a3d1c77aa',
+  kind: 'sale',
+  status: 'POSTED',
+  party_account_id: 501,
+  transaction_date: '2026-09-21',
+  payload: {},
+  books_voucher_id: 55231,
+  books_voucher_uuid: '0a2a9a1e-77aa-4f11-9d20-3c1b8a7d4410',
+  books_voucher_no: 'AIC-1025',
+  last_error: null,
+  created_at: '2026-09-21T09:15:00Z',
+}
+
+export const expenseCapabilities = {
+  bill_storage: {
+    available: false,
+    reason: 'No document service here, so the file itself cannot be kept — record where the bill is.',
+    accepts: ['application/pdf', 'image/jpeg', 'image/png'],
+    max_bytes: 10485760,
+  },
+  bill_extraction: {
+    available: false,
+    reason:
+      'Needs a document-extraction service, and none is configured for this deployment. Typing the details records exactly the same expense.',
+  },
+}
+
+export const recentExpenses = {
+  rows: [
+    {
+      request_id: 9104, date: '2026-09-15', amount: 2450, note: 'Office stationery', reference_no: 'INV-2291',
+      category_id: 810, category_name: 'Office Supplies', paid_from_id: 101, paid_from_name: 'Cash in hand',
+      party_account_id: null, voucher_id: 55201, voucher_no: 'PAY/0091',
+    },
+    {
+      request_id: 9103, date: '2026-09-14', amount: 1320, note: 'Client meeting — cab', reference_no: null,
+      category_id: 811, category_name: 'Travel & Conveyance', paid_from_id: 101, paid_from_name: 'Cash in hand',
+      party_account_id: null, voucher_id: 55188, voucher_no: 'PAY/0090',
+    },
+    {
+      request_id: 9102, date: '2026-09-12', amount: 999, note: 'Internet bill', reference_no: 'ACT-88213',
+      category_id: 813, category_name: 'Electricity & Utilities', paid_from_id: 102, paid_from_name: 'HDFC Bank · 4471',
+      party_account_id: 604, voucher_id: 55140, voucher_no: 'PAY/0088',
+    },
+    {
+      request_id: 9101, date: '2026-09-10', amount: 4000, note: 'Accounting software subscription', reference_no: 'SUB-5512',
+      category_id: 814, category_name: 'Professional Fees', paid_from_id: 102, paid_from_name: 'HDFC Bank · 4471',
+      party_account_id: 605, voucher_id: 55102, voucher_no: 'PAY/0085',
+    },
+  ],
+  names_available: true,
+  basis:
+    "Expenses recorded from Billing in this company and year. Expenses entered directly in Smart Books are in Books' own register.",
+}
+
+export const suppliers = [
+  { acc_id: 601, acc_name: 'Shree Stationers', gstin: '29ABCDE1234F1Z5' },
+  { acc_id: 602, acc_name: 'Mahalaxmi Distributors', gstin: null },
+  { acc_id: 603, acc_name: 'R.K. Industries', gstin: '29AAECR9876M1Z4' },
+  { acc_id: 604, acc_name: 'Airtel Broadband', gstin: '29AAACB2894G1ZX' },
+  { acc_id: 605, acc_name: 'Nandi & Associates', gstin: null },
+]
+
+/** What the API returns when the harness "saves" an expense. */
+export const savedExpense = {
+  request_id: 9105,
+  request_uuid: '8f2c1a10-0000-4000-8000-000000009105',
+  kind: 'expense',
+  status: 'POSTED',
+  party_account_id: null,
+  transaction_date: '2026-09-19',
+  payload: {},
+  books_voucher_id: 55260,
+  books_voucher_uuid: 'v-55260',
+  books_voucher_no: 'PAY/0092',
+  last_error: null,
+  created_at: '2026-09-19T06:10:00Z',
+}
+
+// ---------------------------------------------------------------------------
+// The Items workspace
+// ---------------------------------------------------------------------------
+
+/**
+ * A catalogue with every shape the screen has to survive in it.
+ *
+ * Deliberately awkward: an item with no SKU, one with a name longer than the
+ * column, an amount in lakhs, a service with no stock, an item running low,
+ * one out of stock, one withdrawn, and one Inventory said nothing useful about
+ * at all. Photographing a screen where every row is tidy proves nothing.
+ */
+export const catalogItems = [
+  row(1, 'Ballpoint Pens', {
+    description: 'Smooth writing | Blue',
+    sku: 'PEN-001',
+    hsn: '960810',
+    type: 'stock',
+    group: [3, 'Stationery'],
+    rate: 12,
+    stock: [1250, 100],
+  }),
+  row(2, 'A4 Notebook', {
+    description: '200 Pages | Single Line',
+    sku: 'NB-002',
+    hsn: '482020',
+    type: 'stock',
+    group: [3, 'Stationery'],
+    rate: 45,
+    stock: [320, 60],
+  }),
+  row(3, 'Laptop — Dell Inspiron 15 3520 with 16GB RAM and 512GB NVMe storage', {
+    description: '15.6" | 16GB | 512GB SSD',
+    sku: 'LAP-001',
+    hsn: '847130',
+    type: 'stock',
+    group: [4, 'Computers'],
+    rate: 52000,
+    stock: [15, 5],
+  }),
+  row(4, 'Installation Service', {
+    description: 'On-site installation',
+    sku: 'SERV-001',
+    hsn: '998719',
+    type: 'service',
+    group: [7, 'Services'],
+    rate: 1500,
+  }),
+  row(5, 'Office Chair', {
+    description: 'Ergonomic | Adjustable',
+    sku: 'CHR-001',
+    hsn: '940130',
+    type: 'stock',
+    group: [5, 'Furniture'],
+    rate: 3800,
+    stock: [8, 10],
+  }),
+  row(6, 'Annual AMC', {
+    description: 'Comprehensive support',
+    sku: 'AMC-001',
+    hsn: '998719',
+    type: 'service',
+    group: [7, 'Services'],
+    rate: 5000,
+  }),
+  row(7, 'Whiteboard Marker', {
+    description: null,
+    sku: null,
+    hsn: '960910',
+    type: 'stock',
+    group: [3, 'Stationery'],
+    rate: 25,
+    stock: [0, 24],
+  }),
+  row(8, 'Industrial Air Compressor', {
+    description: '7.5 HP | Two stage',
+    sku: 'ACP-220',
+    hsn: '841430',
+    type: 'stock',
+    group: [6, 'Machinery'],
+    rate: 248500,
+    stock: [2, 1],
+  }),
+  row(9, 'Legacy Fax Rolls', {
+    description: 'Withdrawn from sale',
+    sku: 'FAX-010',
+    hsn: '481140',
+    type: 'stock',
+    group: [3, 'Stationery'],
+    rate: 90,
+    stock: [40, 10],
+    active: false,
+  }),
+  // Inventory answered, but said nothing about what this is or how many there
+  // are. The row still has to draw — as "—" and "Unavailable", never as 0.
+  row(10, 'Imported Gift Set', { description: null, sku: 'GFT-001', hsn: null, type: null, group: null, rate: null }),
+
+  // The three the credit note screen resolves by search and by scan. THE IDS
+  // MATTER: originalDocument's bill lines are items 401 and 402, and a booth
+  // where the bill being credited names an item the search cannot find is a
+  // booth that cannot photograph the line picker. One catalogue, because two
+  // would be two answers to "what does this company sell".
+  row(401, 'Wireless Mouse', { description: 'Wireless | Black', sku: 'M221-BLK', hsn: '8471', type: 'stock', group: [4, 'Computers'], rate: 850, stock: [64, 20] }),
+  row(402, 'USB-C Cable 1M', { description: '1 metre | Braided', sku: 'CB11-1M', hsn: '8544', type: 'stock', group: [4, 'Computers'], rate: 450, stock: [210, 50] }),
+  row(403, 'Laptop Stand', { description: 'Aluminium | Adjustable', sku: 'LS-ALU', hsn: '8473', type: 'stock', group: [4, 'Computers'], rate: 1299, stock: [18, 6] }),
+]
+
+/** One fixture row in the shape the API's normaliser produces. */
+function row(
+  id: number,
+  name: string,
+  options: {
+    description?: string | null
+    sku?: string | null
+    hsn?: string | null
+    type?: 'stock' | 'service' | null
+    group?: [number, string] | null
+    rate?: number | null
+    /** [available, reorder level] — omitted entirely means "Inventory did not say". */
+    stock?: [number, number]
+    active?: boolean
+  },
+) {
+  const isService = options.type === 'service'
+  const available = options.stock?.[0]
+  const threshold = options.stock?.[1] ?? null
+
+  let state: 'in' | 'low' | 'out' | 'none' | 'unknown' = 'unknown'
+  if (isService) state = 'none'
+  else if (available === undefined) state = 'unknown'
+  else if (available <= 0) state = 'out'
+  else if (threshold !== null && available <= threshold) state = 'low'
+  else state = 'in'
+
+  return {
+    item_id: id,
+    item_name: name,
+    item_sku: options.sku ?? null,
+    hsn_sac: options.hsn ?? null,
+    unit_id: 1,
+    mrp: options.rate === null || options.rate === undefined ? null : String(options.rate),
+    description: options.description ?? null,
+    barcode: null,
+    type: options.type === undefined ? 'stock' : options.type,
+    group: options.group ? { id: options.group[0], name: options.group[1] } : null,
+    unit_name: isService ? null : 'Nos',
+    rate: options.rate ?? null,
+    currency: 'INR',
+    is_active: options.active ?? (options.type === null ? null : true),
+    image_url: null,
+    stock: { available: isService ? null : (available ?? null), threshold: isService ? null : threshold, state },
+    source: 'inventory',
+  }
+}
+
+export const catalogItemStats = {
+  total: { value: 1248, available: true, reason: null },
+  stock: { value: 892, available: true, reason: null },
+  services: { value: 356, available: true, reason: null },
+  low_stock: { value: 24, available: true, reason: null },
+  inactive: { value: 62, available: true, reason: null },
+}
+
+export const catalogItemGroups = [
+  { group_id: 4, group_name: 'Computers' },
+  { group_id: 5, group_name: 'Furniture' },
+  { group_id: 6, group_name: 'Machinery' },
+  { group_id: 7, group_name: 'Services' },
+  { group_id: 3, group_name: 'Stationery' },
+]
+
+// ---------------------------------------------------------------------------
+// Sales → Credit note
+// ---------------------------------------------------------------------------
+
+/** Customers, for the credit note's party search. */
+export const customers = [
+  // The credit note screen's parties.
+  { acc_id: 701, acc_name: 'Vaibhav Traders', gstin: '29AACCV1234K1Z9' },
+  { acc_id: 702, acc_name: 'Sunrise Electronics', gstin: '29AASCS4411P1ZQ' },
+  { acc_id: 703, acc_name: 'Deepak General Store', gstin: null },
+  { acc_id: 704, acc_name: 'Kaveri Retail LLP', gstin: '29AAKKR7788D1ZB' },
+  // The bill screen's, which cover the three cases its GST readout has to
+  // tell apart: registered in this company's own state, registered in
+  // another, and no GSTIN at all.
+  { acc_id: 501, acc_name: 'Deshmukh Retail LLP', gstin: '27AABCD1234E1Z9' },
+  { acc_id: 502, acc_name: 'Ludhiana Cycle Works', gstin: '03AACFL5567P1ZB' },
+  { acc_id: 503, acc_name: 'Cash Sales — Counter', gstin: null },
+  { acc_id: 504, acc_name: 'Deshpande & Sons', gstin: '27AAGFD8890Q1ZK' },
+  { acc_id: 505, acc_name: 'Walk-in Customers', gstin: null },
+]
+
+/** This customer's bills, as `v1/original-documents` returns them. */
+export const originalDocuments = {
+  party_account_id: 701,
+  from: '2025-09-21',
+  to: '2026-09-21',
+  documents: [
+    {
+      voucher_id: 55201,
+      voucher_uuid: 'v-55201',
+      document_no: 'INV-2026-0912-087',
+      date: '2026-09-12',
+      party: 'Vaibhav Traders',
+      party_id: 701,
+      amount: 8500,
+      status: 'PARTIALLY_PAID',
+      outstanding: 7260,
+    },
+    {
+      voucher_id: 55188,
+      voucher_uuid: 'v-55188',
+      document_no: 'INV-2026-0829-071',
+      date: '2026-08-29',
+      party: 'Vaibhav Traders',
+      party_id: 701,
+      amount: 14250,
+      status: 'PAID',
+      outstanding: 0,
+    },
+    {
+      voucher_id: 55150,
+      voucher_uuid: 'v-55150',
+      document_no: 'INV-2026-0804-055',
+      date: '2026-08-04',
+      party: 'Vaibhav Traders',
+      party_id: 701,
+      amount: 3120,
+      status: 'UNPAID',
+      outstanding: 3120,
+    },
+  ],
+  complete: true,
+  outstanding_available: true,
+  source: 'books',
+  note: 'Read from Smart Books just now.',
+}
+
+/** One bill with the lines that were billed on it. */
+export const originalDocument = {
+  voucher_id: 55201,
+  voucher_uuid: 'v-55201',
+  document_no: 'INV-2026-0912-087',
+  date: '2026-09-12',
+  party: 'Vaibhav Traders',
+  party_id: 701,
+  amount: 8500,
+  status: 'PARTIALLY_PAID',
+  available: true,
+  reason: null,
+  lines_available: true,
+  lines: [
+    {
+      line_ref: '1',
+      item_id: 401,
+      item_name: 'Wireless Mouse',
+      sku: 'M221-BLK',
+      hsn_sac: '8471',
+      unit_id: 1,
+      unit_name: 'Nos',
+      warehouse_id: 3,
+      batch_id: null,
+      batch_no: 'BATCH-A1',
+      qty: 5,
+      rate: 850,
+      discount_pc: 0,
+      amount: 4250,
+      tax_cat_id: 4,
+      tax_rate: 18,
+      stockable: true,
+    },
+    {
+      line_ref: '2',
+      item_id: 402,
+      item_name: 'USB-C Cable 1M',
+      sku: 'CB11-1M',
+      hsn_sac: '8544',
+      unit_id: 1,
+      unit_name: 'Nos',
+      warehouse_id: 3,
+      batch_id: null,
+      batch_no: 'BATCH-B3',
+      qty: 6,
+      rate: 450,
+      discount_pc: 5,
+      amount: 2565,
+      tax_cat_id: 4,
+      tax_rate: 18,
+      stockable: true,
+    },
+    {
+      line_ref: '3',
+      item_id: null,
+      item_name: 'Installation at site',
+      sku: null,
+      hsn_sac: '9987',
+      unit_id: null,
+      unit_name: null,
+      warehouse_id: null,
+      batch_id: null,
+      batch_no: null,
+      qty: 1,
+      rate: 1200,
+      discount_pc: 0,
+      amount: 1200,
+      tax_cat_id: 4,
+      tax_rate: 18,
+      stockable: false,
+    },
+  ],
+  note: 'Read from Smart Books just now. Smart Books decides what may still be credited when the note is posted.',
+}
+
+export const warehouses = [
+  { mc_id: 3, mc_name: 'Main Warehouse' },
+  { mc_id: 4, mc_name: 'Delhi Warehouse' },
+  { mc_id: 5, mc_name: 'Counter Stock' },
+]
+
+export const creditNoteTrend = {
+  available: true,
+  reason: null,
+  label: 'September 2026',
+  from: '2026-09-01',
+  to: '2026-09-21',
+  count: 3,
+  value: 18240,
+  previous_label: '11 Aug 2026 – 31 Aug 2026',
+  previous_count: 2,
+  series: [
+    { label: '1–8', count: 1 },
+    { label: '9–16', count: 0 },
+    { label: '17–24', count: 2 },
+    { label: '25+', count: 0 },
+  ],
+  source: 'books',
+}
+
+/** What the API returns when the harness "issues" a credit note. */
+export const savedCreditNote = {
+  request_id: 9210,
+  request_uuid: '8f2c1a10-0000-4000-8000-000000009210',
+  kind: 'credit_note',
+  status: 'POSTED',
+  party_account_id: 701,
+  transaction_date: '2026-09-21',
+  payload: {},
+  books_voucher_id: 55311,
+  books_voucher_uuid: 'v-55311',
+  books_voucher_no: 'CN/0014',
+  last_error: null,
+  created_at: '2026-09-21T06:10:00Z',
+}
+
+// ---------------------------------------------------------------------------
+// Money → Bank withdrawal
+// ---------------------------------------------------------------------------
+
+/**
+ * Balances, as `v1/cash-bank` composes them from Books' account summary.
+ *
+ * The `kind` is what lets the withdrawal screen offer banks on one side and
+ * cash on the other; without it the screen falls back to the group name on the
+ * ledger, and with neither it shows every ledger in both lists — which is the
+ * state `?fail=balance` photographs.
+ */
+export const cashBankBalances = {
+  available: true,
+  cash: 42500,
+  bank: 1530500,
+  accounts: [
+    { account_id: 101, account_name: 'Cash in hand', balance: 38500, kind: 'cash' },
+    { account_id: 102, account_name: 'HDFC Bank · 4471', balance: 1248500, kind: 'bank' },
+    { account_id: 103, account_name: 'ICICI Current · 9082', balance: 282000, kind: 'bank' },
+    { account_id: 104, account_name: 'Petty cash — counter', balance: 4000, kind: 'cash' },
+  ],
+  source: 'books',
+}
+
+export const recentWithdrawals = {
+  rows: [
+    {
+      request_id: 9204, date: '2026-09-18', amount: 25000, bank_account_id: 102,
+      bank_account_name: 'HDFC Bank · 4471', cash_account_id: 101, cash_account_name: 'Cash in hand',
+      reference_no: 'CHQ002341', note: 'Counter float', voucher_id: 55240, voucher_no: 'CON/0044',
+    },
+    {
+      request_id: 9203, date: '2026-09-16', amount: 10000, bank_account_id: 103,
+      bank_account_name: 'ICICI Current · 9082', cash_account_id: 104, cash_account_name: 'Petty cash — counter',
+      reference_no: 'UTR987654321', note: null, voucher_id: 55221, voucher_no: 'CON/0043',
+    },
+    {
+      request_id: 9202, date: '2026-09-12', amount: 50000, bank_account_id: 102,
+      bank_account_name: 'HDFC Bank · 4471', cash_account_id: 101, cash_account_name: 'Cash in hand',
+      reference_no: 'CHQ002333', note: 'Wages', voucher_id: 55190, voucher_no: 'CON/0041',
+    },
+    {
+      request_id: 9201, date: '2026-09-05', amount: 15000, bank_account_id: 103,
+      bank_account_name: 'ICICI Current · 9082', cash_account_id: 101, cash_account_name: 'Cash in hand',
+      reference_no: 'Slip No. 4456', note: null, voucher_id: 55151, voucher_no: 'CON/0039',
+    },
+  ],
+  names_available: true,
+  basis:
+    "Withdrawals recorded from Billing in this company and year. Withdrawals entered directly in Smart Books are in Books' own contra register.",
+}
+
+export const withdrawalSummary = {
+  bank_account_id: 102,
+  days: 30,
+  from: '2026-08-21',
+  to: '2026-09-19',
+  total: 235000,
+  count: 12,
+  basis: "Counted from the withdrawals recorded in Billing. The balance above is Smart Books' own.",
+}
+
+/** What the API returns when the harness "saves" a withdrawal. */
+export const savedWithdrawal = {
+  request_id: 9205,
+  request_uuid: '8f2c1a10-0000-4000-8000-000000009205',
+  kind: 'bank_withdrawal',
+  status: 'POSTED',
+  party_account_id: null,
+  transaction_date: '2026-09-19',
+  payload: {},
+  books_voucher_id: 55262,
+  books_voucher_uuid: 'v-55262',
+  books_voucher_no: 'CON/0045',
+  last_error: null,
+  created_at: '2026-09-19T06:20:00Z',
+}

@@ -252,6 +252,29 @@ if (str_contains($path, '/registers')) {
     exit;
 }
 
+// The ledger list, narrowed by `nature`. The expense screen reads it twice —
+// once for the heads, once for the cash and bank accounts.
+if (str_contains($path, '/masters/accounts')) {
+    $nature = $_GET['nature'] ?? '';
+    $rows = match ($nature) {
+        'indirect_expenses' => [
+            ['acc_id' => 810, 'acc_name' => 'Office Supplies'],
+            ['acc_id' => 811, 'acc_name' => 'Travel & Conveyance'],
+            ['acc_id' => 819, 'acc_name' => 'Other Expenses'],
+        ],
+        'cash_bank' => [
+            ['acc_id' => 101, 'acc_name' => 'Cash in hand'],
+            ['acc_id' => 102, 'acc_name' => 'HDFC Current'],
+        ],
+        default => [
+            ['acc_id' => 501, 'acc_name' => 'Northern Distributors', 'gstin' => '29AAACB1234F1Z5'],
+        ],
+    };
+
+    echo json_encode(['data' => $rows, 'meta' => ['total' => count($rows), 'limit' => 200, 'offset' => 0]]);
+    exit;
+}
+
 if (str_contains($path, '/reports/account-summary')) {
     echo json_encode(['data' => [
         ['account_id' => 9001, 'account_name' => 'Cash in hand', 'group_name' => 'Cash-in-hand', 'closing_balance' => 42500.0],

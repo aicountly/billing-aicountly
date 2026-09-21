@@ -7,11 +7,10 @@ import SignIn from './pages/SignIn'
 import Onboarding from './pages/Onboarding'
 import SaleEditor from './pages/SaleEditor'
 import { PartyStatement } from './pages/Dues'
-import { BankCash, MoneyScreen } from './pages/MoneyMovement'
-import { Items, Parties } from './pages/Directory'
+import { BankCash } from './pages/MoneyMovement'
+import { Parties } from './pages/Directory'
 import {
   BankCashOverview,
-  Expense,
   Profiles,
   Recurring,
   TransactionDetail,
@@ -36,7 +35,51 @@ const CashCompliance = lazy(() => import('./dashboards/CashCompliance'))
 const Reports = lazy(() => import('./pages/Reports'))
 
 /**
- * Money to Collect and Money to Pay, split out for the same reason: the screen
+ * Money paid and money received, split for the same reason.
+ *
+ * The screen is a form, a period summary, a party's history and a recent list,
+ * and only one of the two directions is ever open. Left in the main bundle it
+ * costs every screen in the app, including the counter machine that never
+ * opens it.
+ */
+const MoneyScreen = lazy(() =>
+  import('./pages/money/MoneyScreen').then((module) => ({ default: module.MoneyScreen })),
+)
+
+/**
+ * The expense screen carries its own stylesheet and helper panel, and most
+ * sessions never open it. Split for the same reason the dashboards are.
+ */
+const ExpensePage = lazy(() => import('./pages/expense/ExpensePage'))
+
+/** The bank-withdrawal screen, for the same reason: its own stylesheet, its own panel. */
+const BankWithdrawalPage = lazy(() => import('./pages/bank-withdrawal/BankWithdrawalPage'))
+
+/**
+ * The Items workspace, split for the same reason.
+ *
+ * It carries its own stylesheet, a table, a filter popover and a detail panel,
+ * and a counter biller who never leaves the till should not pay for any of it
+ * on the screen they do use.
+ */
+const ItemsPage = lazy(() => import('./pages/items/ItemsPage'))
+
+/**
+ * The bill screen carries its own stylesheet too. It is split for the same
+ * reason — it is reached by navigation rather than on first paint, and the
+ * chunk is fetched once and then cached on the machine that opens it all day.
+ */
+const SalesBillPage = lazy(() => import('./pages/sale/SalesBillPage'))
+
+/**
+ * The credit note screen, split for the same reason again: its own
+ * stylesheet, its own table and its own readings of the bill being credited,
+ * and a counter that only makes bills never opens it.
+ */
+const CreditNotePage = lazy(() => import('./pages/credit-note/CreditNotePage'))
+
+/**
+ * Money to Collect and Money to Pay, split for the same reason: the screen
  * carries its own charts and filter machinery, and a counter biller who only
  * ever makes bills should not pay for them on first load.
  */
@@ -143,9 +186,11 @@ function Shell() {
         <Route path="dashboard/payables" element={<Suspense fallback={<Loading />}><RequireScope><Payables /></RequireScope></Suspense>} />
         <Route path="dashboard/cash-compliance" element={<Suspense fallback={<Loading />}><RequireScope><CashCompliance /></RequireScope></Suspense>} />
 
+        {/* Sales has its own screen. Purchases and the two notes keep the
+            shared editor below, which still handles all three. */}
         <Route path="sales">
-          <Route index element={<RequireScope><SaleEditor /></RequireScope>} />
-          <Route path="new" element={<RequireScope><SaleEditor /></RequireScope>} />
+          <Route index element={<Suspense fallback={<Loading />}><RequireScope><SalesBillPage /></RequireScope></Suspense>} />
+          <Route path="new" element={<Suspense fallback={<Loading />}><RequireScope><SalesBillPage /></RequireScope></Suspense>} />
           <Route path=":id" element={<RequireScope><TransactionDetail /></RequireScope>} />
         </Route>
 
@@ -156,22 +201,32 @@ function Shell() {
         </Route>
 
         <Route path="money-in">
-          <Route index element={<RequireScope><MoneyScreen direction="in" /></RequireScope>} />
-          <Route path="new" element={<RequireScope><MoneyScreen direction="in" /></RequireScope>} />
+          <Route index element={<Suspense fallback={<Loading />}><RequireScope><MoneyScreen direction="in" /></RequireScope></Suspense>} />
+          <Route path="new" element={<Suspense fallback={<Loading />}><RequireScope><MoneyScreen direction="in" /></RequireScope></Suspense>} />
           <Route path=":id" element={<RequireScope><TransactionDetail /></RequireScope>} />
         </Route>
 
         <Route path="money-out">
-          <Route index element={<RequireScope><MoneyScreen direction="out" /></RequireScope>} />
-          <Route path="new" element={<RequireScope><MoneyScreen direction="out" /></RequireScope>} />
+          <Route index element={<Suspense fallback={<Loading />}><RequireScope><MoneyScreen direction="out" /></RequireScope></Suspense>} />
+          <Route path="new" element={<Suspense fallback={<Loading />}><RequireScope><MoneyScreen direction="out" /></RequireScope></Suspense>} />
           <Route path=":id" element={<RequireScope><TransactionDetail /></RequireScope>} />
         </Route>
 
         <Route path="bank-cash">
           <Route index element={<RequireScope><BankCashOverview /></RequireScope>} />
           <Route path="deposit" element={<RequireScope><BankCash kind="bank_deposit" /></RequireScope>} />
-          <Route path="withdrawal" element={<RequireScope><BankCash kind="bank_withdrawal" /></RequireScope>} />
+          <Route
+            path="withdrawal"
+            element={
+              <Suspense fallback={<Loading />}>
+                <RequireScope><BankWithdrawalPage /></RequireScope>
+              </Suspense>
+            }
+          />
           <Route path="transfer" element={<RequireScope><BankCash kind="bank_transfer" /></RequireScope>} />
+          {/* A saved deposit, withdrawal or transfer, by its request id. The three
+              names above are static and so still win over this. */}
+          <Route path=":id" element={<RequireScope><TransactionDetail /></RequireScope>} />
         </Route>
 
         {/* The bill-by-bill lists. The dashboards summarise them and link here. */}
@@ -183,13 +238,29 @@ function Shell() {
           <Route path=":accountId" element={<RequireScope><PartyStatement /></RequireScope>} />
         </Route>
 
-        <Route path="items" element={<RequireScope><Items /></RequireScope>} />
+        <Route
+          path="items"
+          element={<Suspense fallback={<Loading />}><RequireScope><ItemsPage /></RequireScope></Suspense>}
+        />
         <Route path="reports" element={<Suspense fallback={<Loading />}><RequireScope><Reports /></RequireScope></Suspense>} />
 
         <Route path="more">
           <Route index element={<RequireScope><More /></RequireScope>} />
-          <Route path="expense" element={<RequireScope><Expense /></RequireScope>} />
-          <Route path="credit-note" element={<RequireScope><SaleEditor kind="credit_note" /></RequireScope>} />
+          <Route path="expense">
+            <Route
+              index
+              element={<Suspense fallback={<Loading />}><RequireScope><ExpensePage /></RequireScope></Suspense>}
+            />
+            <Route path=":id" element={<RequireScope><TransactionDetail /></RequireScope>} />
+          </Route>
+          <Route
+            path="credit-note"
+            element={
+              <Suspense fallback={<Loading />}>
+                <RequireScope><CreditNotePage /></RequireScope>
+              </Suspense>
+            }
+          />
           <Route path="debit-note" element={<RequireScope><SaleEditor kind="debit_note" /></RequireScope>} />
           <Route path="recurring" element={<RequireScope><Recurring /></RequireScope>} />
           <Route path="unfinished" element={<RequireScope><Unfinished /></RequireScope>} />

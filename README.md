@@ -80,20 +80,27 @@ same-origin.
 | `npm test` | The receivables ageing, status and filter rules, under node's own test runner |
 | `npm run preview` | Serve the production build locally |
 
-`web/visual.html` is a development-only photo booth: it mounts the real
-dashboard components against fixtures so the screens can be checked at four
-widths without a portal session or a company's data. `vite build` takes
-`index.html` only, so none of it reaches the deployed bundle.
+`web/visual.html` is a development-only photo booth: it mounts the real page
+components against fixtures so the screens can be checked at any width without a
+portal session or a company's data. `?screen=` picks one — the five dashboards,
+`money-in`, `money-out`, `expense`, `credit-note`, `bank-withdrawal`, `sale`,
+`items`, `dues` (Money to Collect) or `dues-payable` (Money to Pay) — `?as=biller`
+narrows the profile, and `?fail=recent,categories` makes those endpoints answer
+503, which is how the "one panel is down, the form still works" states get
+checked. The credit note screen adds `bills`, `bill-lines`, `warehouses`,
+`trend` and `issue` to that list, the bank-withdrawal screen adds `balance`,
+`withdrawals` and `withdrawal-summary`, and the Items screen adds `items`,
+`stats` and `groups`, so their degraded states are reachable too. `?at=` sets the
+screen's OWN query string (`?screen=items&at=stock_status%3Dlow`), which is the
+only way to photograph a screen that keeps its state in the address bar in its
+filtered, sorted or paged states. `vite build` takes `index.html` only, so none
+of it reaches the deployed bundle.
 
-```
-/visual.html?screen=overview                 the five dashboards: overview, biller,
-                                             receivables, payables, cash-compliance
-/visual.html?screen=dues                     Money to Collect
-/visual.html?screen=dues-payable             Money to Pay
-          &state=empty|error|slow            the three states a screen must survive
-          &as=biller                         a profile without receipt or reminder rights
-          &router=browser                    the real router, for the filter-in-the-URL round trip
-```
+The dues screens add two of their own: `?state=empty|error|slow` for the three
+states they must survive — nothing outstanding, Books unreachable, and the
+skeletons in between — and `?router=browser`, which swaps the memory router for
+the real one so the filters that live in the address bar can be exercised
+through the browser's own back and forward buttons.
 
 `npm test` needs no browser and no database: `web/src/receivables/model.ts` —
 the ageing, status, filter and export rules — imports nothing, so node runs it
