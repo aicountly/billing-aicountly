@@ -144,15 +144,51 @@ route for one bill.
 
 ## Reports
 
-Ten, at `/reports`, all read live: sales, purchase, credit-note and debit-note
-registers; receipt and payment registers; receivables and payables ageing; cash
-and bank summary; document exceptions.
+Ten, all read live: sales, purchase, credit-note and debit-note registers;
+receipt and payment registers; receivables and payables ageing; cash and bank
+summary; document exceptions.
+
+**Two screens, split on purpose.**
+
+`/reports` is discovery. It reads the catalogue and nothing else — no report is
+run, so landing on Reports costs one metadata call however many reports exist.
+Nine category cards, search over name, description, shelf and keywords
+(`Ctrl + /`, `Cmd + /` on a Mac), a module filter, and the reports this person
+opened last or starred. The count on every card and every KPI is derived from
+what the server actually sent; none of them is written into the markup.
+
+`/reports/:reportKey` is the report. That is where the live read happens, with
+the period control, the total, the export and print. It is a separate lazy
+chunk, so the discovery screen does not carry the table and formatting code of
+a report nobody has opened.
+
+`GET v1/reports` describes each entry with a `description`, its `categories` and
+its `source`. Those are facts about the report — which shelves it belongs on and
+which product owns its figures — so they live in `ReportService::CATALOG` beside
+the permission, not in the browser. The screen supplies the icon and the wording
+around them. A catalogue entry that arrives without them is covered by a
+release-blocking test.
+
+Favourites, the recently-opened list and the screen's preferences are kept in
+`localStorage`, per company, as **report keys and a timestamp**. Nothing a report
+said is kept: no rows, no totals, no party names. A key whose report is no longer
+in the catalogue — retired, or a permission withdrawn — is simply not listed.
+
+Scheduling, the custom report builder and export history have no endpoint behind
+them. They are drawn switched off with the reason on them, behind the
+`VITE_FEATURE_REPORT_*` flags in `.env.example`, rather than as buttons that
+accept a click and do nothing. The intelligence panel opens AI Pulse through the
+launcher's own single-sign-on jump; Billing generates no insight and sends no
+figures anywhere.
 
 Export is CSV, built on the server, and needs `export.data` **separately from**
 `reports.view` — a person may be trusted to look a balance up on screen and not
 to walk out with the ledger. The file is the full filtered set; when the read
 could not be completed the export is refused rather than silently short. Every
-text cell is neutralised against spreadsheet formula injection.
+text cell is neutralised against spreadsheet formula injection. Where an export
+is offered away from the report itself — the overflow menu on the discovery
+screen — the period it would cover is named on the menu item, so nobody exports
+a month they were never shown.
 
 ## The Items screen
 

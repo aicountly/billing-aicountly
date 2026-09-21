@@ -1587,6 +1587,123 @@ export const savedPurchase = {
   status: 'POSTED',
   books_voucher_no: 'PUR-2026-0121',
 }
+
+
+/**
+ * The report catalogue, exactly as `GET v1/reports` describes it for an owner.
+ *
+ * Ten entries, because ten is what ReportService::CATALOG serves — the visual
+ * harness photographs the real counts, not flattering ones.
+ */
+export const reportCatalogue = {
+  reports: [
+    {
+      key: 'sales_register',
+      label: 'Sales register',
+      description: 'Every bill raised in the period, with party, amount and status.',
+      categories: ['sales', 'registers'],
+      source: 'books',
+      kind: 'register',
+    },
+    {
+      key: 'purchase_register',
+      label: 'Purchase register',
+      description: 'Every purchase recorded in the period, with supplier and amount.',
+      categories: ['purchases', 'registers'],
+      source: 'books',
+      kind: 'register',
+    },
+    {
+      key: 'credit_notes',
+      label: 'Credit note register',
+      description: 'Credit notes raised against customers in the period.',
+      categories: ['sales', 'registers'],
+      source: 'books',
+      kind: 'register',
+    },
+    {
+      key: 'debit_notes',
+      label: 'Debit note register',
+      description: 'Debit notes raised against suppliers in the period.',
+      categories: ['purchases', 'registers'],
+      source: 'books',
+      kind: 'register',
+    },
+    {
+      key: 'receipts',
+      label: 'Receipt register',
+      description: 'Money received in the period, and who it came from.',
+      categories: ['money', 'registers'],
+      source: 'books',
+      kind: 'register',
+    },
+    {
+      key: 'payments',
+      label: 'Payment register',
+      description: 'Money paid out in the period, and who it went to.',
+      categories: ['money', 'registers'],
+      source: 'books',
+      kind: 'register',
+    },
+    {
+      key: 'receivables_ageing',
+      label: 'Receivables ageing',
+      description: 'What customers owe, aged by how long it has been outstanding.',
+      categories: ['receivables-payables'],
+      source: 'books',
+      kind: 'ageing',
+    },
+    {
+      key: 'payables_ageing',
+      label: 'Payables ageing',
+      description: 'What you owe suppliers, aged by how long it has been outstanding.',
+      categories: ['receivables-payables'],
+      source: 'books',
+      kind: 'ageing',
+    },
+    {
+      key: 'cash_bank_summary',
+      label: 'Cash and bank summary',
+      description: 'The balance of every cash and bank account you may see.',
+      categories: ['money'],
+      source: 'books',
+      kind: 'accounts',
+    },
+    {
+      key: 'document_exceptions',
+      label: 'Document exceptions',
+      description: 'Documents that did not reach Smart Books, or are waiting on a statutory step.',
+      categories: ['audit'],
+      source: 'books',
+      kind: 'exceptions',
+    },
+  ],
+  note: 'Every report is read from Smart Books as you open it. Billing keeps no copy.',
+}
+
+/** One report, run. The shape `GET v1/reports/{key}` returns. */
+export const salesRegisterReport = {
+  key: 'sales_register',
+  label: 'Sales register',
+  columns: [
+    { key: 'document_no', label: 'Document', numeric: false },
+    { key: 'date', label: 'Date', numeric: false },
+    { key: 'party', label: 'Party', numeric: false },
+    { key: 'amount', label: 'Amount', numeric: true },
+    { key: 'status', label: 'Status', numeric: false },
+  ],
+  rows: [
+    { voucher_id: 9101, document_no: 'INV-2026-0141', date: '2026-09-14', party: 'Sharma Traders', amount: 48200, status: 'POSTED' },
+    { voucher_id: 9102, document_no: 'INV-2026-0142', date: '2026-09-14', party: 'Verma Stationers', amount: 12750, status: 'POSTED' },
+    { voucher_id: 9103, document_no: 'INV-2026-0143', date: '2026-09-15', party: 'Krishna Office Supplies', amount: 91400, status: 'POSTED' },
+    { voucher_id: 9104, document_no: 'INV-2026-0144', date: '2026-09-15', party: 'Nandini Enterprises', amount: 6300, status: 'PENDING' },
+    { voucher_id: 9105, document_no: 'INV-2026-0145', date: '2026-09-16', party: 'Sharma Traders', amount: 27900, status: 'POSTED' },
+  ],
+  total: 186550,
+  complete: true,
+  period: { from: '2026-09-01', to: '2026-09-16' },
+  note: 'Read from Smart Books just now. The total is the sum of every row shown.',
+}
 // ---------------------------------------------------------------------------
 // Settings
 //

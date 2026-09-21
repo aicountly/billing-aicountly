@@ -43,6 +43,8 @@ import BankWithdrawalPage from '../src/pages/bank-withdrawal/BankWithdrawalPage'
 import SalesBillPage from '../src/pages/sale/SalesBillPage'
 import CreditNotePage from '../src/pages/credit-note/CreditNotePage'
 import NewPurchasePage from '../src/pages/purchase/NewPurchasePage'
+import Reports from '../src/pages/reports'
+import ReportView from '../src/pages/reports/ReportView'
 import SettingsHome from '../src/pages/settings/SettingsHome'
 import SettingsCategory from '../src/pages/settings/SettingsCategory'
 import { saveSession, setAuthToken } from '../src/auth/tokens'
@@ -120,9 +122,21 @@ const FAILABLE: Array<[string, RegExp]> = [
   ['balance', /\/v1\/cash-bank(\?|$)/],
   ['withdrawals', /v1\/bank-withdrawals\/recent/],
   ['withdrawal-summary', /v1\/bank-withdrawals\/summary/],
+  // The report catalogue and one report, so "Reports couldn't be loaded" and
+  // "This report couldn't be run" can both be photographed.
+  ['report', /v1\/reports\/[a-z_]+(\?|$)/],
+  ['reports', /v1\/reports(\?|$)/],
 ]
 
-const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
+/**
+ * `path` is the route pattern; `entry` the URL to land on when the two differ.
+ *
+ * They differ for the report viewer, which is mounted on `/reports/:reportKey`:
+ * landing on a literal `/reports/sales_register` would give `useParams()`
+ * nothing to return, and the screen would sit there with no report key, which
+ * is not what it does in the real router.
+ */
+const SCREENS: Record<string, { path: string; entry?: string; element: React.ReactNode }> = {
   overview: { path: '/dashboard/overview', element: <Overview /> },
   biller: { path: '/dashboard/biller', element: <BillerDesk /> },
   receivables: { path: '/dashboard/receivables', element: <Receivables /> },
@@ -142,6 +156,10 @@ const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
   'credit-note': { path: '/more/credit-note', element: <CreditNotePage /> },
   'bank-withdrawal': { path: '/bank-cash/withdrawal', element: <BankWithdrawalPage /> },
   purchase: { path: '/purchases/new', element: <NewPurchasePage /> },
+
+  // Reports is two screens: the discovery layer, and one report open.
+  reports: { path: '/reports', element: <Reports /> },
+  report: { path: '/reports/:reportKey', entry: '/reports/sales_register', element: <ReportView /> },
   settings: { path: '/settings', element: <SettingsHome /> },
 }
 
@@ -170,6 +188,13 @@ const RESPONSES: Array<[RegExp, unknown | ((url: string) => unknown)]> = [
   [/v1\/dashboards\/receivables/, fixtures.receivables],
   [/v1\/dashboards\/payables/, fixtures.payables],
   [/v1\/dashboards\/cash-compliance/, fixtures.compliance],
+
+  // Scoped calls always carry cmp_id/fy_id/bo_id, so both patterns allow a
+  // query string. The run endpoint is matched FIRST — this list is matched in
+  // order, and the bare `v1/reports` pattern would otherwise answer
+  // `v1/reports/sales_register` with the catalogue.
+  [/v1\/reports\/[a-z_]+(\?|$)/, fixtures.salesRegisterReport],
+  [/v1\/reports(\?|$)/, fixtures.reportCatalogue],
 
   [
     DUES,
@@ -542,30 +567,29 @@ try {
 }
 
 const target = SCREENS[screen] ?? SCREENS.overview
-const isSettings = screen === 'settings'
+const base =
+  screen === 'settings' && SETTINGS_CATEGORY
+    ? `/settings/${SETTINGS_CATEGORY}`
+    : (target.entry ?? target.path)
+const entry = at === '' ? base : `${base}?${at}`
 
-const entry = isSettings
-  ? (SETTINGS_CATEGORY ? `/settings/${SETTINGS_CATEGORY}` : '/settings')
-  : at === '' ? target.path : `${target.path}?${at}`
-
-/*
- * Settings is the one area with more than one screen and links between them —
- * twelve cards, a rail and a breadcrumb, all navigating. Both of its routes
- * are mounted whichever one the harness opens on, because a card that
- * navigated to a route the harness had not registered would photograph as a
- * blank page. Every other screen stays on the single-route shape above it.
- */
 const routes = (
   <Routes>
     <Route element={<AppShell />}>
-      {isSettings ? (
-        <>
-          <Route path="/settings" element={<SettingsHome />} />
-          <Route path="/settings/:categoryId" element={<SettingsCategory />} />
-        </>
-      ) : (
-        <Route path={realRouter ? window.location.pathname : target.path} element={target.element} />
+      <Route path={realRouter ? window.location.pathname : target.path} element={target.element} />
+      {/* Opening a report from the discovery screen has somewhere to go, and
+          coming back from it lands on the discovery screen — so the booth
+          exercises the real navigation rather than a dead end. The guards keep
+          the chosen screen from being declared twice. */}
+      {target.path !== '/reports/:reportKey' && (
+        <Route path="/reports/:reportKey" element={<ReportView />} />
       )}
+      {target.path !== '/reports' && <Route path="/reports" element={<Reports />} />}
+      {/* Settings is the same shape: twelve cards, a rail and a
+          breadcrumb, all navigating between the hub and its detail
+          pages. Both are mounted so none of them is a dead end. */}
+      {target.path !== '/settings' && <Route path="/settings" element={<SettingsHome />} />}
+      <Route path="/settings/:categoryId" element={<SettingsCategory />} />
     </Route>
   </Routes>
 )
