@@ -7,7 +7,6 @@ namespace Aicountly\Api\Domain;
 use Aicountly\Api\Auth;
 use Aicountly\Api\Clients\BooksClient;
 use Aicountly\Api\Context;
-use Aicountly\Api\Env;
 use Aicountly\Api\Permissions;
 
 /**
@@ -316,17 +315,21 @@ final class SupplierDuesService
      * totals. So the answer is no, said plainly, with the manual path — which
      * works — offered instead of a button that appears to do something.
      *
+     * The answer itself comes from DocumentCapture, which is also what the
+     * expense screen asks: one switch, so two screens cannot disagree about
+     * what this deployment can read.
+     *
      * @return array<string, mixed>
      */
     private function uploadCapability(): array
     {
-        $configured = Env::get('DOCUMENT_EXTRACTION_BASE') !== '';
+        $extraction = DocumentCapture::extraction();
 
         return [
-            'available'    => $configured,
+            'available'    => $extraction['available'],
             'can_add'      => Permissions::allows($this->ctx, $this->auth, 'purchase.create'),
             'manual_path'  => '/purchases/new',
-            'reason'       => $configured
+            'reason'       => $extraction['available']
                 ? null
                 : 'Reading a bill from a PDF or photo needs a document-extraction service, and none is configured for this '
                     . 'deployment. Entering the bill by hand records exactly the same thing.',

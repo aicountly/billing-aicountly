@@ -437,3 +437,17 @@ export function date(value: string | null | undefined): string {
 
   return new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }).format(parsed)
 }
+
+/**
+ * The symbol in front of an amount being TYPED, for the same currency money()
+ * would format it in.
+ *
+ * Derived from Intl rather than written as a literal, so the day a document
+ * arrives in another currency the prefix follows the formatter instead of
+ * contradicting it.
+ */
+export function currencySymbol(currency = 'INR'): string {
+  const parts = new Intl.NumberFormat('en-IN', { style: 'currency', currency, maximumFractionDigits: 0 }).formatToParts(0)
+
+  return parts.find((part) => part.type === 'currency')?.value ?? currency
+}

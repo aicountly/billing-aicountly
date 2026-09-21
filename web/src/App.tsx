@@ -11,7 +11,6 @@ import { BankCash, MoneyScreen } from './pages/MoneyMovement'
 import { Items, Parties } from './pages/Directory'
 import {
   BankCashOverview,
-  Expense,
   Profiles,
   Recurring,
   TransactionDetail,
@@ -34,6 +33,12 @@ const Receivables = lazy(() => import('./dashboards/Receivables'))
 const Payables = lazy(() => import('./dashboards/Payables'))
 const CashCompliance = lazy(() => import('./dashboards/CashCompliance'))
 const Reports = lazy(() => import('./pages/Reports'))
+
+/**
+ * The expense screen carries its own stylesheet and helper panel, and most
+ * sessions never open it. Split for the same reason the dashboards are.
+ */
+const ExpensePage = lazy(() => import('./pages/expense/ExpensePage'))
 
 initAnalytics()
 
@@ -181,7 +186,13 @@ function Shell() {
 
         <Route path="more">
           <Route index element={<RequireScope><More /></RequireScope>} />
-          <Route path="expense" element={<RequireScope><Expense /></RequireScope>} />
+          <Route path="expense">
+            <Route
+              index
+              element={<Suspense fallback={<Loading />}><RequireScope><ExpensePage /></RequireScope></Suspense>}
+            />
+            <Route path=":id" element={<RequireScope><TransactionDetail /></RequireScope>} />
+          </Route>
           <Route path="credit-note" element={<RequireScope><SaleEditor kind="credit_note" /></RequireScope>} />
           <Route path="debit-note" element={<RequireScope><SaleEditor kind="debit_note" /></RequireScope>} />
           <Route path="recurring" element={<RequireScope><Recurring /></RequireScope>} />

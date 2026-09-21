@@ -104,5 +104,6 @@ After: **56 passing**, `tsc -b` and `vite build` clean.
 | Requirement | Why | User-visible fallback |
 |---|---|---|
 | Unmatched bank entries; suggested matches | No bank feed or statement import exists, and reconciliation is Books' to own. Contract written in `BILLING_API_DEPENDENCIES.md` | The metric reads Unavailable with the reason; the panel names the missing capability and the owning product; the checklist step says so |
-| Supplier-bill extraction (Upload → Extract → Review) | No document-extraction service in this deployment | The panel explains it and offers manual entry, which records the same bill |
+| Bill extraction (Upload → Extract → Review) | No document-extraction service in this deployment. Billing's half is written and switched off with it: `POST v1/expenses/read-bill` | The payables panel and the expense screen's AI Bill Reader both explain it and offer manual entry, which records the same thing |
+| Keeping the bill file itself | No document store, and a folder beside the app would not survive an `rsync --delete` deploy | The expense screen records where the bill is kept, and sends it to Books as `attachment_ref` on the voucher |
 | Sending a reminder | No message-delivery service configured | The draft is composed and shown for review with a Copy button, and says plainly that it cannot be sent from here |
