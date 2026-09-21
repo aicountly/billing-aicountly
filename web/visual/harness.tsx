@@ -45,6 +45,8 @@ import CreditNotePage from '../src/pages/credit-note/CreditNotePage'
 import NewPurchasePage from '../src/pages/purchase/NewPurchasePage'
 import Reports from '../src/pages/reports'
 import ReportView from '../src/pages/reports/ReportView'
+import SettingsHome from '../src/pages/settings/SettingsHome'
+import SettingsCategory from '../src/pages/settings/SettingsCategory'
 import { saveSession, setAuthToken } from '../src/auth/tokens'
 import { setScope } from '../src/services/api'
 import * as fixtures from './fixtures'
@@ -158,7 +160,11 @@ const SCREENS: Record<string, { path: string; entry?: string; element: React.Rea
   // Reports is two screens: the discovery layer, and one report open.
   reports: { path: '/reports', element: <Reports /> },
   report: { path: '/reports/:reportKey', entry: '/reports/sales_register', element: <ReportView /> },
+  settings: { path: '/settings', element: <SettingsHome /> },
 }
+
+/** The settings hub's detail pages: /visual.html?screen=settings&category=taxes */
+const SETTINGS_CATEGORY = params.get('category')
 
 const DUES = /v1\/(receivables|payables)(\?|$)/
 
@@ -264,6 +270,8 @@ const RESPONSES: Array<[RegExp, unknown | ((url: string) => unknown)]> = [
   // A saved purchase. Narrow, so it cannot shadow the other transaction kinds
   // answered above it.
   [/v1\/transactions\/purchase/, fixtures.savedPurchase],
+  [/v1\/profiles/, fixtures.profiles],
+  [/v1\/reminders/, fixtures.reminderRules],
 ]
 
 /**
@@ -559,7 +567,10 @@ try {
 }
 
 const target = SCREENS[screen] ?? SCREENS.overview
-const base = target.entry ?? target.path
+const base =
+  screen === 'settings' && SETTINGS_CATEGORY
+    ? `/settings/${SETTINGS_CATEGORY}`
+    : (target.entry ?? target.path)
 const entry = at === '' ? base : `${base}?${at}`
 
 const routes = (
@@ -574,6 +585,11 @@ const routes = (
         <Route path="/reports/:reportKey" element={<ReportView />} />
       )}
       {target.path !== '/reports' && <Route path="/reports" element={<Reports />} />}
+      {/* Settings is the same shape: twelve cards, a rail and a
+          breadcrumb, all navigating between the hub and its detail
+          pages. Both are mounted so none of them is a dead end. */}
+      {target.path !== '/settings' && <Route path="/settings" element={<SettingsHome />} />}
+      <Route path="/settings/:categoryId" element={<SettingsCategory />} />
     </Route>
   </Routes>
 )

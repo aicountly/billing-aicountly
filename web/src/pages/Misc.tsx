@@ -197,7 +197,10 @@ export function Unfinished() {
 
   return (
     <div style={{ display: 'grid', gap: '1rem' }}>
-      <h1 style={{ margin: 0, fontSize: '1.3rem' }}>Not saved yet</h1>
+      <div>
+        <Link to="/settings" style={{ fontSize: '0.85rem' }}>← Settings</Link>
+        <h1 style={{ margin: '0.25rem 0 0', fontSize: '1.3rem' }}>Not saved yet</h1>
+      </div>
 
       <Notice tone="info">
         These have not reached Smart Books. Retrying uses the same key as the first attempt, so a retry can never make a
@@ -311,7 +314,10 @@ export function Recurring() {
 
   return (
     <div style={{ display: 'grid', gap: '1rem' }}>
-      <h1 style={{ margin: 0, fontSize: '1.3rem' }}>Recurring bills</h1>
+      <div>
+        <Link to="/settings/automation" style={{ fontSize: '0.85rem' }}>← Automation &amp; workflows</Link>
+        <h1 style={{ margin: '0.25rem 0 0', fontSize: '1.3rem' }}>Recurring bills</h1>
+      </div>
 
       <Notice tone="info">
         A recurring bill is a rule. When its date comes round it raises a real invoice in Smart Books — Billing never
@@ -370,7 +376,10 @@ export function Profiles() {
 
   return (
     <div style={{ display: 'grid', gap: '1rem' }}>
-      <h1 style={{ margin: 0, fontSize: '1.3rem' }}>Who can do what</h1>
+      <div>
+        <Link to="/settings/users" style={{ fontSize: '0.85rem' }}>← Users &amp; access</Link>
+        <h1 style={{ margin: '0.25rem 0 0', fontSize: '1.3rem' }}>Who can do what</h1>
+      </div>
 
       <Notice tone="info">
         A Billing profile decides what someone sees and does <em>in this app</em>. Smart Books has its own permissions for
