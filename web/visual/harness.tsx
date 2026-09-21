@@ -11,6 +11,7 @@
  * none of this reaches the deployed bundle.
  *
  *   /visual.html?screen=overview&as=owner
+ *   /visual.html?screen=bank-withdrawal&fail=balance
  */
 
 import { StrictMode } from 'react'
@@ -26,6 +27,7 @@ import Payables from '../src/dashboards/Payables'
 import CashCompliance from '../src/dashboards/CashCompliance'
 import { MoneyScreen } from '../src/pages/money/MoneyScreen'
 import ExpensePage from '../src/pages/expense/ExpensePage'
+import BankWithdrawalPage from '../src/pages/bank-withdrawal/BankWithdrawalPage'
 import SalesBillPage from '../src/pages/sale/SalesBillPage'
 import CreditNotePage from '../src/pages/credit-note/CreditNotePage'
 import { saveSession, setAuthToken } from '../src/auth/tokens'
@@ -62,6 +64,11 @@ const FAILABLE: Array<[string, RegExp]> = [
   ['warehouses', /v1\/catalog\/warehouses/],
   ['trend', /v1\/credit-notes\/trend/],
   ['issue', /v1\/transactions\/credit_note/],
+  // The withdrawal screen's two sidebar panels and its balance, each of which
+  // has to be able to fail without taking the form down with it.
+  ['balance', /\/v1\/cash-bank(\?|$)/],
+  ['withdrawals', /v1\/bank-withdrawals\/recent/],
+  ['withdrawal-summary', /v1\/bank-withdrawals\/summary/],
 ]
 
 const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
@@ -75,6 +82,7 @@ const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
   expense: { path: '/more/expense', element: <ExpensePage /> },
   sale: { path: '/sales/new', element: <SalesBillPage /> },
   'credit-note': { path: '/more/credit-note', element: <CreditNotePage /> },
+  'bank-withdrawal': { path: '/bank-cash/withdrawal', element: <BankWithdrawalPage /> },
 }
 
 /** The fixture behind each endpoint the screens call. */
@@ -112,6 +120,12 @@ const RESPONSES: Array<[RegExp, unknown]> = [
   // One entry, shared: this list is matched in order and a second
   // cash-bank pattern below would never be reached.
   [/v1\/catalog\/cash-bank/, fixtures.cashBankAccounts],
+  // The BALANCES are a different endpoint, and its pattern is anchored so it
+  // cannot swallow the catalog URL above.
+  [/\/v1\/cash-bank(\?|$)/, fixtures.cashBankBalances],
+  [/v1\/bank-withdrawals\/recent/, fixtures.recentWithdrawals],
+  [/v1\/bank-withdrawals\/summary/, fixtures.withdrawalSummary],
+  [/v1\/transactions\/bank_withdrawal/, fixtures.savedWithdrawal],
   [/v1\/manage\/companies/, { data: [{ cmp_id: 1, cmp_name: 'Sharma Enterprises' }], meta: { total: 1 } }],
   [/v1\/manage\/companyinfo/, {
     cmp_id: 1,

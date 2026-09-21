@@ -107,6 +107,48 @@ to walk out with the ledger. The file is the full filtered set; when the read
 could not be completed the export is refused rather than silently short. Every
 text cell is neutralised against spreadsheet formula injection.
 
+## Money → Bank withdrawal
+
+`/bank-cash/withdrawal`, gated on `contra.create` — the same permission the save
+asserts, so a URL typed by hand is refused exactly as the menu entry was
+withheld. A profile without it gets a sentence saying so instead of a form.
+
+What is on it, and where each thing comes from:
+
+| On screen | Source | Notes |
+|---|---|---|
+| Bank account, cash account | `v1/catalog/cash-bank` → Books' `masters/accounts` | The ledgers that may be posted to. Nothing is cached |
+| Which of them is cash and which is bank | `v1/cash-bank`, else the ledger's own `group_name` | Books' own classification either way, never the ledger's name — "Cash Credit A/c" is a bank. Neither available → **both lists show every ledger** rather than a guess |
+| Available balance, estimated balance after | `v1/cash-bank` | `cash.view` / `bank.view` decide whether a balance is shown at all. The estimate is arithmetic on screen and is written nowhere |
+| Last 30 days withdrawals, and the count | `v1/bank-withdrawals/summary` | Billing's own request rows for that account, in the company's timezone. Says so under the figure |
+| Recent bank withdrawals | `v1/bank-withdrawals/recent` | Billing's own posted requests; the account NAMES are read live from Books on the request |
+| The financial year a date must fall in | Manage, via `v1/manage/companyinfo` | Failing to read it costs the check, not the screen |
+
+Saving is `POST v1/transactions/bank_withdrawal` — the call this screen's
+predecessor already made, with the fields that request already accepted
+(`from_account_id`, `to_account_id`, `amount`, `date`, `instrument_no`,
+`narration`). **Books makes the entry.** Billing posts no ledger lines, computes
+no double entry, and keeps no balance; what it keeps is the request row that
+makes a retry safe, which is what the recent list and the 30-day figure are read
+back from.
+
+Two endpoints are new, both `contra.create`, both read-only, and both shaped on
+`v1/expenses/recent`: `GET v1/bank-withdrawals/recent` and
+`GET v1/bank-withdrawals/summary`. Neither is a second cash book — each carries
+a `basis` line that the screen prints, saying it covers what Billing recorded
+and not what was entered directly in Books.
+
+Deliberate refusals on this screen:
+
+* **Repeat from last** copies the two accounts and never the amount or the
+  cheque number. Reusing either is how one withdrawal becomes two.
+* **A possible duplicate warns and never blocks** — two withdrawals of the same
+  round figure on one day is a real thing that happens.
+* **More than the balance warns and never blocks** — an account may be allowed
+  to go overdrawn, and Billing is not the product that knows.
+* **Editing or cancelling a posted withdrawal is not offered**, because the
+  voucher is Books' and there is no Billing route that would do it.
+
 ## Permissions added
 
 | Permission | Grants |
@@ -136,10 +178,11 @@ approximated.
 
 ## Verification
 
-* `server-php/tests/run.sh` — 56 passing, 0 failing, against a real PostgreSQL
+* `server-php/tests/run.sh` — 76 passing, 0 failing, against a real PostgreSQL
   and a stub standing in for Books and Inventory.
-* `npm run build` in `web/` — `tsc -b` clean, six lazy chunks.
-* Visual pass at 1440, 1024, 768 and 390 px across all five dashboards, via
-  `web/visual.html` — a development-only entry point that mounts the real
-  components against fixtures. `vite build` does not include it, and no fake
-  record is written anywhere.
+* `npm run build` in `web/` — `tsc -b` clean, eight lazy chunks.
+* Visual pass at 1512, 1024 and 390 px across all five dashboards, the expense
+  screen and the bank-withdrawal screen, via `web/visual.html` — a
+  development-only entry point that mounts the real components against
+  fixtures, including their unavailable states (`?fail=balance,withdrawals`).
+  `vite build` does not include it, and no fake record is written anywhere.

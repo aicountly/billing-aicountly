@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Aicountly\Api;
 
+use Aicountly\Api\Controllers\BankWithdrawalsController;
 use Aicountly\Api\Controllers\CatalogController;
 use Aicountly\Api\Controllers\DashboardController;
 use Aicountly\Api\Controllers\DashboardsController;
@@ -67,6 +68,11 @@ final class Routes
         $router->get('v1/expenses/recent', [ExpensesController::class, 'recent']);
         $router->get('v1/expenses/capabilities', [ExpensesController::class, 'capabilities']);
         $router->post('v1/expenses/read-bill', [ExpensesController::class, 'readBill']);
+        // Around the bank-withdrawal form: what this product withdrew lately,
+        // and how much has come out of the chosen bank in the last month.
+        // Recording one is still POST v1/transactions/bank_withdrawal, above.
+        $router->get('v1/bank-withdrawals/recent', [BankWithdrawalsController::class, 'recent']);
+        $router->get('v1/bank-withdrawals/summary', [BankWithdrawalsController::class, 'summary']);
         // Invoices a credit note (or bills a debit note) can be raised against,
         // and — for one of them — the lines that were billed on it, so the note
         // can start from what was sold instead of an empty table.
