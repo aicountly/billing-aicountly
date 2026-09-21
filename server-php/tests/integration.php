@@ -2696,6 +2696,35 @@ check('an item name that is a formula does not become one in the file', function
     assertSame("'+SUM(A1:A9)", \Aicountly\Api\Domain\ReportService::cell($row['item_sku']), 'and so is the code');
 });
 
+check('only a caller that draws a stock column pays for one', function () {
+    // `v1/catalog/items` serves the Items screen AND the line pickers and the
+    // barcode probe. The pickers put a name and a rate on a bill and draw no
+    // Stock column, so they must not be charged the extra batched read to
+    // Inventory that filling one in costs.
+    $picker = ItemCatalog::filtersFromRequest();
+    assertSame(false, $picker['with_stock'], 'nothing asks for stock by default');
+
+    $_GET['with_stock'] = '1';
+    try {
+        assertSame(true, ItemCatalog::filtersFromRequest()['with_stock'], 'the Items screen asks explicitly');
+    } finally {
+        unset($_GET['with_stock']);
+    }
+
+    // And whatever it is set to, it is ours — never relayed to Inventory as a
+    // filter it never defined.
+    $ask = ItemCatalog::upstreamQuery(['with_stock' => true, 'limit' => 25]);
+    assertTrue(!isset($ask['with_stock']), 'the flag stays on this side of the call');
+
+    // The export writes a Stock column, so it asks regardless of the request,
+    // and a query string cannot switch it off.
+    $source = (string) file_get_contents((new \ReflectionClass(ItemCatalog::class))->getFileName());
+    assertTrue(
+        str_contains($source, "'with_stock' => true] + \$filters"),
+        'the export forces the flag on, on the winning side of the union',
+    );
+});
+
 check('only filters the API understands are passed upstream', function () {
     $ask = ItemCatalog::upstreamQuery([
         'q' => '  pen  ', 'type' => 'service', 'status' => 'nonsense', 'stock_status' => 'low',

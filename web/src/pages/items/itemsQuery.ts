@@ -188,5 +188,9 @@ export function toApiParams(query: ItemsQuery): Record<string, string | number |
     order: query.sort ? query.order : undefined,
     limit: query.perPage,
     offset: (query.page - 1) * query.perPage,
+    // This screen has a Stock column, so it is worth one extra call to
+    // Inventory when the list response did not carry quantities. The pickers
+    // reading the same endpoint do not ask, and are not charged for it.
+    with_stock: 1,
   }
 }

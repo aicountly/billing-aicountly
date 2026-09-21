@@ -89,7 +89,16 @@ final class ItemCatalog
         $raw = array_values(array_filter((array) ($body['data'] ?? []), 'is_array'));
 
         $rows = array_map(static fn (array $row): array => self::normalise($row), $raw);
-        $rows = $this->withStock($rows);
+
+        // Only for a caller that asked. `v1/catalog/items` is not just the Items
+        // screen: the line pickers and the barcode probe read the same endpoint
+        // to put a name and a rate on a bill, and they draw no Stock column.
+        // Charging them a second round trip to Inventory for a number they
+        // never paint is how a counter screen gets slower for nobody's benefit.
+        // The Items screen sends with_stock=1 and pays for it; nothing else does.
+        if (($filters['with_stock'] ?? false) === true) {
+            $rows = $this->withStock($rows);
+        }
 
         $meta = is_array($body['meta'] ?? null) ? $body['meta'] : [];
         $meta['limit'] = (int) $ask['limit'];
@@ -202,7 +211,7 @@ final class ItemCatalog
         $pageSize = Http::MAX_LIMIT;
 
         while (true) {
-            $result = $this->page(['limit' => $pageSize, 'offset' => $offset] + $filters);
+            $result = $this->page(['limit' => $pageSize, 'offset' => $offset, 'with_stock' => true] + $filters);
             if (!$result['ok']) {
                 Http::error(
                     $result['status'] === 0 ? 503 : $result['status'],
@@ -706,6 +715,8 @@ final class ItemCatalog
             'order'        => Http::param('order'),
             'limit'        => Http::intParam('limit', 25),
             'offset'       => Http::intParam('offset', 0),
+            // Only a caller that draws a Stock column asks for one. See page().
+            'with_stock'   => Http::param('with_stock') === '1',
         ];
     }
 
