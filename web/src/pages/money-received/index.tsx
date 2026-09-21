@@ -23,7 +23,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   AlertTriangle,
   Calendar,
@@ -90,7 +90,27 @@ export default function MoneyReceived() {
   const { can } = useBilling()
 
   const today = useMemo(() => isoDate(new Date()), [])
-  const form = useReceiptForm(today)
+
+  /**
+   * What the link opened this screen with — see useReceiptForm.
+   *
+   * Read once. Re-reading it after the user has typed would undo their edit on
+   * every render.
+   */
+  const [search] = useSearchParams()
+  const opening = useMemo(() => {
+    const id = Number(search.get('account_id'))
+    const name = search.get('account_name')
+    const amount = Number(search.get('amount'))
+
+    return {
+      party: Number.isFinite(id) && id > 0 && name ? { id, name } : null,
+      amount: Number.isFinite(amount) && amount > 0 ? amount.toFixed(2) : '',
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const form = useReceiptForm(today, opening)
 
   const accounts = useCashBankAccounts()
   const openBills = useOpenBills(form.party?.id ?? null)

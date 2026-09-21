@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Aicountly\Api\Controllers;
 
 use Aicountly\Api\Clients\DocumentExtractionClient;
+use Aicountly\Api\Clients\DocumentStorageClient;
 use Aicountly\Api\Domain\DocumentCapture;
 use Aicountly\Api\Domain\ExpenseHistory;
 use Aicountly\Api\Http;
@@ -17,7 +18,7 @@ use Aicountly\Api\Permissions;
  * makes every transaction in this product and that has not changed. These
  * endpoints are the things around the form: what was recorded lately, what this
  * deployment can do with a bill file, and — when a document service is
- * configured — reading one.
+ * configured — keeping one and reading one.
  */
 final class ExpensesController extends Controller
 {
@@ -55,6 +56,69 @@ final class ExpensesController extends Controller
     }
 
     /**
+     * Keep the bill file, and hand back what the voucher will point at.
+     *
+     * The reference this returns is what the expense carries to Books as
+     * `attachment_ref` — a field the expense request already accepted. Nothing
+     * is recorded by this call: a bill uploaded and then abandoned leaves no
+     * expense behind, which is the right way round, because the person is still
+     * filling the form when it happens.
+     *
+     * Billing writes no bytes. The file goes straight out to the configured
+     * document service and the temporary upload dies with the request.
+     */
+    public static function storeBill(): void
+    {
+        [$auth, $ctx] = self::enter();
+        Permissions::assert($ctx, $auth, 'expense.create');
+
+        $capability = DocumentCapture::storage();
+        if (!$capability['available']) {
+            Http::error(503, 'storage_unavailable', (string) $capability['reason']);
+        }
+
+        $upload = self::takeUpload('Choose a bill to attach.');
+
+        $result = DocumentStorageClient::put(
+            $upload['path'],
+            $upload['name'],
+            $upload['type'],
+            $ctx->cmpId,
+            $ctx->fyId,
+        );
+
+        if (!$result['ok']) {
+            Http::error(
+                $result['status'] === 0 || $result['status'] >= 500 ? 503 : 422,
+                $result['status'] === 0 ? 'storage_unreachable' : 'storage_failed',
+                $result['status'] === 0
+                    ? 'Could not reach the service that keeps bills. The expense can still be recorded without one.'
+                    : 'That file was not accepted by the document service. The expense can still be recorded '
+                        . 'without it.',
+            );
+        }
+
+        $stored = DocumentStorageClient::stored($result['body'] ?? []);
+        if ($stored === null) {
+            // A 200 with no reference in it. Saying "saved" here would put an
+            // expense on record pointing at a bill nobody can find again.
+            Http::error(
+                502,
+                'storage_incomplete',
+                'The document service did not say where it kept that bill, so it has not been attached.',
+            );
+        }
+
+        // What the browser said the file was called, when the service did not
+        // say: the name is for the person looking at the form, not for the
+        // voucher, and the reference is the part that has to be right.
+        $stored['filename'] ??= $upload['name'];
+        $stored['content_type'] ??= $upload['type'];
+
+        Http::data($stored);
+    }
+
+    /**
      * Read a bill and PROPOSE what is on it. Nothing is recorded here.
      *
      * The response is fields and a confidence for each, handed back for a person
@@ -75,7 +139,7 @@ final class ExpensesController extends Controller
             Http::error(503, 'extraction_unavailable', (string) $capability['reason']);
         }
 
-        $upload = self::takeUpload();
+        $upload = self::takeUpload('Choose a bill to read.');
 
         $result = DocumentExtractionClient::read($upload['path'], $upload['name'], $upload['type']);
         if (!$result['ok']) {
@@ -101,16 +165,16 @@ final class ExpensesController extends Controller
      *
      * @return array{path:string, name:string, type:string}
      */
-    private static function takeUpload(): array
+    private static function takeUpload(string $missing): array
     {
         $file = $_FILES['file'] ?? null;
         if (!is_array($file) || !isset($file['tmp_name']) || !is_uploaded_file((string) $file['tmp_name'])) {
-            Http::validationFailed('Choose a bill to read.', ['field' => 'file']);
+            Http::validationFailed($missing, ['field' => 'file']);
         }
 
         $error = (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE);
         if ($error === UPLOAD_ERR_INI_SIZE || $error === UPLOAD_ERR_FORM_SIZE) {
-            Http::validationFailed('That file is too large to read.', ['field' => 'file']);
+            Http::validationFailed('That file is too large.', ['field' => 'file']);
         }
         if ($error !== UPLOAD_ERR_OK) {
             Http::validationFailed('That file did not arrive in one piece. Try again.', ['field' => 'file']);

@@ -205,25 +205,24 @@ amount, bill date and bill number, and leaves the supplier for a person to pick
 **Until this exists**, both screens offer the manual path, which records exactly
 the same thing.
 
-## Not available: keeping the bill file
+## Needs configuring: keeping the bill file
 
-**The expense screen shows a reference field instead.**
+**The drop zone appears when `DOCUMENT_STORAGE_BASE` is set, and not before.**
 
-There is nowhere in this deployment to put a PDF or a photo of a bill and get it
-back later, and Billing is the wrong place to build one: the deploy runs
+Billing stores no bytes of its own and should not: the deploy runs
 `rsync --delete` over the document root (see `DEPLOYMENT.md`), so a folder of
-uploads beside the app would not survive a release.
+uploads beside the app would not survive a release. The file goes straight out
+to a document service and what comes back — a reference — is what travels to
+Books on the voucher as `attachment_ref`, a field the expense request already
+accepted.
 
-So the expense screen records **where the bill is kept** — a file number, a
-folder, a link — and sends it to Books as `attachment_ref` on the voucher, which
-is a field the expense request already accepted. That is a smaller thing than an
-attachment and it is honest about being one.
-
-Two pieces are needed to turn it into a real attachment, and the first is
-configuration:
+The client exists (`server-php/src/Clients/DocumentStorageClient.php`) and
+`DocumentCapture::storage()` reports the capability from the configuration
+alone, so turning this on is one line in `server-php/.env`:
 
 ```
 DOCUMENT_STORAGE_BASE=<service>     in server-php/.env
+DOCUMENT_STORAGE_KEY=<bearer>       optional, if the service wants one
 
 POST <DOCUMENT_STORAGE_BASE>/v1/documents
   multipart: file=<pdf|jpg|png>, scope=<cmp_id>/<fy_id>
@@ -233,10 +232,17 @@ GET <DOCUMENT_STORAGE_BASE>/v1/documents/<reference>
   → the file, for whoever may see the voucher
 ```
 
-The second is a client for it in `server-php/src/Clients/`, and one line in
-`DocumentCapture::storage()`. Until both exist that method answers `false`
-whatever the environment says, because configuring a service Billing cannot call
-would put a drop zone on screen that swallows a photo and loses it.
+`reference` is the only part Billing insists on. A 2xx without one is treated as
+a failure and nothing is attached, because an expense pointing at a bill nobody
+can find again is worse than an expense with no bill on it.
+
+**Until it is configured**, the expense screen does not show a drop zone that
+would swallow a photo and lose it. It asks **where the bill is kept** — a file
+number, a folder, a link — and sends that as `attachment_ref` instead. That is a
+smaller thing than an attachment and the screen says so. Both shapes can be
+looked at without standing a service up: `/visual.html?screen=expense` for the
+deployment as it is today, and `?screen=expense&docs=on` for the same screen
+once a service answers.
 
 **Money received is in the same position, with one difference.** A receipt is
 often backed by a UPI screenshot, a counterfoil or a bank advice, and the screen
@@ -365,6 +371,98 @@ GET v1/return-dispositions          → { data: [ { code, label, restocks: bool 
 
 Until that exists the list stays short, plain, and honest about being ours.
 
+## Partly available: what a bill was raised for
+
+**Money to Collect shows this when Books sends it, and "not known" when it does
+not. It is never rendered as zero.**
+
+The bill-by-bill report is an OUTSTANDING report: every row is guaranteed to
+carry the balance still owed, which is what the ageing, the totals and the
+follow-up list are built from. Three columns on the bill-by-bill table want more
+than that:
+
+| Column | Needs | Today |
+|---|---|---|
+| Bill amount | the gross value of the bill | passed through when the row carries one |
+| Received | gross less balance | derived, and only when the gross is present |
+| Part paid badge | the same | shown only when received is known and above zero |
+
+`DuesService::dues()` reads the gross from the first of `bill_amount`,
+`invoice_amount`, `total_amount`, `bill_value`, `grand_total` that the row
+actually carries, and emits `bill_amount` and `received` as **null** when none of
+them is there. Null prints as "not known".
+
+It is deliberately not inferred. A received amount worked out from the balance
+alone would be a guess, and the difference between "this customer has paid
+nothing" and "Books did not tell us what the bill was for" is the difference
+between ringing them and not.
+
+### The contract that would make it complete
+
+Owner: **Smart Books**. One additional field per row on
+`GET reports/bill-by-bill`:
+
+```
+  → { data: [ {
+        …the existing row…,
+        bill_amount: <number>     // the gross the bill was raised for
+      } ] }
+```
+
+Nothing else changes: `received` stays a subtraction Billing performs, so there
+is still only one authority for either figure.
+
+## Not available: how a customer is classified
+
+**Money to Collect shows "Who owes it" instead of "Receivables by party type".**
+
+A breakdown by customer type — regular, new, government, export/SEZ — needs a
+classification, and nothing in this deployment has one. Books' bill-by-bill
+carries no such field, `masters/accounts` carries no segment, and Billing owns
+no customer master of its own to put one in.
+
+So the donut shows what IS known exactly: the largest debtors by outstanding,
+with the tail gathered into one slice. That answers the same question a party-type
+chart is usually asked — *where is my money sitting* — without putting a
+confident label on a guess.
+
+### The contract that would allow the original
+
+Owner: **Smart Books** (or whichever product comes to own the customer master).
+A stable classification on the account:
+
+```
+GET masters/accounts
+  → { data: [ { acc_id, acc_name, …, party_segment: <string|null> } ] }
+```
+
+It must be a value somebody in the business SET, not one derived at read time:
+a segment computed from turnover changes under the chart between two page loads
+and cannot be reconciled against anything.
+
+## Not available: a document route for one bill
+
+**Money to Collect does not link a bill number to the bill.**
+
+Every row on the list carries Books' `voucher_id` and `voucher_uuid`, but no
+route in this product addresses a Books voucher: `/sales/:id` takes a Billing
+*request* id — the record of something this app asked Books to create — and a
+bill raised anywhere else has no such record. Linking the two would send the
+user to a page that does not exist for most rows.
+
+The row menu therefore offers what does exist: the party's statement, a receipt
+against the bill, a drafted reminder, and the bill number on the clipboard. The
+same gap is why there is no "Download PDF": `BooksClient::salesInvoicePdfUrl()`
+can build the URL, but no Billing route exposes it and no endpoint fetches it
+with the caller's own session key.
+
+### The contract that would allow it
+
+Owner: **Billing**, over Books' existing voucher endpoints — a read-through
+route that takes a Books voucher id, checks `sale.view`, and returns the voucher
+(or streams the invoice PDF) the way `v1/parties/{id}/statement` already does for
+a ledger.
+
 ## Not depended on: Aicountly Pay
 
 Nothing in this product requires a payment gateway, and nothing in it moves
@@ -376,3 +474,9 @@ There is no `Pay now` button, no payment link, no webhook listener and no
 settlement state. When Aicountly Pay is configured, it arrives as an adapter
 beside the existing methods; no screen in this product has been shaped around
 its absence, so none has to be reshaped by its arrival.
+
+Money to Collect keeps the integration point visible and honest: **Share a
+payment link** sits in the quick actions and in the collection-actions menu,
+permanently disabled, and says why when you hover it. A live-looking button that
+quietly did nothing would be the worst outcome on a collections screen — the
+user believes the customer was sent a way to pay and stops chasing them.

@@ -1,22 +1,28 @@
 /**
- * A photo booth for the five dashboards. Development only.
+ * A photo booth for the dashboards and the dues screens. Development only.
  *
  * It mounts the REAL page components inside the REAL shell, with the real
  * hooks, the real loading states and the real router. The only thing replaced
- * is the network: `window.fetch` answers the dashboard endpoints from the
- * fixtures next door, so the screens can be photographed at four widths
- * without inventing records in anybody's company.
+ * is the network: `window.fetch` answers the endpoints from the fixtures next
+ * door, so the screens can be photographed at four widths without inventing
+ * records in anybody's company.
  *
  * It is a separate HTML entry point. `vite build` takes index.html only, so
  * none of this reaches the deployed bundle.
  *
  *   /visual.html?screen=overview&as=owner
  *   /visual.html?screen=bank-withdrawal&fail=balance
+ *   /visual.html?screen=dues&state=empty|error|slow
+ *   /visual.html?screen=dues&as=biller            (no receipt or reminder rights)
+ *   /visual.html?screen=items&at=stock_status%3Dlow
+ *   /visual.html?screen=dues&router=browser       (the real router and the real
+ *                                                  back button, for the filters
+ *                                                  that live in the address bar)
  */
 
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, MemoryRouter, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from '../src/auth/AuthProvider'
 import { BillingProvider } from '../src/context/BillingContext'
 import { AppShell } from '../src/shell/AppShell'
@@ -25,6 +31,7 @@ import BillerDesk from '../src/dashboards/BillerDesk'
 import Receivables from '../src/dashboards/Receivables'
 import Payables from '../src/dashboards/Payables'
 import CashCompliance from '../src/dashboards/CashCompliance'
+import { DuesScreen } from '../src/receivables/DuesScreen'
 import { MoneyScreen } from '../src/pages/money/MoneyScreen'
 import MoneyReceived from '../src/pages/money-received'
 import ExpensePage from '../src/pages/expense/ExpensePage'
@@ -42,6 +49,23 @@ import '../src/App.css'
 const params = new URLSearchParams(window.location.search)
 const screen = params.get('screen') ?? 'overview'
 const asBiller = params.get('as') === 'biller'
+const state = params.get('state') ?? 'normal'
+// `?router=browser` swaps the memory router for the real one, so the filter
+// round trip through the address bar — and the back button with it — can be
+// exercised as it behaves in the app. The screenshots keep the memory router,
+// which lets the sidebar highlight the route each screen really sits on.
+const realRouter = params.get('router') === 'browser'
+
+/**
+ * `?docs=on` answers the capability endpoint as a deployment with a document
+ * service configured.
+ *
+ * The expense screen has two honest shapes — a drop zone when a bill file can
+ * be kept, a reference field when it cannot — and both have to be looked at.
+ * The flag changes nothing but the capability response, which is exactly what
+ * configuring the service would change.
+ */
+const documentsConfigured = params.get('docs') === 'on'
 
 /**
  * Endpoints to answer with a 503, as `?fail=recent,categories`.
@@ -99,6 +123,10 @@ const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
   receivables: { path: '/dashboard/receivables', element: <Receivables /> },
   payables: { path: '/dashboard/payables', element: <Payables /> },
   'cash-compliance': { path: '/dashboard/cash-compliance', element: <CashCompliance /> },
+
+  // The bill-by-bill screens. `/receivables` is the one the menu points at.
+  dues: { path: '/receivables', element: <DuesScreen side="receivable" /> },
+  'dues-payable': { path: '/payables', element: <DuesScreen side="payable" /> },
   'money-out': { path: '/money-out/new', element: <MoneyScreen direction="out" /> },
   'money-in': { path: '/money-in/new', element: <MoneyReceived /> },
   'money-in-form': { path: '/money-in/new', element: <MoneyScreen direction="in" /> },
@@ -110,8 +138,10 @@ const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
   purchase: { path: '/purchases/new', element: <NewPurchasePage /> },
 }
 
-/** The fixture behind each endpoint the screens call. */
-const RESPONSES: Array<[RegExp, unknown]> = [
+const DUES = /v1\/(receivables|payables)(\?|$)/
+
+/** The fixture behind each endpoint the screens call. A function gets the URL. */
+const RESPONSES: Array<[RegExp, unknown | ((url: string) => unknown)]> = [
   [/v1\/session/, asBiller ? fixtures.billerSession : fixtures.ownerSession],
   // Before the dashboard itself: `v1/dashboards/overview` matches the briefing
   // URL too, and the first pattern in this list wins.
@@ -130,6 +160,19 @@ const RESPONSES: Array<[RegExp, unknown]> = [
   [/v1\/dashboards\/receivables/, fixtures.receivables],
   [/v1\/dashboards\/payables/, fixtures.payables],
   [/v1\/dashboards\/cash-compliance/, fixtures.compliance],
+
+  [
+    DUES,
+    (url: string) => {
+      if (state === 'empty') return fixtures.duesEmpty
+      // The dues screen takes a second reading at an earlier date for the
+      // movement on the cards. Answering both from one fixture would show a
+      // flat 0% and never exercise the comparison at all.
+      if (url.includes('as_on=')) return fixtures.receivableDuesEarlier
+      return url.includes('v1/payables') ? fixtures.payableDues : fixtures.receivableDues
+    },
+  ],
+
   [/v1\/insights/, [
     { kind: 'overdue_receivable', tone: 'warning', message: '₹74,500.00 is overdue from customers.', action: { label: 'See who', path: '/dashboard/receivables' } },
     { kind: 'payable_due', tone: 'info', message: '₹48,000.00 is due to suppliers this week.', action: { label: 'See the list', path: '/dashboard/payables' } },
@@ -154,7 +197,7 @@ const RESPONSES: Array<[RegExp, unknown]> = [
   [/v1\/catalog\/item-groups/, fixtures.catalogItemGroups],
   [/v1\/expenses\/recent/, fixtures.recentExpenses],
   [/v1\/transactions\/expense/, fixtures.savedExpense],
-  [/v1\/expenses\/capabilities/, fixtures.expenseCapabilities],
+  [/v1\/expenses\/capabilities/, documentsConfigured ? fixtures.expenseCapabilitiesConfigured : fixtures.expenseCapabilities],
   // One entry, shared: this list is matched in order and a second
   // cash-bank pattern below would never be reached.
   [/v1\/catalog\/cash-bank/, fixtures.cashBankAccounts],
@@ -165,25 +208,86 @@ const RESPONSES: Array<[RegExp, unknown]> = [
   [/v1\/bank-withdrawals\/summary/, fixtures.withdrawalSummary],
   [/v1\/transactions\/bank_withdrawal/, fixtures.savedWithdrawal],
   [/v1\/manage\/companies/, { data: [{ cmp_id: 1, cmp_name: 'Sharma Enterprises' }], meta: { total: 1 } }],
+  // Two branches and two years on purpose: switching one mid-entry is a case
+  // the expense form has to handle (it clears the ids that belonged to the
+  // company that was open), and it is only checkable if there is something to
+  // switch to.
   [/v1\/manage\/companyinfo/, {
     cmp_id: 1,
     cmp_name: 'Sharma Enterprises',
     gstin: '27AAACS1234F1Z5',
     ro_address: 'Unit 4, Sai Industrial Estate\nAndheri East, Mumbai, Maharashtra\n400093',
-    fy_list: [{ fy_id: 4, fy_name: 'FY 2026-27', fy_start: '2026-04-01', fy_end: '2027-03-31' }],
-    branch_list: [{ bo_id: 1, bo_name: 'Main Branch', is_head_office: true }],
+    fy_list: [
+      { fy_id: 4, fy_name: 'FY 2026-27', fy_start: '2026-04-01', fy_end: '2027-03-31' },
+      { fy_id: 3, fy_name: 'FY 2025-26', fy_start: '2025-04-01', fy_end: '2026-03-31' },
+    ],
+    branch_list: [
+      { bo_id: 1, bo_name: 'Main Branch', is_head_office: true },
+      { bo_id: 2, bo_name: 'Warehouse', is_head_office: false },
+    ],
   }],
 
   // Purchases → New purchase. Everything else it reads — items, parties,
   // warehouses, tax categories, cash/bank, stock, the register — is already
   // answered above or by the interceptors, and is deliberately not repeated.
   [/v1\/catalog\/uoms/, fixtures.uoms],
-  // After /v1/dashboards/payables above, which would otherwise match first.
-  [/v1\/payables/, fixtures.supplierPayables],
   // A saved purchase. Narrow, so it cannot shadow the other transaction kinds
   // answered above it.
   [/v1\/transactions\/purchase/, fixtures.savedPurchase],
 ]
+
+/**
+ * The bill upload goes over XMLHttpRequest, not fetch — that is the only way
+ * the browser will say how much of the file has gone — so the booth has to
+ * stand in for it separately to photograph an attached bill.
+ */
+class HarnessUpload extends XMLHttpRequest {
+  private stubbed = false
+
+  override open(method: string, url: string | URL, async = true, user?: string | null, password?: string | null): void {
+    this.stubbed = /v1\/expenses\/bill/.test(String(url))
+    if (this.stubbed) return
+
+    super.open(method, url, async, user, password)
+  }
+
+  override setRequestHeader(name: string, value: string): void {
+    if (this.stubbed) return
+    super.setRequestHeader(name, value)
+  }
+
+  override send(body?: Document | XMLHttpRequestBodyInit | null): void {
+    if (!this.stubbed) {
+      super.send(body)
+      return
+    }
+
+    const file = body instanceof FormData ? body.get('file') : null
+    const stored =
+      file instanceof File
+        ? { ...fixtures.storedBill, filename: file.name, size: file.size, content_type: file.type }
+        : fixtures.storedBill
+
+    Object.defineProperty(this, 'status', { value: 200, configurable: true })
+    Object.defineProperty(this, 'responseText', { value: JSON.stringify({ data: stored }), configurable: true })
+
+    // A couple of frames of progress, so the uploading state is reachable.
+    let sent = 0
+    const total = stored.size ?? 1
+    const tick = window.setInterval(() => {
+      sent = Math.min(total, sent + total / 4)
+      this.upload.dispatchEvent(
+        Object.assign(new ProgressEvent('progress', { lengthComputable: true, loaded: sent, total }), {}),
+      )
+      if (sent >= total) {
+        window.clearInterval(tick)
+        this.dispatchEvent(new ProgressEvent('load'))
+      }
+    }, 120)
+  }
+}
+
+window.XMLHttpRequest = HarnessUpload
 
 /**
  * Every item the booth knows, across both screens' fixtures.
@@ -197,8 +301,23 @@ const everyItem = (): LooseItem[] => [...fixtures.catalogItems, ...fixtures.sale
 
 const originalFetch = window.fetch.bind(window)
 
+function json(payload: unknown, status = 200): Response {
+  const body = Array.isArray(payload) || !(payload as { data?: unknown }).data ? { data: payload } : payload
+
+  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+}
+
 window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+
+  // The error state is the whole point of having one: the screen has to keep
+  // its shell and say what failed, rather than going blank.
+  if (state === 'error' && DUES.test(url)) {
+    return json(
+      { error: { code: 'books_unavailable', message: 'Could not reach Smart Books to work out money to collect. Please retry.' } },
+      503,
+    )
+  }
 
   for (const [key, pattern] of FAILABLE) {
     if (failing.has(key) && pattern.test(url)) {
@@ -352,13 +471,11 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Res
 
   for (const [pattern, payload] of RESPONSES) {
     if (pattern.test(url)) {
-      const body = Array.isArray(payload) || !(payload as { data?: unknown }).data
-        ? { data: payload }
-        : payload
-      return new Response(JSON.stringify(body), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
+      const resolved = typeof payload === 'function' ? (payload as (url: string) => unknown)(url) : payload
+      // A deliberate pause, so the skeletons can be photographed too.
+      if (state === 'slow') await new Promise((resume) => window.setTimeout(resume, 4000))
+
+      return json(resolved)
     }
   }
 
@@ -389,17 +506,23 @@ try {
 const target = SCREENS[screen] ?? SCREENS.overview
 const entry = at === '' ? target.path : `${target.path}?${at}`
 
+const routes = (
+  <Routes>
+    <Route element={<AppShell />}>
+      <Route path={realRouter ? window.location.pathname : target.path} element={target.element} />
+    </Route>
+  </Routes>
+)
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <AuthProvider>
       <BillingProvider>
-        <MemoryRouter initialEntries={[entry]}>
-          <Routes>
-            <Route element={<AppShell />}>
-              <Route path={target.path} element={target.element} />
-            </Route>
-          </Routes>
-        </MemoryRouter>
+        {realRouter ? (
+          <BrowserRouter>{routes}</BrowserRouter>
+        ) : (
+          <MemoryRouter initialEntries={[entry]}>{routes}</MemoryRouter>
+        )}
       </BillingProvider>
     </AuthProvider>
   </StrictMode>,

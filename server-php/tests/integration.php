@@ -23,6 +23,7 @@ use Aicountly\Api\Domain\BillerDeskService;
 use Aicountly\Api\Domain\BriefingService;
 use Aicountly\Api\Domain\CollectionsService;
 use Aicountly\Api\Domain\ComplianceService;
+use Aicountly\Api\Clients\DocumentStorageClient;
 use Aicountly\Api\Domain\DocumentCapture;
 use Aicountly\Api\Domain\CreditNoteContext;
 use Aicountly\Api\Domain\DuesService;
@@ -519,6 +520,33 @@ check('receivables are aged from the due date and totalled', function () use ($c
     assertSame('books', $dues['source'], 'and it says where it came from');
     assertTrue(count($dues['bills']) === 1, 'the bill is listed');
     assertTrue($dues['bills'][0]['days_overdue'] > 0, 'with its age');
+});
+
+check('the gross and what came in are passed through when Books sends them', function () use ($ctx, $auth) {
+    resetDatabase();
+    $bill = (new DuesService($ctx, $auth))->receivables()['bills'][0];
+
+    // The stub bill is 150000 raised, 120000 still owed. Both figures are
+    // Books' own; `received` is the subtraction and nothing else.
+    assertSame(150000.0, $bill['bill_amount'], 'the gross');
+    assertSame(30000.0, $bill['received'], 'and what has come in against it');
+    assertSame(120000.0, $bill['balance'], 'the balance is untouched by either');
+});
+
+check('a bill Books sent no gross for reports null, never zero', function () use ($ctx, $auth) {
+    // The distinction this protects: on screen, null prints as "not known" and
+    // zero prints as \u20b90.00. One of those says the customer has paid nothing,
+    // and inferring it from the balance alone would be a guess.
+    $service = new \ReflectionClass(DuesService::class);
+    $amount = $service->getMethod('amount');
+    $amount->setAccessible(true);
+
+    assertSame(null, $amount->invoke(null, ['balance' => 100.0], ['bill_amount']), 'key absent');
+    assertSame(null, $amount->invoke(null, ['bill_amount' => null], ['bill_amount']), 'key null');
+    assertSame(null, $amount->invoke(null, ['bill_amount' => ''], ['bill_amount']), 'key empty');
+    assertSame(null, $amount->invoke(null, ['bill_amount' => 'n/a'], ['bill_amount']), 'key not a number');
+    assertSame(0.0, $amount->invoke(null, ['bill_amount' => 0], ['bill_amount']), 'but a real zero is a real zero');
+    assertSame(9.5, $amount->invoke(null, ['invoice_amount' => '9.5'], ['bill_amount', 'invoice_amount']), 'second alias');
 });
 
 check('an unreachable Books is reported, not shown as zero', function () use ($ctx, $auth) {
@@ -1436,17 +1464,56 @@ check('the expense carries the party, bill number and tax category it was given'
     assertSame('Drive / bills / 2026-09', $payload['attachment_ref'], 'and where the bill is kept');
 });
 
-check('a bill file cannot be kept here, and the screen is told why', function () {
+check('with no document service configured, the screen is told why', function () {
+    // Nothing is configured in the test environment, so both answers are no —
+    // and each one says so in words the screen can show.
     $storage = DocumentCapture::storage();
-    assertTrue($storage['available'] === false, 'there is nowhere to put it');
+    assertTrue($storage['available'] === false, 'there is nowhere to put a bill file');
     assertTrue(is_string($storage['reason']) && $storage['reason'] !== '', 'and the reason says so in words');
     assertSame(['application/pdf', 'image/jpeg', 'image/png'], $storage['accepts'], 'what one would be, when there is');
+    assertSame(10 * 1024 * 1024, $storage['max_bytes'], 'and how big it may get');
 
-    // No DOCUMENT_EXTRACTION_BASE in the test environment, so the reader is off
-    // — with an explanation rather than a button that does nothing.
     $extraction = DocumentCapture::extraction();
     assertTrue($extraction['available'] === false, 'and no service reads one either');
     assertTrue(str_contains((string) $extraction['reason'], 'document-extraction'), 'named, so it can be turned on');
+});
+
+check('configuring a document service is all it takes to turn the drop zone on', function () {
+    // The capability is configuration and nothing else: there is no second
+    // switch to forget, which is what made the old answer "false whatever the
+    // environment says" worth removing once the client existed.
+    putenv('DOCUMENT_STORAGE_BASE=https://documents.example.test');
+    putenv('DOCUMENT_EXTRACTION_BASE=https://extract.example.test');
+
+    try {
+        $storage = DocumentCapture::storage();
+        assertTrue($storage['available'] === true, 'the file can be kept');
+        assertTrue($storage['reason'] === null, 'and there is nothing to apologise for');
+        assertTrue(DocumentStorageClient::configured(), 'the client agrees it has somewhere to send it');
+
+        $extraction = DocumentCapture::extraction();
+        assertTrue($extraction['available'] === true, 'and a bill can be read');
+        assertTrue($extraction['reason'] === null, 'with no reason to show');
+    } finally {
+        putenv('DOCUMENT_STORAGE_BASE');
+        putenv('DOCUMENT_EXTRACTION_BASE');
+    }
+
+    assertTrue(DocumentCapture::storage()['available'] === false, 'and it goes back off when it is unset');
+});
+
+check('a document service that answers without a reference is not a success', function () {
+    // The reference is the whole point of the call. A 200 without one would
+    // otherwise put an expense on record pointing at a bill nobody can find.
+    assertTrue(DocumentStorageClient::stored([]) === null, 'an empty body stores nothing');
+    assertTrue(DocumentStorageClient::stored(['data' => ['url' => 'x']]) === null, 'nor does a url on its own');
+
+    $stored = DocumentStorageClient::stored([
+        'data' => ['reference' => ' doc_99 ', 'filename' => 'bill.pdf', 'size' => '2048', 'content_type' => 'application/pdf'],
+    ]);
+    assertSame('doc_99', $stored['reference'], 'a reference is taken, trimmed');
+    assertSame(2048, $stored['size'], 'and a size that arrived as text is still a number');
+    assertTrue($stored['url'] === null, 'a url that was not sent is absent rather than invented');
 });
 
 echo "\nThe bank withdrawal screen\n";

@@ -174,9 +174,22 @@ export interface ReceiptForm {
   reset: (keep?: { party?: boolean }) => void
 }
 
-export function useReceiptForm(today: string): ReceiptForm {
-  const [party, setParty] = useState<ChosenParty | null>(null)
-  const [amount, setAmount] = useState('')
+/**
+ * @param opening  A party and an amount the screen was opened with.
+ *
+ * Money to Collect links here from a bill it already knows the customer and
+ * the balance of, so neither is retyped. It fills the FORM and nothing else:
+ * the open bills are still read from Books when the party lands and the
+ * allocation is still worked out from those, so a bill settled since the link
+ * was made cannot be receipted twice. Read once, as the opening value — a
+ * later edit belongs to the user, not to the URL.
+ */
+export function useReceiptForm(
+  today: string,
+  opening?: { party: ChosenParty | null; amount: string },
+): ReceiptForm {
+  const [party, setParty] = useState<ChosenParty | null>(opening?.party ?? null)
+  const [amount, setAmount] = useState(opening?.amount ?? '')
   const [entryDate, setEntryDate] = useState(today)
   const [accountId, setAccountId] = useState('')
   const [mode, setMode] = useState<PaymentMode>('cash')
