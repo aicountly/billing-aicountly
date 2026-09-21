@@ -28,6 +28,12 @@ Behind them: sales and purchases, credit and debit notes with their original
 document, receipts and payments with allocation, bank deposits and withdrawals,
 ten live reports with CSV export, and Billing profiles deciding who sees what.
 
+The party directory sits alongside them — every customer and supplier with what
+they owe beside the name, searchable, filterable and exportable. It is composed
+from Smart Books on each request and stores nothing: no party table, no balance,
+no sync. A figure Books does not carry is drawn as "—" with the reason on it,
+never as a zero.
+
 See [docs/BILLING_IMPLEMENTATION_STATUS.md](docs/BILLING_IMPLEMENTATION_STATUS.md)
 for what each figure means, and
 [docs/BILLING_API_DEPENDENCIES.md](docs/BILLING_API_DEPENDENCIES.md) for the

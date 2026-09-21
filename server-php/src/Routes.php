@@ -12,6 +12,7 @@ use Aicountly\Api\Controllers\DuesController;
 use Aicountly\Api\Controllers\ExpensesController;
 use Aicountly\Api\Controllers\ManageController;
 use Aicountly\Api\Controllers\MoneyController;
+use Aicountly\Api\Controllers\PartiesController;
 use Aicountly\Api\Controllers\ProfilesController;
 use Aicountly\Api\Controllers\ReportsController;
 use Aicountly\Api\Controllers\ScheduleController;
@@ -91,6 +92,13 @@ final class Routes
         $router->post('v1/transactions/{id}/retry', [TransactionsController::class, 'retry']);
         $router->get('v1/transactions/{id}/statutory', [TransactionsController::class, 'statutoryStatus']);
         $router->post('v1/transactions/{id}/statutory/{what}', [TransactionsController::class, 'generateStatutory']);
+
+        // The party directory. Books owns the party; these compose one screen's
+        // worth of its answers and write nothing down.
+        $router->get('v1/parties', [PartiesController::class, 'index']);
+        $router->get('v1/parties/overview', [PartiesController::class, 'overview']);
+        $router->get('v1/parties/duplicates', [PartiesController::class, 'duplicates']);
+        $router->get('v1/parties/export', [PartiesController::class, 'export']);
 
         // The money screens' own context: the period's entries, their totals,
         // and when a party was last paid. Books' register, read on the request.

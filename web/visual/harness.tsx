@@ -1,9 +1,10 @@
 /**
- * A photo booth for the five dashboards. Development only.
+ * A photo booth for the five dashboards and the party directory.
+ * Development only.
  *
  * It mounts the REAL page components inside the REAL shell, with the real
  * hooks, the real loading states and the real router. The only thing replaced
- * is the network: `window.fetch` answers the dashboard endpoints from the
+ * is the network: `window.fetch` answers the endpoints they call from the
  * fixtures next door, so the screens can be photographed at four widths
  * without inventing records in anybody's company.
  *
@@ -12,6 +13,8 @@
  *
  *   /visual.html?screen=overview&as=owner
  *   /visual.html?screen=bank-withdrawal&fail=balance
+ *   /visual.html?screen=parties&fail=party-directory
+ *   /visual.html?screen=parties&empty=parties
  */
 
 import { StrictMode } from 'react'
@@ -31,6 +34,7 @@ import ItemsPage from '../src/pages/items/ItemsPage'
 import BankWithdrawalPage from '../src/pages/bank-withdrawal/BankWithdrawalPage'
 import SalesBillPage from '../src/pages/sale/SalesBillPage'
 import CreditNotePage from '../src/pages/credit-note/CreditNotePage'
+import { Parties } from '../src/pages/parties'
 import { saveSession, setAuthToken } from '../src/auth/tokens'
 import { setScope } from '../src/services/api'
 import * as fixtures from './fixtures'
@@ -50,6 +54,15 @@ const asBiller = params.get('as') === 'biller'
  * booth can refuse to answer.
  */
 const failing = new Set((params.get('fail') ?? '').split(',').filter(Boolean))
+
+/**
+ * Endpoints to answer with nothing in them, as `?empty=parties`.
+ *
+ * The third state worth photographing, and the one most easily left undesigned:
+ * the list arrived, it worked, and there is nothing in it. That is not the same
+ * screen as a 503 and must not be allowed to look like one.
+ */
+const emptying = new Set((params.get('empty') ?? '').split(',').filter(Boolean))
 
 /**
  * The screen's OWN query string, as `?at=stock_status%3Dlow`.
@@ -83,6 +96,9 @@ const FAILABLE: Array<[string, RegExp]> = [
   ['balance', /\/v1\/cash-bank(\?|$)/],
   ['withdrawals', /v1\/bank-withdrawals\/recent/],
   ['withdrawal-summary', /v1\/bank-withdrawals\/summary/],
+  // The whole party directory — its list, its figures and its duplicate check
+  // — so the screen can be photographed with Smart Books unreachable.
+  ['party-directory', /v1\/parties(\?|\/|$)/],
 ]
 
 const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
@@ -98,6 +114,7 @@ const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
   sale: { path: '/sales/new', element: <SalesBillPage /> },
   'credit-note': { path: '/more/credit-note', element: <CreditNotePage /> },
   'bank-withdrawal': { path: '/bank-cash/withdrawal', element: <BankWithdrawalPage /> },
+  parties: { path: '/parties', element: <Parties /> },
 }
 
 /** The fixture behind each endpoint the screens call. */
@@ -108,6 +125,9 @@ const RESPONSES: Array<[RegExp, unknown]> = [
   [/v1\/dashboards\/receivables/, fixtures.receivables],
   [/v1\/dashboards\/payables/, fixtures.payables],
   [/v1\/dashboards\/cash-compliance/, fixtures.compliance],
+  [/v1\/parties\/overview/, fixtures.partyOverview],
+  [/v1\/parties\/duplicates/, fixtures.partyDuplicates],
+  [/v1\/parties(\?|$)/, fixtures.partyDirectory],
   [/v1\/insights/, [
     { kind: 'overdue_receivable', tone: 'warning', message: '₹74,500.00 is overdue from customers.', action: { label: 'See who', path: '/dashboard/receivables' } },
     { kind: 'payable_due', tone: 'info', message: '₹48,000.00 is due to suppliers this week.', action: { label: 'See the list', path: '/dashboard/payables' } },
@@ -176,6 +196,20 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Res
         headers: { 'Content-Type': 'application/json' },
       })
     }
+  }
+
+  if (emptying.has('parties') && /v1\/parties(\?|$)/.test(url)) {
+    return new Response(
+      JSON.stringify({
+        data: [],
+        meta: {
+          total: 0, limit: 20, offset: 0, total_known: true, complete: true,
+          sides: ['customer', 'supplier'], source: 'books',
+          note: 'Read from Smart Books on this request. Billing keeps no copy of a party.',
+        },
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    )
   }
 
   /**

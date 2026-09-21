@@ -30,6 +30,7 @@ use Aicountly\Api\Domain\ItemCatalog;
 use Aicountly\Api\Domain\Metric;
 use Aicountly\Api\Domain\MoneyActivityService;
 use Aicountly\Api\Domain\OverviewService;
+use Aicountly\Api\Domain\PartyDirectory;
 use Aicountly\Api\Domain\Period;
 use Aicountly\Api\Domain\RegisterReader;
 use Aicountly\Api\Domain\ReportService;
@@ -531,6 +532,256 @@ check('an unreachable Books is reported, not shown as zero', function () use ($c
     );
 
     stubRecover();
+});
+
+echo "\nThe party directory\n";
+
+check('the directory reads parties from Books and writes nothing down', function () use ($ctx, $auth) {
+    resetDatabase();
+    $page = (new PartyDirectory($ctx, $auth))->page(['side' => 'customer', 'limit' => 50]);
+
+    assertSame(4, count($page['rows']), 'the four customers the stub holds');
+
+    $byId = [];
+    foreach ($page['rows'] as $row) {
+        $byId[$row['account_id']] = $row;
+    }
+    assertSame('Northern Distributors', $byId[501]['name'], 'named as Books names them');
+    assertSame('07AABCA1234F1Z5', $byId[501]['gstin'], 'with the GSTIN Books carries');
+
+    $asked = array_filter(stubRequests(), static fn (array $r) => str_contains($r['path'], '/masters/accounts'));
+    assertTrue(count($asked) > 0, 'Books was actually asked');
+
+    // The release-blocking rule, at the level of this screen: reading the
+    // directory must not create a single row anywhere in Billing.
+    $rows = (int) Db::scalar("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name LIKE '%part%'");
+    assertSame(0, $rows, 'no party table came into existence');
+});
+
+check('a party carries the balance Books says it has, joined on this request', function () use ($ctx, $auth) {
+    resetDatabase();
+    $page = (new PartyDirectory($ctx, $auth))->page(['side' => 'customer', 'limit' => 50]);
+
+    $byId = [];
+    foreach ($page['rows'] as $row) {
+        $byId[$row['account_id']] = $row;
+    }
+
+    // The same 120000 the receivables screen shows, read the same way.
+    assertSame(120000.0, $byId[501]['outstanding'], 'the open bill');
+    assertSame(120000.0, $byId[501]['overdue'], 'and it is overdue');
+    // Read, and genuinely nothing owing. That is a nought, not an absence.
+    assertSame(0.0, $byId[502]['outstanding'], 'a customer with no open bill');
+});
+
+check('a balance nobody was allowed to read is absent, not zero', function () use ($ctx) {
+    resetDatabase();
+    // A biller sells but does not see what is owed. The column must say "—",
+    // because a zero there reads as "this customer is square with us".
+    $biller = userWithProfile($ctx, 'user-biller', 'biller');
+    $page = (new PartyDirectory($ctx, $biller))->page(['side' => 'customer', 'limit' => 50]);
+
+    assertTrue(count($page['rows']) > 0, 'the biller still gets the names');
+    foreach ($page['rows'] as $row) {
+        assertSame(null, $row['outstanding'], 'no balance for ' . $row['name']);
+    }
+});
+
+check('a field Books does not carry reads as null, never as an empty guess', function () use ($ctx, $auth) {
+    resetDatabase();
+    $page = (new PartyDirectory($ctx, $auth))->page(['side' => 'customer', 'limit' => 50]);
+
+    $achievement = null;
+    foreach ($page['rows'] as $row) {
+        if ($row['account_id'] === 503) {
+            $achievement = $row;
+        }
+    }
+
+    assertTrue($achievement !== null, 'the row is there');
+    assertSame(null, $achievement['state'], 'no state was stated');
+    assertSame(null, $achievement['gstin'], 'and no GSTIN');
+    assertSame(null, $achievement['credit_limit'], 'and no credit limit — not 0');
+});
+
+check('the figures above the list are counted, never taken from one page', function () use ($ctx, $auth) {
+    resetDatabase();
+    $overview = (new PartyDirectory($ctx, $auth))->overview();
+
+    assertSame(4, $overview['customers'], 'customers');
+    assertSame(2, $overview['suppliers'], 'suppliers');
+    assertSame(6, $overview['total_parties'], 'and the total is the sum of both sides');
+    assertTrue($overview['complete'], 'the whole list was read, so the totals may be stated');
+
+    // 5 of the 6 are active in the stub, and the percentage is of the parties
+    // whose status Books actually stated — not of every party.
+    assertSame(5, $overview['active_parties'], 'active');
+    assertSame(1, $overview['inactive_parties'], 'inactive');
+    assertSame(83, $overview['active_percentage'], 'active share');
+});
+
+check('credit exposure is summed from real limits and the breaches are named', function () use ($ctx, $auth) {
+    resetDatabase();
+    $overview = (new PartyDirectory($ctx, $auth))->overview();
+
+    // 100000 + 0 + 250000. The two parties Books gave no limit for are left
+    // out rather than counted as nought, which would understate nothing but
+    // would claim a limit that was never set.
+    assertSame(350000.0, $overview['credit_limit_exposure'], 'exposure');
+    assertSame(1, $overview['parties_over_limit'], 'one party owes more than its limit');
+    assertSame(120000.0, $overview['overdue_receivables'], 'overdue, from the same reading the dues screen uses');
+
+    $kinds = array_column($overview['insights'], 'kind');
+    assertTrue(in_array('over_credit_limit', $kinds, true), 'and it is said in words as well');
+});
+
+check('a partial reading reports no totals at all', function () use ($ctx, $auth) {
+    resetDatabase();
+    $directory = new PartyDirectory($ctx, $auth);
+
+    // Force the scan to stop short, exactly as a company with more parties
+    // than one pass can read would. Everything derived from a complete reading
+    // must go null rather than quietly describing the part that was read.
+    $reflection = new \ReflectionClass($directory);
+    $scans = $reflection->getProperty('scans');
+    $scans->setAccessible(true);
+    $scans->setValue($directory, [
+        'customer|' => ['rows' => [], 'total' => 900, 'complete' => false],
+        'supplier|' => ['rows' => [], 'total' => 5, 'complete' => false],
+    ]);
+
+    $overview = $directory->overview();
+    assertTrue(!$overview['complete'], 'it says it is partial');
+    assertSame(null, $overview['active_parties'], 'no active count');
+    assertSame(null, $overview['credit_limit_exposure'], 'no exposure');
+    assertSame(null, $overview['duplicate_groups'], 'no duplicate count');
+    assertSame([], $overview['insights'], 'and nothing is claimed about it');
+    assertSame([], $overview['facets']['states'], 'the state picker offers nothing rather than half the states');
+});
+
+check('the inactive tab filters on the status Books stated', function () use ($ctx, $auth) {
+    resetDatabase();
+    $page = (new PartyDirectory($ctx, $auth))->page(['side' => 'all', 'status' => 'inactive', 'limit' => 50]);
+
+    assertSame(1, count($page['rows']), 'one inactive party');
+    assertSame(503, $page['rows'][0]['account_id'], 'and it is the one Books marked inactive');
+});
+
+check('filters narrow the list and the count beneath it agrees', function () use ($ctx, $auth) {
+    resetDatabase();
+    $directory = new PartyDirectory($ctx, $auth);
+
+    $delhi = $directory->page(['side' => 'all', 'state' => 'Delhi', 'limit' => 50]);
+    assertSame(2, $delhi['total'], 'two parties in Delhi');
+    assertSame(2, count($delhi['rows']), 'and both are on the page');
+
+    $owing = $directory->page(['side' => 'all', 'balance' => 'outstanding', 'limit' => 50]);
+    assertSame(2, $owing['total'], 'two parties have an open bill');
+
+    $unregistered = $directory->page(['side' => 'all', 'gst' => 'unregistered', 'limit' => 50]);
+    foreach ($unregistered['rows'] as $row) {
+        assertSame(null, $row['gstin'], $row['name'] . ' has no GSTIN');
+    }
+});
+
+check('sorting by what is owed puts the largest debt first and the unknown last', function () use ($ctx, $auth) {
+    resetDatabase();
+    $page = (new PartyDirectory($ctx, $auth))->page(['side' => 'all', 'sort' => 'outstanding', 'order' => 'desc', 'limit' => 50]);
+
+    assertSame(501, $page['rows'][0]['account_id'], 'the largest debt leads');
+    assertSame(601, $page['rows'][1]['account_id'], 'then the next');
+});
+
+check('reversing the name order reverses the list, not the page', function () use ($ctx, $auth) {
+    resetDatabase();
+    $directory = new PartyDirectory($ctx, $auth);
+
+    // The trap this guards: reversing the twenty rows Books just returned gives
+    // the FIRST twenty names backwards, which looks correct on page one and is
+    // wrong on every other.
+    $ascending = $directory->page(['side' => 'customer', 'order' => 'asc', 'limit' => 50]);
+    $descending = $directory->page(['side' => 'customer', 'order' => 'desc', 'limit' => 50]);
+
+    $names = array_column($ascending['rows'], 'name');
+    $sorted = $names;
+    usort($sorted, 'strcasecmp');
+    assertSame($sorted, $names, 'the page reads alphabetically whatever order Books sent it in');
+
+    assertSame('Achievement Reward', $ascending['rows'][0]['name'], 'first name ascending');
+    assertSame('Northern Distributors Pvt Ltd', $descending['rows'][0]['name'], 'last name descending');
+});
+
+check('pagination is served by the page, not by the browser', function () use ($ctx, $auth) {
+    resetDatabase();
+    $directory = new PartyDirectory($ctx, $auth);
+
+    $first = $directory->page(['side' => 'customer', 'limit' => 2, 'offset' => 0]);
+    $second = $directory->page(['side' => 'customer', 'limit' => 2, 'offset' => 2]);
+
+    assertSame(2, count($first['rows']), 'two on the first page');
+    assertSame(2, count($second['rows']), 'two on the second');
+    assertSame(4, $first['total'], 'out of four');
+    assertTrue($first['rows'][0]['account_id'] !== $second['rows'][0]['account_id'], 'and they are different parties');
+});
+
+check('search is asked of Books rather than filtered in the browser', function () use ($ctx, $auth) {
+    resetDatabase();
+    $page = (new PartyDirectory($ctx, $auth))->page(['side' => 'customer', 'q' => 'Mehta', 'limit' => 50]);
+
+    assertSame(1, count($page['rows']), 'one match');
+    assertSame('Mehta Traders', $page['rows'][0]['name'], 'the right one');
+
+    $asked = array_values(array_filter(
+        stubRequests(),
+        static fn (array $r) => str_contains($r['path'], '/masters/accounts') && ($r['query']['q'] ?? '') === 'Mehta',
+    ));
+    assertTrue(count($asked) > 0, 'the term reached Books');
+});
+
+check('duplicates are found by evidence, and nothing is merged', function () use ($ctx, $auth) {
+    resetDatabase();
+    $result = (new PartyDirectory($ctx, $auth))->duplicates();
+
+    assertSame(1, count($result['groups']), 'one pair looks like the same party twice');
+    assertSame('Same GSTIN', $result['groups'][0]['reason'], 'and the reason can be checked');
+    assertSame(2, count($result['groups'][0]['members']), 'two members');
+    assertTrue(!str_contains(json_encode($result), 'confidence'), 'no confidence score is invented');
+});
+
+check('a profile that does not buy sees no suppliers in the directory', function () use ($ctx) {
+    resetDatabase();
+    $collector = userWithProfile($ctx, 'user-collector', 'collection');
+    $directory = new PartyDirectory($ctx, $collector);
+
+    assertTrue($directory->maySeeCustomers(), 'customers yes');
+    assertTrue(!$directory->maySeeSuppliers(), 'suppliers no');
+    assertSame(['customer'], $directory->sidesFor('all'), 'and "all" means customers for them');
+    assertSame(0, count($directory->page(['side' => 'supplier', 'limit' => 50])['rows']), 'asking anyway gets nothing');
+});
+
+check('an unreachable Books empties no directory — it says so', function () use ($ctx, $auth) {
+    resetDatabase();
+    stubFail('masters/accounts', 500);
+
+    assertThrows(
+        static fn () => (new PartyDirectory($ctx, $auth))->page(['side' => 'customer', 'limit' => 20]),
+        'Could not reach Smart Books',
+        'the directory during an outage',
+    );
+
+    stubRecover();
+});
+
+check('an exported party list cannot be opened as a spreadsheet formula', function () use ($ctx, $auth) {
+    resetDatabase();
+    $csv = PartyDirectory::toCsv([[
+        'name' => '=cmd|calc', 'type' => 'customer', 'gstin' => null, 'phone' => null, 'email' => null,
+        'city' => null, 'state' => null, 'group' => null, 'outstanding' => 0.0, 'overdue' => 0.0,
+        'credit_limit' => null, 'status' => 'active', 'last_transaction_at' => null,
+    ]]);
+
+    assertTrue(str_contains($csv, "'=cmd|calc"), 'the leading = is defused');
+    assertTrue(str_contains($csv, 'Credit limit'), 'and the header is there');
 });
 
 echo "\nRecurring bills and reminders\n";

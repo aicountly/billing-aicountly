@@ -1,0 +1,623 @@
+/* ---------------------------------------------------------------------------
+   The party directory.
+
+   Layout only, and only for this screen. Every colour, radius and shadow comes
+   from the tokens in index.css — there is no second palette here, and no bare
+   element selector, so adding this file to the bundle cannot reach into a
+   screen that was not asking for it.
+
+   The one token this screen adds is --billing-party-purple, for the supplier
+   badge. Customer and supplier have to be told apart at a glance in a column
+   of four hundred rows, and green against a second green is not a difference.
+   --------------------------------------------------------------------------- */
+
+.billing-parties {
+  --billing-party-purple: #6d28d9;
+  --billing-party-purple-soft: #f2edff;
+
+  display: grid;
+  /* minmax(0, …) rather than the implicit `auto`: a grid item's default
+     min-width is its own content, so one 240px name cell inside a card widens
+     the column, the page, and the heading above it — which is how a phone ends
+     up scrolling the title sideways. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+}
+
+.billing-parties > * { min-width: 0; }
+
+/* ------------------------------------------------------------------ header */
+
+.billing-parties__breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: var(--billing-muted);
+}
+
+.billing-parties__breadcrumb a { color: var(--billing-muted); }
+.billing-parties__breadcrumb a:hover { color: var(--billing-action); }
+.billing-parties__breadcrumb strong { color: var(--billing-text); font-weight: 650; }
+
+.billing-parties__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.billing-parties__head h1 {
+  margin: 0;
+  font-size: clamp(24px, 2.4vw, 31px);
+  line-height: 1.15;
+  font-weight: 750;
+  letter-spacing: -0.025em;
+}
+
+.billing-parties__head p {
+  margin: 7px 0 0;
+  max-width: 62ch;
+  color: var(--billing-muted);
+  font-size: 14px;
+}
+
+.billing-parties__head-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+/* ------------------------------------------------------------------ banner */
+
+.billing-parties__banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--billing-mint-strong);
+  border-radius: 12px;
+  background: linear-gradient(90deg, var(--billing-mint) 0%, #f8fdf8 100%);
+}
+
+.billing-parties__banner-mark {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--billing-mint-strong);
+  color: var(--billing-action);
+}
+
+.billing-parties__banner-text { display: grid; gap: 2px; min-width: 0; flex: 1 1 10rem; }
+.billing-parties__banner-text strong { font-size: 13px; }
+.billing-parties__banner-text span { color: var(--billing-muted); font-size: 12px; }
+.billing-parties__banner-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+
+/* ------------------------------------------------------------------- stats */
+
+.billing-parties__stats {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.billing-parties__stat {
+  min-width: 0;
+  min-height: 104px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--billing-border);
+  border-radius: 12px;
+  background: var(--billing-surface);
+  box-shadow: var(--billing-shadow);
+}
+
+.billing-parties__stat--ring { align-items: center; }
+
+.billing-parties__stat-mark {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: var(--billing-mint);
+  color: var(--billing-action);
+}
+
+.billing-parties__stat-mark--warning { background: var(--billing-warning-bg); color: var(--billing-warning); }
+.billing-parties__stat-mark--danger { background: var(--billing-danger-bg); color: var(--billing-danger); }
+
+.billing-parties__stat-body { min-width: 0; display: flex; flex-direction: column; }
+
+.billing-parties__stat-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--billing-muted);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.billing-parties__stat-value {
+  margin-top: 4px;
+  font-size: 19px;
+  line-height: 1.2;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* An unreadable figure is set smaller and greyer than a real one, so a glance
+   across the row never mistakes it for a number. */
+.billing-parties__stat-value--absent { font-size: 14px; font-weight: 650; color: var(--billing-muted); }
+
+.billing-parties__stat-note { margin-top: 6px; font-size: 11px; color: var(--billing-muted); }
+.billing-parties__stat-note--danger { color: var(--billing-danger); font-weight: 650; }
+.billing-parties__stat-note--warning { color: var(--billing-warning); font-weight: 650; }
+
+/* The active-parties ring. A conic gradient and a hole punched in the middle:
+   no chart library is worth carrying for one circle. */
+.billing-parties__ring {
+  width: 58px;
+  height: 58px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background:
+    radial-gradient(closest-side, var(--billing-surface) 74%, transparent 75% 100%),
+    conic-gradient(var(--billing-action) calc(var(--billing-ring-share, 0) * 1%), #e3eae5 0);
+  color: var(--billing-action);
+  font-size: 14px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+.billing-parties__ring--absent { color: var(--billing-muted); font-size: 12px; }
+
+/* ------------------------------------------------------------ tabs and bar */
+
+.billing-parties__nav {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--billing-border);
+}
+
+/* `min-width: 0` is what makes `overflow-x: auto` mean anything here: a flex
+   item's default floor is its own content, so the strip would widen the row
+   rather than scroll inside it. */
+.billing-parties__tabs { display: flex; align-items: center; gap: 2px; overflow-x: auto; min-width: 0; }
+
+.billing-parties__tab {
+  position: relative;
+  min-height: 42px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 9px 9px 0 0;
+  background: transparent;
+  color: var(--billing-muted);
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.billing-parties__tab:hover { color: var(--billing-text); background: var(--billing-surface-2); }
+
+.billing-parties__tab[aria-selected='true'] { color: var(--billing-action); }
+
+.billing-parties__tab[aria-selected='true']::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--billing-action);
+}
+
+.billing-parties__tab-count {
+  margin-left: 6px;
+  color: var(--billing-muted);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.billing-parties__toolbar { display: flex; align-items: center; gap: 8px; padding-bottom: 8px; flex-wrap: wrap; min-width: 0; }
+
+.billing-parties__count-badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--billing-warning-bg);
+  color: #855000;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+/* ------------------------------------------------------------------- panel */
+
+.billing-parties__panel {
+  border: 1px solid var(--billing-border);
+  border-radius: var(--billing-radius);
+  background: var(--billing-surface);
+  box-shadow: var(--billing-shadow);
+  overflow: hidden;
+}
+
+.billing-parties__filters {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px;
+  border-bottom: 1px solid var(--billing-border);
+  flex-wrap: wrap;
+}
+
+.billing-parties__filters .billing-search { order: 0; flex: 1 1 18rem; max-width: none; min-width: 12rem; }
+
+.billing-parties__select {
+  min-height: 42px;
+  padding: 6px 10px;
+  border: 1px solid var(--billing-border);
+  border-radius: 10px;
+  background: var(--billing-surface);
+  color: var(--billing-text);
+  max-width: 11rem;
+}
+
+.billing-parties__filter-field { display: grid; gap: 3px; }
+.billing-parties__filter-field > span { font-size: 11px; font-weight: 650; color: var(--billing-muted); }
+
+.billing-parties__filters-spacer { flex: 1 1 0; }
+
+.billing-parties__filters-end { display: flex; align-items: flex-end; gap: 10px; margin-left: auto; }
+
+/* A zero-height full-width flex item: it ends the line it is on. Only where
+   one line would not hold everything — a 1920px screen keeps them together. */
+.billing-parties__filters-break { display: none; flex-basis: 100%; height: 0; }
+
+@media (max-width: 1600px) {
+  .billing-parties__filters-break { display: block; }
+}
+
+.billing-parties__viewtoggle { display: inline-flex; border: 1px solid var(--billing-border); border-radius: 10px; overflow: hidden; }
+
+.billing-parties__viewtoggle button {
+  width: 40px;
+  min-height: 40px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: var(--billing-surface);
+  color: var(--billing-muted);
+  cursor: pointer;
+}
+
+.billing-parties__viewtoggle button[aria-pressed='true'] { background: var(--billing-mint); color: var(--billing-action); }
+
+/* A bar that replaces the toolbar while rows are ticked, rather than a second
+   row of controls appearing beneath it and moving the table down. */
+.billing-parties__bulkbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  background: var(--billing-mint);
+  border-bottom: 1px solid var(--billing-mint-strong);
+}
+
+.billing-parties__bulkbar strong { font-size: 13px; }
+
+/* ------------------------------------------------------------------- table */
+
+.billing-parties__table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
+
+.billing-parties__table th {
+  padding: 10px 12px;
+  background: var(--billing-surface-2);
+  border-bottom: 1px solid var(--billing-border);
+  color: var(--billing-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.billing-parties__table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #edf1ed;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.billing-parties__table tbody tr:last-child td { border-bottom: 0; }
+.billing-parties__table tbody tr:hover { background: #fbfdfb; }
+.billing-parties__table tbody tr[data-selected='true'] { background: var(--billing-mint); }
+
+.billing-parties__table .billing-amount { text-align: right; font-variant-numeric: tabular-nums; }
+.billing-parties__table th.billing-amount { text-align: right; }
+
+.billing-parties__table th:first-child,
+.billing-parties__table td:first-child { width: 40px; padding-right: 0; }
+
+.billing-parties__sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
+.billing-parties__sort:hover { color: var(--billing-action); }
+.billing-parties__sort[data-active='true'] { color: var(--billing-action); }
+
+.billing-parties__name { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.billing-parties__table .billing-parties__name { min-width: 15rem; }
+
+.billing-parties__avatar {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--billing-mint-strong);
+  color: var(--billing-action);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.billing-parties__avatar--supplier { background: var(--billing-party-purple-soft); color: var(--billing-party-purple); }
+
+.billing-parties__name-text { display: grid; gap: 1px; min-width: 0; }
+
+.billing-parties__name-text a,
+.billing-parties__name-text button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--billing-text);
+  font: inherit;
+  font-weight: 650;
+  text-align: left;
+  cursor: pointer;
+  max-width: 24rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.billing-parties__name-text button:hover { color: var(--billing-action); text-decoration: underline; }
+.billing-parties__name-text small { color: var(--billing-muted); font-size: 11px; }
+
+.billing-parties__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 23px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.billing-parties__pill--customer { background: #eaf7e7; color: #1a6b18; }
+.billing-parties__pill--supplier { background: var(--billing-party-purple-soft); color: var(--billing-party-purple); }
+.billing-parties__pill--active { background: #eaf7e7; color: #216b18; }
+.billing-parties__pill--inactive { background: #eef2f0; color: #516059; }
+.billing-parties__pill--unknown { background: var(--billing-surface-2); color: var(--billing-muted); }
+
+.billing-parties__muted { color: var(--billing-muted); }
+.billing-parties__danger { color: var(--billing-danger); font-weight: 650; }
+
+.billing-parties__gstin { display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+
+.billing-parties__copy {
+  border: 0;
+  padding: 2px;
+  line-height: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--billing-muted);
+  cursor: pointer;
+  opacity: 0;
+}
+
+.billing-parties__table tr:hover .billing-parties__copy,
+.billing-parties__copy:focus-visible { opacity: 1; }
+.billing-parties__copy:hover { background: var(--billing-surface-2); color: var(--billing-action); }
+
+/* ---------------------------------------------------------------- row cards */
+
+.billing-parties__cards { display: grid; gap: 10px; padding: 14px; }
+
+.billing-parties__card {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--billing-border);
+  border-radius: 12px;
+  background: var(--billing-surface);
+}
+
+.billing-parties__card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.billing-parties__card-figures { display: flex; gap: 18px; flex-wrap: wrap; }
+.billing-parties__card-figures div { display: grid; gap: 1px; }
+.billing-parties__card-figures span { font-size: 11px; color: var(--billing-muted); }
+.billing-parties__card-figures strong { font-variant-numeric: tabular-nums; }
+
+/* ---------------------------------------------------------------- footer */
+
+.billing-parties__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  border-top: 1px solid var(--billing-border);
+  color: var(--billing-muted);
+  font-size: 13px;
+}
+
+.billing-parties__pager { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+.billing-parties__pager button {
+  min-width: 34px;
+  min-height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--billing-border);
+  border-radius: 8px;
+  background: var(--billing-surface);
+  color: var(--billing-text);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.billing-parties__pager button:hover:not(:disabled) { background: var(--billing-surface-2); }
+.billing-parties__pager button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.billing-parties__pager button[aria-current='page'] {
+  background: var(--billing-action);
+  border-color: var(--billing-action);
+  color: #fff;
+  font-weight: 700;
+}
+
+.billing-parties__pager-gap { padding: 0 2px; color: var(--billing-muted); }
+
+/* ---------------------------------------------------------------- drawers */
+
+.billing-parties__drawer-section { display: grid; gap: 10px; padding: 14px 0; border-top: 1px solid var(--billing-border); }
+.billing-parties__drawer-section:first-of-type { border-top: 0; }
+.billing-parties__drawer-section h3 { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--billing-muted); }
+
+.billing-parties__facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.billing-parties__fact { display: grid; gap: 2px; min-width: 0; }
+.billing-parties__fact dt { font-size: 11px; color: var(--billing-muted); }
+.billing-parties__fact dd { margin: 0; font-weight: 650; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+
+.billing-parties__dupe {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--billing-border);
+  border-radius: 12px;
+  background: var(--billing-surface-2);
+}
+
+.billing-parties__dupe-member {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--billing-border);
+  border-radius: 9px;
+  background: var(--billing-surface);
+}
+
+.billing-parties__insight {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--billing-muted);
+}
+
+.billing-parties__insight strong { color: var(--billing-text); font-weight: 650; }
+
+/* ----------------------------------------------------------- refresh hint */
+
+.billing-parties__refreshing {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--billing-muted);
+}
+
+/* The table dims rather than disappearing while the next page is on its way.
+   Blanking it would move the pager under a finger already reaching for it. */
+.billing-parties__stale { opacity: 0.55; transition: opacity 0.18s ease; }
+
+/* ------------------------------------------------------------- responsive */
+
+@media (max-width: 1500px) {
+  .billing-parties__stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+/* Columns leave in the order of how rarely they are the reason somebody opened
+   this screen, at the width where the row would otherwise start scrolling
+   sideways. Name, what is owed, the status and the actions never leave. */
+@media (max-width: 1460px) {
+  .billing-parties__col--credit { display: none; }
+}
+
+@media (max-width: 1240px) {
+  .billing-parties__col--state { display: none; }
+}
+
+@media (max-width: 1100px) {
+  .billing-parties__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .billing-parties__select { max-width: none; flex: 1 1 8rem; }
+}
+
+@media (max-width: 1000px) {
+  .billing-parties__col--gstin { display: none; }
+}
+
+@media (max-width: 760px) {
+  .billing-parties__col--last { display: none; }
+}
+
+@media (max-width: 720px) {
+  .billing-parties { gap: 14px; }
+  .billing-parties__stats { grid-template-columns: minmax(0, 1fr); }
+  .billing-parties__head-actions { width: 100%; }
+  .billing-parties__head-actions .billing-button { flex: 1 1 auto; justify-content: center; }
+  .billing-parties__filters { gap: 8px; }
+  .billing-parties__filters .billing-search { flex-basis: 100%; }
+  .billing-parties__filter-field { flex: 1 1 8rem; }
+  /* The list is cards at this width whatever the toggle says, so the toggle
+     would be a control that visibly does nothing. */
+  .billing-parties__viewtoggle { display: none; }
+  .billing-parties__facts { grid-template-columns: minmax(0, 1fr); }
+  .billing-parties__foot { align-items: flex-start; flex-direction: column; }
+  .billing-parties__banner { align-items: flex-start; flex-wrap: wrap; }
+  .billing-parties__card-figures { gap: 12px; }
+  .billing-parties__cards { padding: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .billing-parties__stale { transition: none; }
+}
+
+@media print {
+  .billing-parties__toolbar,
+  .billing-parties__filters,
+  .billing-parties__head-actions,
+  .billing-parties__banner,
+  .billing-parties__pager { display: none; }
+  .billing-parties__panel { box-shadow: none; }
+}

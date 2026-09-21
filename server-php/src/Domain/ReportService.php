@@ -308,10 +308,11 @@ final class ReportService
     /**
      * One CSV cell, neutralised against spreadsheet formula injection.
      *
-     * Public because the item catalogue exports through the same rule: a
-     * supplier's name that begins with `=` is a formula the moment somebody
-     * opens the file, and there must be exactly one place that decides what to
-     * do about it.
+     * Public because the item catalogue and the party directory both export
+     * through the same rule: a supplier's name that begins with `=` is a
+     * formula the moment somebody opens the file, and there must be exactly
+     * one place that decides what to do about it. Three copies of that defence
+     * is two copies that will be forgotten.
      */
     public static function cell(mixed $value): string
     {

@@ -452,6 +452,141 @@ export const compliance: ComplianceDashboard = {
 }
 
 // ---------------------------------------------------------------------------
+// The party directory
+// ---------------------------------------------------------------------------
+
+/**
+ * Deliberately awkward, because that is what the screen has to survive.
+ *
+ * There is a party with no GSTIN, one with no state at all, one Smart Books
+ * marked inactive, one owing more than its credit limit allows, one with no
+ * credit limit set — which is NOT a limit of zero — and two that are plainly
+ * the same company entered twice. A fixture where every field is filled in
+ * proves nothing about a directory whose whole job is reporting what it could
+ * not read.
+ */
+export const partyDirectory = {
+  data: [
+    {
+      account_id: 503, name: 'Achievement Reward', type: 'customer', gstin: null, pan: null,
+      phone: null, email: null, city: 'New Delhi', state: 'Delhi', group: 'Retail customers',
+      credit_limit: null, credit_days: null, status: 'active', last_transaction_at: null,
+      updated_at: '2026-08-02', outstanding: 0, overdue: 0, bill_count: 0, oldest_overdue_days: 0,
+      over_credit_limit: false,
+    },
+    {
+      account_id: 512, name: 'Advance Deduction', type: 'supplier', gstin: null, pan: null,
+      phone: '9820000512', email: null, city: 'Mumbai', state: 'Maharashtra', group: 'Vendors',
+      credit_limit: 50000, credit_days: 30, status: 'active', last_transaction_at: '2026-09-12',
+      updated_at: '2026-09-12', outstanding: 12450, overdue: 0, bill_count: 2, oldest_overdue_days: 0,
+      over_credit_limit: false,
+    },
+    {
+      account_id: 518, name: 'Advertising Services', type: 'supplier', gstin: null, pan: null,
+      phone: null, email: 'billing@advertising.example', city: 'Bengaluru', state: 'Karnataka',
+      group: 'Service providers', credit_limit: 0, credit_days: null, status: 'active',
+      last_transaction_at: '2026-09-05', updated_at: '2026-09-05', outstanding: 0, overdue: 0,
+      bill_count: 0, oldest_overdue_days: 0, over_credit_limit: false,
+    },
+    {
+      account_id: 521, name: 'Alankit Limited', type: 'supplier', gstin: '07AABCA1234F1Z5', pan: 'AABCA1234F',
+      phone: '9811000521', email: 'accounts@alankit.example', city: 'New Delhi', state: 'Delhi',
+      group: 'Key accounts', credit_limit: 200000, credit_days: 45, status: 'active',
+      last_transaction_at: '2026-09-14', updated_at: '2026-09-14', outstanding: 84200, overdue: 0,
+      bill_count: 3, oldest_overdue_days: 0, over_credit_limit: false,
+    },
+    {
+      account_id: 526, name: 'Amazon Pay India Private Limited', type: 'supplier', gstin: '29AAGCA9798Q1Z1',
+      pan: 'AAGCA9798Q', phone: null, email: null, city: 'Bengaluru', state: 'Karnataka',
+      group: 'Service providers', credit_limit: 500000, credit_days: 15, status: 'active',
+      last_transaction_at: '2026-09-11', updated_at: '2026-09-11', outstanding: 234500, overdue: 0,
+      bill_count: 6, oldest_overdue_days: 0, over_credit_limit: false,
+    },
+    {
+      account_id: 530, name: 'API Service Charges', type: 'supplier', gstin: '27AACFA1122D1Z7', pan: null,
+      phone: null, email: null, city: 'Mumbai', state: 'Maharashtra', group: 'Vendors',
+      credit_limit: 100000, credit_days: 30, status: 'active', last_transaction_at: '2026-09-10',
+      updated_at: '2026-09-10', outstanding: 6780, overdue: 0, bill_count: 1, oldest_overdue_days: 0,
+      over_credit_limit: false,
+    },
+    {
+      account_id: 534, name: 'Arrears', type: 'customer', gstin: null, pan: null, phone: null,
+      email: null, city: 'Chennai', state: 'Tamil Nadu', group: 'Retail customers',
+      credit_limit: null, credit_days: null, status: 'inactive', last_transaction_at: null,
+      updated_at: '2026-04-01', outstanding: 0, overdue: 0, bill_count: 0, oldest_overdue_days: 0,
+      over_credit_limit: false,
+    },
+    {
+      account_id: 541, name: 'Bharat Steels & Alloys', type: 'customer', gstin: '24AAACB2233K1Z9',
+      pan: 'AAACB2233K', phone: '9825000541', email: 'ap@bharatsteels.example', city: 'Surat',
+      state: 'Gujarat', group: 'Wholesale customers', credit_limit: 150000, credit_days: 30,
+      status: 'active', last_transaction_at: '2026-07-02', updated_at: '2026-09-16',
+      outstanding: 268400, overdue: 268400, bill_count: 4, oldest_overdue_days: 76,
+      over_credit_limit: true,
+    },
+  ],
+  meta: {
+    total: 468,
+    limit: 20,
+    offset: 0,
+    total_known: true,
+    complete: true,
+    sides: ['customer', 'supplier'],
+    source: 'books',
+    note: 'Read from Smart Books on this request. Billing keeps no copy of a party.',
+  },
+}
+
+export const partyOverview = {
+  total_parties: 468,
+  customers: 298,
+  suppliers: 170,
+  active_parties: 364,
+  inactive_parties: 104,
+  status_known: 468,
+  active_percentage: 78,
+  credit_limit_exposure: 2875200,
+  parties_over_limit: 4,
+  gst_registered: 291,
+  without_activity_90d: 8,
+  overdue_receivables: 1234600,
+  total_receivable: 2840900,
+  total_payable: 986400,
+  overdue_payables: 0,
+  duplicate_groups: 1,
+  complete: true,
+  facets: {
+    states: ['Delhi', 'Gujarat', 'Karnataka', 'Maharashtra', 'Tamil Nadu'],
+    groups: ['Key accounts', 'Retail customers', 'Service providers', 'Vendors', 'Wholesale customers'],
+    cities: ['Bengaluru', 'Chennai', 'Mumbai', 'New Delhi', 'Surat'],
+  },
+  insights: [
+    { kind: 'over_credit_limit', tone: 'danger', message: '4 parties owe more than their credit limit allows.' },
+    { kind: 'dormant', tone: 'info', message: '8 parties have had no transaction in the last 90 days.' },
+  ],
+  may_see_customers: true,
+  may_see_suppliers: true,
+  source: 'books',
+  note: 'Counted from Smart Books on this request. Billing keeps no party list of its own.',
+}
+
+export const partyDuplicates = {
+  groups: [
+    {
+      key: 'gstin:07AABCA1234F1Z5',
+      reason: 'Same GSTIN',
+      field: 'gstin',
+      members: [
+        { account_id: 521, name: 'Alankit Limited', type: 'supplier', gstin: '07AABCA1234F1Z5', phone: '9811000521', email: null, state: 'Delhi', outstanding: 84200 },
+        { account_id: 604, name: 'ALANKIT LTD.', type: 'supplier', gstin: '07AABCA1234F1Z5', phone: null, email: null, state: 'Delhi', outstanding: 0 },
+      ],
+    },
+  ],
+  complete: true,
+  note: 'Matched on GSTIN, phone, email and name. Nothing is merged here — the party master belongs to Smart Books.',
+}
+
+// ---------------------------------------------------------------------------
 // Money paid / money received
 // ---------------------------------------------------------------------------
 

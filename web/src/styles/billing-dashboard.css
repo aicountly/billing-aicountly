@@ -883,20 +883,43 @@
 
 .billing-drawer {
   position: fixed;
-  inset: 0 auto 0 0;
   z-index: 71;
   width: min(84vw, 300px);
   display: flex;
   flex-direction: column;
   gap: 4px;
   padding: 16px 14px 24px;
-  overflow-y: auto;
   background: var(--billing-surface);
-  border-right: 1px solid var(--billing-border);
   box-shadow: var(--billing-shadow-lg);
 }
 
-.billing-drawer__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+/* Navigation comes in from the left, a record from the right — which is where
+   a reader's eye already is when they clicked the row that opened it. */
+.billing-drawer--left  { inset: 0 auto 0 0; border-right: 1px solid var(--billing-border); }
+.billing-drawer--right { inset: 0 0 0 auto; border-left: 1px solid var(--billing-border); }
+.billing-drawer--wide  { width: min(94vw, 440px); }
+
+.billing-drawer__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  flex-shrink: 0;
+}
+
+/* The body scrolls, the head and foot do not: a drawer whose close button
+   scrolls away is one a touch user has to scroll back up to escape. */
+.billing-drawer__body { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+
+.billing-drawer__foot {
+  flex-shrink: 0;
+  display: flex;
+  gap: 8px;
+  padding-top: 12px;
+  margin-top: 8px;
+  border-top: 1px solid var(--billing-border);
+}
 
 /* ----------------------------------------------------------------- toasts */
 

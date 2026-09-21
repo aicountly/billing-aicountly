@@ -56,6 +56,7 @@ export function useMoneyForm({
   direction,
   bills,
   today,
+  initialParty = null,
   onSaved,
   onFailed,
 }: {
@@ -63,13 +64,21 @@ export function useMoneyForm({
   bills: OpenBill[]
   /** The company's today, once the server has told us what it is. */
   today: string
+  /**
+   * The party this screen was opened for, when something handed one over.
+   *
+   * The party directory does, on the same two query parameters the bill editor
+   * already reads. Making somebody search again for the customer they just
+   * clicked is how a screen gets skipped.
+   */
+  initialParty?: PickedParty | null
   onSaved: (result: { requestId: number; amount: number; partyName: string; savedAndNew: boolean }) => void
   onFailed: (message: string) => void
 }) {
   const isOut = direction === 'out'
 
   const [values, setValues] = useState<MoneyFormValues>(() => ({
-    party: null,
+    party: initialParty,
     amount: '',
     entryDate: today,
     accountId: '',

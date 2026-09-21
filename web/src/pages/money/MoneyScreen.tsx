@@ -17,7 +17,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Lightbulb, WalletCards } from 'lucide-react'
 import { api } from '../../services/api'
 import type {
@@ -50,6 +50,16 @@ export function MoneyScreen({ direction }: { direction: Direction }) {
   const isOut = direction === 'out'
   const permission = isOut ? 'payment.create' : 'receipt.create'
   const allowed = can(permission)
+
+  // The party directory opens this screen for a particular customer or
+  // supplier, on the same two parameters the bill editor already reads.
+  // Resolved once: after that the field is the user's to change.
+  const [searchParams] = useSearchParams()
+  const [partyFromUrl] = useState(() => {
+    const id = Number(searchParams.get('party_account_id') ?? '')
+    const name = searchParams.get('party_name')
+    return id > 0 ? { id, name: name ?? `Account ${id}` } : null
+  })
 
   const [period, setPeriod] = useState<MoneyPeriodKey>('month')
   const [allocationOpen, setAllocationOpen] = useState(false)
@@ -94,6 +104,7 @@ export function MoneyScreen({ direction }: { direction: Direction }) {
     direction,
     bills,
     today: localToday(),
+    initialParty: partyFromUrl,
     onSaved: ({ requestId, amount, partyName, savedAndNew }) => {
       // The period totals and the recent list both just changed.
       activity.reload()
