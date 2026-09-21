@@ -18,14 +18,17 @@ require __DIR__ . '/../src/Autoload.php';
 
 Env::load(__DIR__ . '/../.env');
 
+use Aicountly\Api\Domain\BankWithdrawalHistory;
 use Aicountly\Api\Domain\BillerDeskService;
 use Aicountly\Api\Domain\BriefingService;
 use Aicountly\Api\Domain\CollectionsService;
 use Aicountly\Api\Domain\ComplianceService;
 use Aicountly\Api\Domain\DocumentCapture;
+use Aicountly\Api\Domain\CreditNoteContext;
 use Aicountly\Api\Domain\DuesService;
 use Aicountly\Api\Domain\ExpenseHistory;
 use Aicountly\Api\Domain\Metric;
+use Aicountly\Api\Domain\MoneyActivityService;
 use Aicountly\Api\Domain\OverviewService;
 use Aicountly\Api\Domain\Period;
 use Aicountly\Api\Domain\RegisterReader;
@@ -254,6 +257,81 @@ check('Billing computes no tax — Books is sent the lines and decides', functio
         assertTrue(!array_key_exists($forbidden, $draft), "the payload must not carry {$forbidden}");
     }
     assertTrue(isset($draft['inventory_lines']), 'the lines are sent');
+});
+
+check('the bill carries the facts the biller knows — and still no tax figure', function () use ($ctx, $auth) {
+    resetDatabase();
+    (new TransactionService($ctx, $auth))->create('sale', saleInput([
+        'place_of_supply' => '27',
+        'terms'           => 'Goods once sold are not taken back.',
+        'due_date'        => '2026-10-14',
+        'lines'           => [
+            ['item_id' => 301, 'unit_id' => 1, 'qty' => 5, 'rate' => 120, 'tax_cat_id' => 7, 'hsn_sac' => '8479'],
+        ],
+    ]));
+
+    $draft = null;
+    foreach (stubRequests() as $request) {
+        if (str_contains($request['path'], '/vouchers/drafts') && !str_contains($request['path'], '/post')) {
+            $draft = $request['body']['payload'] ?? [];
+            break;
+        }
+    }
+
+    assertTrue($draft !== null, 'a draft was sent');
+    // A place of supply is a fact about the supply, not a computation: it is
+    // what decides CGST + SGST against IGST, and Books decides that with it.
+    assertSame('27', $draft['place_of_supply'], 'the place of supply reaches Books');
+    assertSame('Goods once sold are not taken back.', $draft['terms'], 'and the terms that print on it');
+    assertSame('2026-10-14', $draft['due_date'], 'and the due date');
+
+    $line = $draft['inventory_lines'][0] ?? [];
+    assertSame(7, $line['tax_cat_id'], 'the tax category Books should apply is sent');
+    assertSame('8479', $line['hsn_sac'], 'and the HSN read from Inventory');
+
+    // The point of the whole exercise: none of that is a tax AMOUNT.
+    foreach (['tax_amount', 'cgst', 'sgst', 'igst', 'total_amount', 'round_off'] as $forbidden) {
+        assertTrue(!array_key_exists($forbidden, $draft), "the payload must not carry {$forbidden}");
+    }
+});
+
+check('a cash sale tells Books which ledger took the money, and how', function () use ($ctx, $auth) {
+    resetDatabase();
+    (new TransactionService($ctx, $auth))->create('sale', saleInput([
+        'settled_to_account_id' => 9001,
+        'payment_mode'          => 'upi',
+    ]));
+
+    $draft = null;
+    foreach (stubRequests() as $request) {
+        if (str_contains($request['path'], '/vouchers/drafts') && !str_contains($request['path'], '/post')) {
+            $draft = $request['body']['payload'] ?? [];
+            break;
+        }
+    }
+
+    assertTrue($draft !== null, 'a draft was sent');
+    assertSame(9001, $draft['settlement_account_id'], 'the ledger that received the money');
+    assertTrue($draft['is_cash_transaction'] === true, 'and that it settled itself');
+    assertSame('upi', $draft['payment_mode'], 'and how it was paid');
+});
+
+check('a bill with nothing settled carries no payment mode at all', function () use ($ctx, $auth) {
+    resetDatabase();
+    (new TransactionService($ctx, $auth))->create('sale', saleInput(['payment_mode' => 'upi']));
+
+    $draft = null;
+    foreach (stubRequests() as $request) {
+        if (str_contains($request['path'], '/vouchers/drafts') && !str_contains($request['path'], '/post')) {
+            $draft = $request['body']['payload'] ?? [];
+            break;
+        }
+    }
+
+    // A payment mode on a bill nobody paid would be a fact about a payment that
+    // did not happen.
+    assertTrue(!array_key_exists('payment_mode', $draft ?? []), 'no payment mode without a settlement');
+    assertTrue(!array_key_exists('settlement_account_id', $draft ?? []), 'and no settlement ledger');
 });
 
 check('an unreachable Books leaves the entry retryable and says no duplicate exists', function () use ($ctx, $auth) {
@@ -1127,6 +1205,47 @@ check('a part-paid invoice never reads as paid', function () {
     assertSame(null, $unknown, 'and an unreadable row shows no status rather than a guessed one');
 });
 
+check('an invoice\'s lines are read whatever Books calls them', function () {
+    // Two deployments, two spellings, one set of lines. A credit note that
+    // cannot start from the bill is a credit note somebody retypes off paper.
+    $ours = CreditNoteContext::linesOf(['inventory_lines' => [[
+        'source_line_ref' => '1', 'item_id' => 7, 'item_name' => 'Wireless Mouse', 'item_sku' => 'M221-BLK',
+        'mc_id' => 3, 'batch_no' => 'BATCH-A1', 'qty' => 5, 'rate' => 850, 'discount_pc' => 0,
+        'amount' => 4250, 'tax_cat_id' => 4, 'tax_rate' => 18,
+    ]], 'service_lines' => [[
+        'source_line_ref' => '2', 'description' => 'Installation', 'amount' => 500,
+    ]]]);
+
+    assertSame(2, count($ours), 'the goods line and the service line');
+    assertSame('Wireless Mouse', $ours[0]['item_name'], 'the item');
+    assertSame(3, $ours[0]['warehouse_id'], 'the warehouse it went out of');
+    assertTrue($ours[0]['stockable'], 'goods can come back');
+    assertTrue($ours[1]['stockable'] === false, 'a described charge never does');
+
+    $theirs = CreditNoteContext::linesOf(['items' => [[
+        'product_id' => 9, 'product_name' => 'USB-C Cable', 'code' => 'CB11-1M', 'quantity' => '3',
+        'unit_price' => '450.00', 'discount_percent' => '5', 'line_amount' => '1282.50',
+        'gst_rate' => '18', 'warehouse_id' => 2,
+    ]]]);
+
+    assertSame(1, count($theirs), 'the other spelling reads too');
+    assertSame(3.0, $theirs[0]['qty'], 'quantity as a number, from a string');
+    assertSame(18.0, $theirs[0]['tax_rate'], 'the rate Books had on the bill');
+});
+
+check('the accounting legs of a voucher are never read as goods', function () {
+    // "Output CGST 9%" in a list of things coming back is the one mistake this
+    // normaliser must not make, so those containers are not even looked at.
+    $legs = CreditNoteContext::linesOf([
+        'entries' => [['account_name' => 'Output CGST 9%', 'amount' => 382.5, 'dr_cr' => 'CR']],
+        'ledger_entries' => [['account_name' => 'Sales', 'amount' => 4250]],
+    ]);
+    assertSame(0, count($legs), 'no lines from the ledger side of the voucher');
+
+    $unknown = CreditNoteContext::linesOf(['something_else' => [['foo' => 'bar']]]);
+    assertSame(0, count($unknown), 'and none from a shape we do not recognise');
+});
+
 check('a comparison against nothing is refused, and a rise is not always good', function () {
     $noBase = Metric::compare(1000.0, 0.0, 'last month', riseIsGood: true);
     assertTrue($noBase['available'] === false, 'dividing by nothing gives no percentage');
@@ -1329,6 +1448,145 @@ check('a bill file cannot be kept here, and the screen is told why', function ()
     assertTrue(str_contains((string) $extraction['reason'], 'document-extraction'), 'named, so it can be turned on');
 });
 
+echo "\nThe bank withdrawal screen\n";
+
+/** One withdrawal, as the screen sends it: bank out, cash in, a cheque number. */
+function withdrawal(array $overrides = []): array
+{
+    return $overrides + [
+        'amount'          => 25000,
+        'from_account_id' => 102,
+        'to_account_id'   => 101,
+        'date'            => '2026-09-18',
+        'instrument_no'   => 'CHQ002341',
+        'narration'       => 'Counter float',
+    ];
+}
+
+check('recent withdrawals are this company\'s own posted ones, newest first, named live', function () use ($ctx, $auth) {
+    resetDatabase();
+    $service = new TransactionService($ctx, $auth);
+    $service->create('bank_withdrawal', withdrawal(['amount' => 50000, 'date' => '2026-09-12', 'instrument_no' => 'CHQ002333']));
+    $service->create('bank_withdrawal', withdrawal());
+
+    $recent = (new BankWithdrawalHistory($ctx, $auth))->recent(4);
+
+    assertSame(2, count($recent['rows']), 'both withdrawals come back');
+    assertSame('2026-09-18', $recent['rows'][0]['date'], 'newest first');
+    assertSame(25000.0, $recent['rows'][0]['amount'], 'the amount is what was recorded');
+    assertSame('CHQ002341', $recent['rows'][0]['reference_no'], 'and the cheque number with it');
+    assertSame(102, $recent['rows'][0]['bank_account_id'], 'the bank it came out of');
+    assertSame(101, $recent['rows'][0]['cash_account_id'], 'and the cash account it went into');
+    // The NAMES are Books', read on this request. Billing stores the ids only.
+    assertTrue($recent['names_available'], 'Books answered, so the accounts are named');
+    assertSame('HDFC Current', $recent['rows'][0]['bank_account_name'], 'the bank is named from Books');
+    assertSame('Cash in hand', $recent['rows'][0]['cash_account_name'], 'so is the cash account');
+});
+
+check('a deposit is not a withdrawal, and an unposted one is not history', function () use ($ctx, $auth) {
+    resetDatabase();
+    (new TransactionService($ctx, $auth))->create('bank_deposit', [
+        'amount' => 9000, 'from_account_id' => 101, 'to_account_id' => 102, 'date' => '2026-09-17',
+    ]);
+
+    stubFail('vouchers/drafts', 500);
+    try {
+        (new TransactionService($ctx, $auth))->create('bank_withdrawal', withdrawal());
+    } catch (\Throwable) {
+        // The point of the case: it did not reach Books.
+    }
+    stubRecover();
+
+    assertSame([], (new BankWithdrawalHistory($ctx, $auth))->recent(4)['rows'], 'neither one shows as a withdrawal');
+});
+
+check('another company\'s withdrawals are not in this one\'s list', function () use ($auth) {
+    resetDatabase();
+    $mine = freshContext(55);
+    $theirs = freshContext(77);
+
+    (new TransactionService($mine, $auth))->create('bank_withdrawal', withdrawal(['amount' => 1000]));
+    (new TransactionService($theirs, $auth))->create('bank_withdrawal', withdrawal(['amount' => 2000]));
+
+    $rows = (new BankWithdrawalHistory($mine, $auth))->recent(4)['rows'];
+    assertSame(1, count($rows), 'only this company\'s');
+    assertSame(1000.0, $rows[0]['amount'], 'and it is the right one');
+});
+
+check('Books being unreachable costs the account names, not the list', function () use ($ctx, $auth) {
+    resetDatabase();
+    (new TransactionService($ctx, $auth))->create('bank_withdrawal', withdrawal(['amount' => 7500]));
+
+    stubFail('masters/accounts', 503);
+    $recent = (new BankWithdrawalHistory($ctx, $auth))->recent(4);
+    stubRecover();
+
+    assertSame(1, count($recent['rows']), 'the withdrawal is still listed');
+    assertSame(7500.0, $recent['rows'][0]['amount'], 'with its amount');
+    assertTrue($recent['names_available'] === false, 'and the screen is told the names are missing');
+    assertSame(null, $recent['rows'][0]['bank_account_name'], 'rather than being given a guess');
+});
+
+check('the month\'s withdrawals are counted for one bank account, inside its own window', function () use ($ctx, $auth) {
+    resetDatabase();
+    $service = new TransactionService($ctx, $auth);
+    $today = (new \DateTimeImmutable('now', new \DateTimeZone('Asia/Kolkata')))->format('Y-m-d');
+    $lastWeek = (new \DateTimeImmutable('now', new \DateTimeZone('Asia/Kolkata')))->modify('-7 days')->format('Y-m-d');
+    $longAgo = (new \DateTimeImmutable('now', new \DateTimeZone('Asia/Kolkata')))->modify('-90 days')->format('Y-m-d');
+
+    $service->create('bank_withdrawal', withdrawal(['amount' => 25000, 'date' => $today]));
+    $service->create('bank_withdrawal', withdrawal(['amount' => 15000, 'date' => $lastWeek]));
+    // Another bank, and one older than the window. Neither should be counted.
+    $service->create('bank_withdrawal', withdrawal(['amount' => 99000, 'date' => $today, 'from_account_id' => 103]));
+    $service->create('bank_withdrawal', withdrawal(['amount' => 88000, 'date' => $longAgo]));
+
+    $summary = (new BankWithdrawalHistory($ctx, $auth))->summary(102);
+
+    assertSame(40000.0, $summary['total'], 'only this account, only the last 30 days');
+    assertSame(2, $summary['count'], 'and the count matches the total');
+    assertSame(30, $summary['days'], 'the window the screen says it is showing');
+});
+
+check('an account nothing has come out of reads zero, not an error', function () use ($ctx, $auth) {
+    resetDatabase();
+    $summary = (new BankWithdrawalHistory($ctx, $auth))->summary(999);
+
+    assertSame(0.0, $summary['total'], 'no withdrawals, no total');
+    assertSame(0, $summary['count'], 'and nothing counted');
+});
+
+check('a BILLER cannot record a withdrawal or read the list of them', function () use ($ctx) {
+    resetDatabase();
+    $biller = userWithProfile($ctx, 'till-ravi', 'biller');
+
+    assertTrue(!Permissions::allows($ctx, $biller, 'contra.create'), 'no contra.create, which is what the screen needs');
+    assertThrows(
+        static fn () => (new TransactionService($ctx, $biller))->create('bank_withdrawal', withdrawal()),
+        'Billing profile',
+        'a biller withdrawing from the bank',
+    );
+});
+
+check('a withdrawal carries the two accounts, the cheque number and the note it was given', function () use ($ctx, $auth) {
+    resetDatabase();
+    $saved = (new TransactionService($ctx, $auth))->create('bank_withdrawal', withdrawal(['narration' => 'Wages for the week']));
+
+    $payload = Db::jsonColumn(Db::scalar(
+        'SELECT payload FROM billing_transaction_requests WHERE request_id = :id',
+        ['id' => $saved['request_id']],
+    ));
+
+    assertSame(102, $payload['from_account_id'], 'out of the bank');
+    assertSame(101, $payload['to_account_id'], 'into the cash account');
+    // JSON gives a whole number back as an int; what matters is the value.
+    assertSame(25000.0, (float) $payload['amount'], 'for the amount asked');
+    assertSame('CHQ002341', $payload['instrument_no'], 'with the cheque number');
+    assertSame('Wages for the week', $payload['narration'], 'and the note');
+    assertSame('bank_withdrawal', $payload['contra_kind'], 'recorded as a withdrawal, which Books posts as a contra');
+    // Billing posts no ledger lines of its own. The payload is a request.
+    assertTrue(!isset($payload['debit_account_id']) && !isset($payload['entries']), 'and no ledger lines of our own');
+});
+
 echo "\nData ownership (release-blocking)\n";
 
 check('no table holds a voucher, ledger, balance, item or party', function () {
@@ -1431,6 +1689,123 @@ check('the audit log refuses UPDATE and DELETE', function () {
     );
     assertThrows(static fn () => Db::run("UPDATE billing_audit_log SET action = 'tampered'"), 'append-only', 'audit UPDATE');
     assertThrows(static fn () => Db::run('DELETE FROM billing_audit_log'), 'append-only', 'audit DELETE');
+});
+
+echo "\nThe money screens\n";
+
+/**
+ * A payment as it exists after a real save: Books holds the voucher, and the
+ * Billing row holds what the user typed. `books_voucher_id` is the stub payment
+ * register's own row, which is what the join is being tested against.
+ */
+function paidEntry(Context $ctx, array $overrides = []): int
+{
+    return (int) Db::insert('billing_transaction_requests', [
+        'cmp_id'           => $ctx->cmpId,
+        'fy_id'            => $ctx->fyId,
+        'bo_id'            => 0,
+        'kind'             => 'payment',
+        'status'           => 'POSTED',
+        'party_account_id' => 601,
+        'transaction_date' => '2026-09-15',
+        'payload'          => [
+            'cash_bank_account_id' => 9001,
+            'payment_mode'         => 'upi',
+            'instrument_no'        => 'UTR-77',
+            'narration'            => 'Material payment',
+        ] + $overrides,
+        'books_voucher_id' => 4301,
+        'created_by'       => 'user-owner',
+    ], 'request_id');
+}
+
+check("the recent list is Books' register with Billing's own detail joined on", function () use ($ctx, $auth) {
+    resetDatabase();
+    paidEntry($ctx);
+
+    $result = (new MoneyActivityService($ctx, $auth))->recent('out', Period::resolve(['key' => 'month']), 8);
+
+    assertSame(1, count($result['rows']), 'one payment in the register');
+    $row = $result['rows'][0];
+
+    // Books' half.
+    assertSame('Aarti Plastics', $row['party'], 'party comes from Books');
+    assertSame(12000.0, $row['amount'], 'amount comes from Books');
+
+    // Billing's half, which Books' register does not carry.
+    assertSame('upi', $row['payment_mode'], 'mode comes from the Billing row');
+    assertSame('UTR-77', $row['reference_no'], 'reference comes from the Billing row');
+    assertSame('Material payment', $row['narration'], 'narration comes from the Billing row');
+    assertSame(9001, $row['account_id'], 'paid-from comes from the Billing row');
+    assertSame('user-owner', $row['created_by'], 'who keyed it comes from the Billing row');
+    assertTrue($row['recorded_here'] === true, 'and it is marked as ours');
+});
+
+check('an entry made in Books shows with its detail empty, not missing', function () use ($ctx, $auth) {
+    resetDatabase();
+    // No Billing row at all: this payment was recorded in Books.
+    $result = (new MoneyActivityService($ctx, $auth))->recent('out', Period::resolve(['key' => 'month']), 8);
+
+    assertSame(1, count($result['rows']), 'it is still listed');
+    $row = $result['rows'][0];
+    assertSame(12000.0, $row['amount'], 'with the amount Books holds');
+    assertSame(null, $row['payment_mode'], 'and no mode, because Billing never saw it');
+    assertSame(null, $row['created_by'], 'and nobody here keyed it');
+    assertTrue($row['recorded_here'] === false, 'and the row says so');
+});
+
+check('the summary totals, counts and averages the same set', function () use ($ctx, $auth) {
+    resetDatabase();
+    $summary = (new MoneyActivityService($ctx, $auth))->recent('out', Period::resolve(['key' => 'month']), 8)['summary'];
+
+    assertTrue($summary['available'] === true, 'the register could be read');
+    assertSame(12000.0, $summary['total'], 'total');
+    assertSame(1, $summary['count'], 'count');
+    assertSame(12000.0, $summary['average'], 'average is the total over the count');
+    assertSame('Aarti Plastics', $summary['largest']['party'], 'the largest payment names its party');
+});
+
+check('a Billing row for another company is never joined on', function () use ($ctx, $auth) {
+    resetDatabase();
+    // Same Books voucher id, a different company's row. If the scope clause
+    // were missing this would put one company's narration on another's screen.
+    paidEntry(freshContext(999));
+
+    $row = (new MoneyActivityService($ctx, $auth))->recent('out', Period::resolve(['key' => 'month']), 8)['rows'][0];
+    assertSame(null, $row['narration'], 'company 55 sees none of 999\'s detail');
+    assertTrue($row['recorded_here'] === false, 'and does not claim the entry');
+});
+
+check('money paid is refused to a profile that may only take money in', function () use ($ctx) {
+    resetDatabase();
+    $biller = userWithProfile($ctx, 'user-biller-money', 'biller');
+    $service = new MoneyActivityService($ctx, $biller);
+
+    assertThrows(
+        static fn () => $service->recent('out', Period::resolve(['key' => 'month']), 8),
+        'cannot',
+        'a biller reading money paid',
+    );
+
+    // The same profile may read money received, which it is allowed to record.
+    assertTrue(
+        is_array($service->recent('in', Period::resolve(['key' => 'month']), 8)['rows']),
+        'but money received is theirs to see',
+    );
+});
+
+check('the party context answers for the party asked about and no other', function () use ($ctx, $auth) {
+    resetDatabase();
+    $service = new MoneyActivityService($ctx, $auth);
+
+    $theirs = $service->partyContext('out', 601);
+    assertSame(1, $theirs['entries_in_window'], 'one payment to this supplier in the window');
+    assertSame('2026-09-15', $theirs['last']['date'], 'and it is the one Books returned');
+    assertSame(180, $theirs['looked_back_days'], 'the window is stated, not implied');
+
+    $nobody = $service->partyContext('out', 999999);
+    assertSame(0, $nobody['entries_in_window'], 'a supplier with nothing gets nothing');
+    assertSame(null, $nobody['last'], 'and no last payment is invented for them');
 });
 
 echo "\nTenant isolation\n";

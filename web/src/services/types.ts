@@ -7,6 +7,11 @@
  * what Billing owns: a request, a profile, a rule.
  */
 
+// The comparison shape is the server's `Metric::compare` output, already typed
+// for the dashboards. Imported rather than restated: two declarations of one
+// server shape drift, and this one decides whether a trend is drawn at all.
+import type { MetricComparison } from '../dashboards/types'
+
 export interface MenuEntry {
   key: string
   label: string
@@ -87,6 +92,91 @@ export interface TransactionRequest {
   last_error: string | null
   created_at: string
   commands?: IntegrationCommand[]
+}
+
+// ---------------------------------------------------------------------------
+// The original a credit or debit note is raised against
+// ---------------------------------------------------------------------------
+
+/**
+ * One invoice (or supplier bill) as Books' register describes it.
+ *
+ * `outstanding` is the unpaid balance from Books' bill-by-bill report, matched
+ * to this document on the same request. It is null when that report could not
+ * be read — never zero, because "settled" and "we could not tell" are the two
+ * facts this column exists to keep apart.
+ */
+export interface OriginalDocument {
+  voucher_id: number | null
+  voucher_uuid: string | null
+  document_no: string | null
+  date: string | null
+  party: string | null
+  party_id: number | null
+  amount: number | null
+  status: string | null
+  outstanding?: number | null
+}
+
+export interface OriginalDocuments {
+  party_account_id: number
+  from: string
+  to: string
+  documents: OriginalDocument[]
+  /** False when more documents exist in the range than one read could hold. */
+  complete: boolean
+  outstanding_available: boolean
+  note: string
+}
+
+/**
+ * A line that was billed on the original, as Books has it.
+ *
+ * The quantity DESCRIBES the invoice; it is not a permission to credit that
+ * much. Books decides what may still be credited when the note is posted.
+ */
+export interface OriginalDocumentLine {
+  line_ref: string
+  item_id: number | null
+  item_name: string | null
+  sku: string | null
+  hsn_sac: string | null
+  unit_id: number | null
+  unit_name: string | null
+  warehouse_id: number | null
+  batch_id: number | null
+  batch_no: string | null
+  qty: number | null
+  rate: number | null
+  discount_pc: number | null
+  amount: number | null
+  tax_cat_id: number | null
+  tax_rate: number | null
+  /** False for a service or described charge: creditable, but never stock. */
+  stockable: boolean
+}
+
+export interface OriginalDocumentDetail extends OriginalDocument {
+  available: boolean
+  reason: string | null
+  /** False when Books answered without lines this product could read. */
+  lines_available: boolean
+  lines: OriginalDocumentLine[]
+  note: string
+}
+
+/** Credit notes raised this month against the window before it. */
+export interface CreditNoteTrend {
+  available: boolean
+  reason: string | null
+  label?: string
+  from?: string
+  to?: string
+  count?: number
+  value?: number | null
+  previous_label?: string
+  previous_count?: number | null
+  series?: Array<{ label: string; count: number }>
 }
 
 export interface DueBill {
@@ -236,6 +326,121 @@ export interface CatalogParty {
 export interface CashBankAccount {
   acc_id: number
   acc_name: string
+  /**
+   * The bank account number, when the ledger carries one.
+   *
+   * Books spells it differently across deployments, so the screens read it
+   * through readText() over these keys and show the last few digits only. It
+   * is rendered on the request that reads it and never stored here.
+   */
+  account_no?: string | null
+  acc_no?: string | null
+  bank_account_no?: string | null
+  account_number?: string | null
+  /**
+   * Whatever Books calls the group this account sits in — "Bank Accounts",
+   * "Cash-in-hand". Optional because the catalog relays Books' own response and
+   * not every deployment spells it. Rendered only when present; never guessed
+   * from the name, because "Cash Credit A/c" is a bank.
+   */
+  group_name?: string | null
+  nature?: string | null
+}
+
+// ---------------------------------------------------------------------------
+// The money screens' context
+// ---------------------------------------------------------------------------
+
+/**
+ * One entry on the money screens' recent list.
+ *
+ * The first half — voucher, date, party, amount, status — is Books' register
+ * row, read live. The second half is what Billing itself recorded when the user
+ * pressed Save, and is null on an entry made in Books rather than here.
+ * `recorded_here` says which is which so the table can explain an empty cell
+ * instead of looking broken.
+ */
+export interface MoneyActivityRow {
+  voucher_id: number | null
+  voucher_uuid: string | null
+  document_no: string | null
+  date: string | null
+  party: string | null
+  party_id: number | null
+  amount: number | null
+  status: string | null
+  request_id: number | null
+  kind: string | null
+  account_id: number | null
+  account_name: string | null
+  payment_mode: string | null
+  reference_no: string | null
+  narration: string | null
+  created_by: string | null
+  recorded_here: boolean
+}
+
+/**
+ * What the period came to.
+ *
+ * Every figure is nullable and `available` may be false, because a register
+ * page that cannot be proved complete must not be totalled. A null here is
+ * rendered as "—", never as ₹0.
+ */
+export interface MoneySummary {
+  available: boolean
+  reason: string | null
+  total: number | null
+  count: number | null
+  average: number | null
+  largest: {
+    amount: number | null
+    party: string | null
+    party_id: number | null
+    date: string | null
+    voucher_id: number | null
+  } | null
+  comparison: MetricComparison | null
+}
+
+export interface MoneyActivity {
+  direction: 'in' | 'out'
+  period: {
+    key: string
+    label: string
+    from: string
+    to: string
+    previous_from: string
+    previous_to: string
+    previous_label: string
+  }
+  available: boolean
+  reason: string | null
+  summary: MoneySummary
+  rows: MoneyActivityRow[]
+  complete: boolean
+  source: string
+  note: string
+}
+
+/** When this party was last paid, or last paid us. Withheld when unprovable. */
+export interface MoneyPartyContext {
+  party_account_id: number
+  direction: 'in' | 'out'
+  looked_back_days: number
+  from: string
+  to: string
+  available: boolean
+  complete: boolean
+  last: {
+    date: string | null
+    amount: number | null
+    document_no: string | null
+    voucher_id: number | null
+    days_ago: number | null
+  } | null
+  entries_in_window: number | null
+  source: string
 }
 
 /**
@@ -284,4 +489,43 @@ export interface ExpenseCapabilities {
 export interface CatalogAccount {
   acc_id: number
   acc_name: string
+}
+
+/**
+ * A bank withdrawal this product recorded, as `v1/bank-withdrawals/recent`
+ * describes it.
+ *
+ * The names are resolved live from Books on that request; `null` means Books
+ * did not answer, not that the account is missing.
+ */
+export interface RecentWithdrawal {
+  request_id: number
+  date: string
+  amount: number | null
+  bank_account_id: number | null
+  bank_account_name: string | null
+  cash_account_id: number | null
+  cash_account_name: string | null
+  reference_no: string | null
+  note: string | null
+  voucher_id: number | null
+  voucher_no: string | null
+}
+
+export interface RecentWithdrawals {
+  rows: RecentWithdrawal[]
+  /** False when Books did not answer: the amounts still stand, the names do not. */
+  names_available: boolean
+  basis: string
+}
+
+/** What has come out of one bank account lately. Context beside a balance, not a balance. */
+export interface WithdrawalSummary {
+  bank_account_id: number
+  days: number
+  from: string
+  to: string
+  total: number
+  count: number
+  basis: string
 }

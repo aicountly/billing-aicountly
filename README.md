@@ -77,12 +77,16 @@ same-origin.
 `web/visual.html` is a development-only photo booth: it mounts the real page
 components against fixtures so the screens can be checked at any width without a
 portal session or a company's data. `?screen=` picks one — the five dashboards,
-or `expense` — `?as=biller` narrows the profile, and `?fail=recent,categories`
-makes those endpoints answer 503, which is how the "one panel is down, the form
-still works" states get checked. `?fail=overview` and `?fail=briefing` are the
-overview's two halves, so "the dashboard is down" and "only the written summary
-is down" can be checked apart from each other. `vite build` takes `index.html`
-only, so none of it reaches the deployed bundle.
+`money-in`, `money-out`, `expense`, `credit-note` or `bank-withdrawal` —
+`?as=biller` narrows the profile, and `?fail=recent,categories` makes those
+endpoints answer 503, which is how the "one panel is down, the form still works"
+states get checked. `?fail=overview` and `?fail=briefing` are the overview's two
+halves, so "the dashboard is down" and "only the written summary is down" can be
+checked apart from each other. The credit note screen adds `bills`, `bill-lines`,
+`warehouses`, `trend` and `issue` to that list, and the bank-withdrawal screen
+adds `balance`, `withdrawals` and `withdrawal-summary`, so their degraded states
+are reachable too. `vite build` takes `index.html` only, so none of it reaches
+the deployed bundle.
 
 The PHP API has no build step and no dependencies. To run it locally:
 

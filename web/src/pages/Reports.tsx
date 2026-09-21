@@ -47,10 +47,11 @@ export default function Reports() {
   /**
    * The chosen report and period live in the URL.
    *
-   * So that a dashboard card can link straight to the register behind it with
-   * the period the person was looking at still applied — a drill-down that
-   * lands on "pick one on the left" has not drilled into anything — and so
-   * that the result is a link somebody can send to their accountant.
+   * So that a dashboard or money-screen card can link straight to the
+   * register behind it with the period the person was looking at still
+   * applied — a drill-down that lands on "pick one on the left" has not
+   * drilled into anything — and so that the result is a link somebody can
+   * send to their accountant.
    */
   const [params, setParams] = useSearchParams()
   const selected = params.get('report')

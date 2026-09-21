@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Search } from 'lucide-react'
 import { api } from '../services/api'
 import type { CatalogItem, CatalogParty } from '../services/types'
@@ -9,6 +9,13 @@ import type { CatalogItem, CatalogParty } from '../services/types'
  * Every keystroke asks Inventory (items) or Books (parties) through this
  * product's read-through endpoint. Nothing is prefetched into a local list and
  * nothing survives the choice except the id.
+ *
+ * The BEHAVIOUR lives in `useTypeahead` and the MARKUP lives in whoever calls
+ * it. That split exists because the behaviour is the part with the sharp edges
+ * — a debounce, an abort on every new term, and a highlight that has to survive
+ * a response arriving after the user has already typed further — and the money
+ * screens need the same behaviour inside a different control. Two copies of
+ * this logic would be two sets of those bugs.
  */
 
 function useDebounced<T>(value: T, ms: number): T {
@@ -18,6 +25,143 @@ function useDebounced<T>(value: T, ms: number): T {
     return () => clearTimeout(timer)
   }, [value, ms])
   return debounced
+}
+
+export interface Typeahead<T> {
+  term: string
+  setTerm: (term: string) => void
+  options: T[]
+  open: boolean
+  setOpen: (open: boolean) => void
+  busy: boolean
+  failed: boolean
+  highlighted: number
+  setHighlighted: (index: number) => void
+  /** True once the term is long enough for the list to be worth drawing. */
+  ready: boolean
+  choose: (record: T) => void
+  onKeyDown: (event: React.KeyboardEvent) => void
+  boxRef: React.RefObject<HTMLDivElement | null>
+}
+
+export function useTypeahead<T>({
+  search,
+  onPick,
+  minChars = 2,
+  debounceMs = 250,
+}: {
+  search: (term: string, signal: AbortSignal) => Promise<T[]>
+  onPick: (record: T) => void
+  minChars?: number
+  debounceMs?: number
+}): Typeahead<T> {
+  const [term, setTerm] = useState('')
+  const [options, setOptions] = useState<T[]>([])
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [failed, setFailed] = useState(false)
+  const [highlighted, setHighlighted] = useState(0)
+  const debounced = useDebounced(term, debounceMs)
+  const boxRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (debounced.trim().length < minChars) {
+      setOptions([])
+      return
+    }
+
+    const controller = new AbortController()
+    setBusy(true)
+    setFailed(false)
+
+    search(debounced.trim(), controller.signal)
+      .then((rows) => {
+        setOptions(rows)
+        setHighlighted(0)
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setFailed(true)
+      })
+      .finally(() => setBusy(false))
+
+    return () => controller.abort()
+  }, [debounced, search, minChars])
+
+  useEffect(() => {
+    function onClickAway(event: MouseEvent) {
+      if (boxRef.current && !boxRef.current.contains(event.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onClickAway)
+    return () => document.removeEventListener('mousedown', onClickAway)
+  }, [])
+
+  const choose = useCallback(
+    (record: T) => {
+      onPick(record)
+      setTerm('')
+      setOpen(false)
+    },
+    [onPick],
+  )
+
+  /**
+   * Arrow keys and Enter, because this screen is used at a counter with a
+   * customer waiting and reaching for the mouse costs real seconds.
+   *
+   * Escape closes the list and stops there — it does not bubble on to clear the
+   * field or leave the screen, which is what the browser would otherwise do
+   * with it inside a form.
+   */
+  const onKeyDown = useCallback(
+    (event: React.KeyboardEvent) => {
+      if (event.key === 'Escape' && open) {
+        event.stopPropagation()
+        setOpen(false)
+        return
+      }
+      if (!open || options.length === 0) return
+
+      if (event.key === 'ArrowDown') {
+        event.preventDefault()
+        setHighlighted(Math.min(highlighted + 1, options.length - 1))
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault()
+        setHighlighted(Math.max(highlighted - 1, 0))
+      } else if (event.key === 'Enter') {
+        event.preventDefault()
+        const chosen = options[highlighted]
+        if (chosen) choose(chosen)
+      }
+    },
+    [open, options, highlighted, choose],
+  )
+
+  return {
+    term,
+    setTerm,
+    options,
+    open,
+    setOpen,
+    busy,
+    failed,
+    highlighted,
+    setHighlighted,
+    ready: term.trim().length >= minChars,
+    choose,
+    onKeyDown,
+    boxRef,
+  }
+}
+
+/** The search used by every party field in the app, parameterised by side. */
+export function usePartySearch(side: 'customer' | 'supplier') {
+  return useMemo(
+    () => async (term: string, signal: AbortSignal) => {
+      const response = await api.list<CatalogParty>('v1/catalog/parties', { q: term, side }, signal)
+      return response.data
+    },
+    [side],
+  )
 }
 
 function Picker<T>({
@@ -39,86 +183,23 @@ function Picker<T>({
   keyOf: (record: T) => string | number
   autoFocus?: boolean
 }) {
-  const [term, setTerm] = useState('')
-  const [options, setOptions] = useState<T[]>([])
-  const [open, setOpen] = useState(false)
-  const [busy, setBusy] = useState(false)
-  const [failed, setFailed] = useState(false)
-  const [highlighted, setHighlighted] = useState(0)
-  const debounced = useDebounced(term, 250)
-  const boxRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (debounced.trim().length < 2) {
-      setOptions([])
-      return
-    }
-
-    const controller = new AbortController()
-    setBusy(true)
-    setFailed(false)
-
-    search(debounced.trim(), controller.signal)
-      .then((rows) => {
-        setOptions(rows)
-        setHighlighted(0)
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) setFailed(true)
-      })
-      .finally(() => setBusy(false))
-
-    return () => controller.abort()
-  }, [debounced, search])
-
-  useEffect(() => {
-    function onClickAway(event: MouseEvent) {
-      if (boxRef.current && !boxRef.current.contains(event.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', onClickAway)
-    return () => document.removeEventListener('mousedown', onClickAway)
-  }, [])
-
-  /**
-   * Arrow keys and Enter, because this screen is used at a counter with a
-   * customer waiting and reaching for the mouse costs real seconds.
-   */
-  function onKeyDown(event: React.KeyboardEvent) {
-    if (!open || options.length === 0) return
-    if (event.key === 'ArrowDown') {
-      event.preventDefault()
-      setHighlighted((n) => Math.min(n + 1, options.length - 1))
-    } else if (event.key === 'ArrowUp') {
-      event.preventDefault()
-      setHighlighted((n) => Math.max(n - 1, 0))
-    } else if (event.key === 'Enter') {
-      event.preventDefault()
-      const chosen = options[highlighted]
-      if (chosen) {
-        onPick(chosen)
-        setTerm('')
-        setOpen(false)
-      }
-    } else if (event.key === 'Escape') {
-      setOpen(false)
-    }
-  }
+  const picker = useTypeahead<T>({ search, onPick })
 
   return (
-    <div ref={boxRef} style={{ position: 'relative' }}>
+    <div ref={picker.boxRef} style={{ position: 'relative' }}>
       <span style={{ display: 'block', fontSize: '0.8rem', color: 'var(--muted)', marginBottom: '0.25rem' }}>{label}</span>
       <div style={{ position: 'relative' }}>
         <Search size={14} aria-hidden style={{ position: 'absolute', left: '0.5rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }} />
         <input
-          value={term}
+          value={picker.term}
           placeholder={selectedLabel ?? placeholder ?? 'Type to search…'}
           autoFocus={autoFocus}
           onChange={(event) => {
-            setTerm(event.target.value)
-            setOpen(true)
+            picker.setTerm(event.target.value)
+            picker.setOpen(true)
           }}
-          onFocus={() => setOpen(true)}
-          onKeyDown={onKeyDown}
+          onFocus={() => picker.setOpen(true)}
+          onKeyDown={picker.onKeyDown}
           style={{
             width: '100%',
             padding: '0.5rem 0.55rem 0.5rem 1.7rem',
@@ -130,7 +211,7 @@ function Picker<T>({
         />
       </div>
 
-      {open && term.trim().length >= 2 && (
+      {picker.open && picker.ready && (
         <div
           style={{
             position: 'absolute',
@@ -147,30 +228,28 @@ function Picker<T>({
             overflowY: 'auto',
           }}
         >
-          {busy && <div style={{ padding: '0.6rem', color: 'var(--muted)' }}>Searching…</div>}
-          {failed && (
+          {picker.busy && <div style={{ padding: '0.6rem', color: 'var(--muted)' }}>Searching…</div>}
+          {picker.failed && (
             <div style={{ padding: '0.6rem', color: 'var(--danger)' }}>
               Could not reach the app that holds this list. Try again in a moment.
             </div>
           )}
-          {!busy && !failed && options.length === 0 && <div style={{ padding: '0.6rem', color: 'var(--muted)' }}>No matches.</div>}
-          {options.map((option, index) => (
+          {!picker.busy && !picker.failed && picker.options.length === 0 && (
+            <div style={{ padding: '0.6rem', color: 'var(--muted)' }}>No matches.</div>
+          )}
+          {picker.options.map((option, index) => (
             <button
               key={keyOf(option)}
               type="button"
-              onMouseEnter={() => setHighlighted(index)}
-              onClick={() => {
-                onPick(option)
-                setTerm('')
-                setOpen(false)
-              }}
+              onMouseEnter={() => picker.setHighlighted(index)}
+              onClick={() => picker.choose(option)}
               style={{
                 display: 'block',
                 width: '100%',
                 textAlign: 'left',
                 padding: '0.55rem 0.6rem',
                 border: 'none',
-                background: index === highlighted ? 'var(--surface-2)' : 'transparent',
+                background: index === picker.highlighted ? 'var(--surface-2)' : 'transparent',
                 cursor: 'pointer',
               }}
             >
@@ -225,13 +304,7 @@ export function PartyPicker({
   selectedLabel?: string | null
   autoFocus?: boolean
 }) {
-  const search = useMemo(
-    () => async (term: string, signal: AbortSignal) => {
-      const response = await api.list<CatalogParty>('v1/catalog/parties', { q: term, side }, signal)
-      return response.data
-    },
-    [side],
-  )
+  const search = usePartySearch(side)
 
   return (
     <Picker
