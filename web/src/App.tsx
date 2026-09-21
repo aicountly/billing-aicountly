@@ -7,7 +7,7 @@ import SignIn from './pages/SignIn'
 import Onboarding from './pages/Onboarding'
 import SaleEditor from './pages/SaleEditor'
 import { DuesScreen, PartyStatement } from './pages/Dues'
-import { BankCash, MoneyScreen } from './pages/MoneyMovement'
+import { BankCash } from './pages/MoneyMovement'
 import { Items, Parties } from './pages/Directory'
 import {
   BankCashOverview,
@@ -33,6 +33,18 @@ const Receivables = lazy(() => import('./dashboards/Receivables'))
 const Payables = lazy(() => import('./dashboards/Payables'))
 const CashCompliance = lazy(() => import('./dashboards/CashCompliance'))
 const Reports = lazy(() => import('./pages/Reports'))
+
+/**
+ * Money paid and money received, split for the same reason.
+ *
+ * The screen is a form, a period summary, a party's history and a recent list,
+ * and only one of the two directions is ever open. Left in the main bundle it
+ * costs every screen in the app, including the counter machine that never
+ * opens it.
+ */
+const MoneyScreen = lazy(() =>
+  import('./pages/money/MoneyScreen').then((module) => ({ default: module.MoneyScreen })),
+)
 
 /**
  * The expense screen carries its own stylesheet and helper panel, and most
@@ -163,14 +175,14 @@ function Shell() {
         </Route>
 
         <Route path="money-in">
-          <Route index element={<RequireScope><MoneyScreen direction="in" /></RequireScope>} />
-          <Route path="new" element={<RequireScope><MoneyScreen direction="in" /></RequireScope>} />
+          <Route index element={<Suspense fallback={<Loading />}><RequireScope><MoneyScreen direction="in" /></RequireScope></Suspense>} />
+          <Route path="new" element={<Suspense fallback={<Loading />}><RequireScope><MoneyScreen direction="in" /></RequireScope></Suspense>} />
           <Route path=":id" element={<RequireScope><TransactionDetail /></RequireScope>} />
         </Route>
 
         <Route path="money-out">
-          <Route index element={<RequireScope><MoneyScreen direction="out" /></RequireScope>} />
-          <Route path="new" element={<RequireScope><MoneyScreen direction="out" /></RequireScope>} />
+          <Route index element={<Suspense fallback={<Loading />}><RequireScope><MoneyScreen direction="out" /></RequireScope></Suspense>} />
+          <Route path="new" element={<Suspense fallback={<Loading />}><RequireScope><MoneyScreen direction="out" /></RequireScope></Suspense>} />
           <Route path=":id" element={<RequireScope><TransactionDetail /></RequireScope>} />
         </Route>
 

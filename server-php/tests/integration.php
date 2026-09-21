@@ -25,6 +25,7 @@ use Aicountly\Api\Domain\DocumentCapture;
 use Aicountly\Api\Domain\DuesService;
 use Aicountly\Api\Domain\ExpenseHistory;
 use Aicountly\Api\Domain\Metric;
+use Aicountly\Api\Domain\MoneyActivityService;
 use Aicountly\Api\Domain\OverviewService;
 use Aicountly\Api\Domain\Period;
 use Aicountly\Api\Domain\RegisterReader;
@@ -1383,6 +1384,123 @@ check('the audit log refuses UPDATE and DELETE', function () {
     );
     assertThrows(static fn () => Db::run("UPDATE billing_audit_log SET action = 'tampered'"), 'append-only', 'audit UPDATE');
     assertThrows(static fn () => Db::run('DELETE FROM billing_audit_log'), 'append-only', 'audit DELETE');
+});
+
+echo "\nThe money screens\n";
+
+/**
+ * A payment as it exists after a real save: Books holds the voucher, and the
+ * Billing row holds what the user typed. `books_voucher_id` is the stub payment
+ * register's own row, which is what the join is being tested against.
+ */
+function paidEntry(Context $ctx, array $overrides = []): int
+{
+    return (int) Db::insert('billing_transaction_requests', [
+        'cmp_id'           => $ctx->cmpId,
+        'fy_id'            => $ctx->fyId,
+        'bo_id'            => 0,
+        'kind'             => 'payment',
+        'status'           => 'POSTED',
+        'party_account_id' => 601,
+        'transaction_date' => '2026-09-15',
+        'payload'          => [
+            'cash_bank_account_id' => 9001,
+            'payment_mode'         => 'upi',
+            'instrument_no'        => 'UTR-77',
+            'narration'            => 'Material payment',
+        ] + $overrides,
+        'books_voucher_id' => 4301,
+        'created_by'       => 'user-owner',
+    ], 'request_id');
+}
+
+check("the recent list is Books' register with Billing's own detail joined on", function () use ($ctx, $auth) {
+    resetDatabase();
+    paidEntry($ctx);
+
+    $result = (new MoneyActivityService($ctx, $auth))->recent('out', Period::resolve(['key' => 'month']), 8);
+
+    assertSame(1, count($result['rows']), 'one payment in the register');
+    $row = $result['rows'][0];
+
+    // Books' half.
+    assertSame('Aarti Plastics', $row['party'], 'party comes from Books');
+    assertSame(12000.0, $row['amount'], 'amount comes from Books');
+
+    // Billing's half, which Books' register does not carry.
+    assertSame('upi', $row['payment_mode'], 'mode comes from the Billing row');
+    assertSame('UTR-77', $row['reference_no'], 'reference comes from the Billing row');
+    assertSame('Material payment', $row['narration'], 'narration comes from the Billing row');
+    assertSame(9001, $row['account_id'], 'paid-from comes from the Billing row');
+    assertSame('user-owner', $row['created_by'], 'who keyed it comes from the Billing row');
+    assertTrue($row['recorded_here'] === true, 'and it is marked as ours');
+});
+
+check('an entry made in Books shows with its detail empty, not missing', function () use ($ctx, $auth) {
+    resetDatabase();
+    // No Billing row at all: this payment was recorded in Books.
+    $result = (new MoneyActivityService($ctx, $auth))->recent('out', Period::resolve(['key' => 'month']), 8);
+
+    assertSame(1, count($result['rows']), 'it is still listed');
+    $row = $result['rows'][0];
+    assertSame(12000.0, $row['amount'], 'with the amount Books holds');
+    assertSame(null, $row['payment_mode'], 'and no mode, because Billing never saw it');
+    assertSame(null, $row['created_by'], 'and nobody here keyed it');
+    assertTrue($row['recorded_here'] === false, 'and the row says so');
+});
+
+check('the summary totals, counts and averages the same set', function () use ($ctx, $auth) {
+    resetDatabase();
+    $summary = (new MoneyActivityService($ctx, $auth))->recent('out', Period::resolve(['key' => 'month']), 8)['summary'];
+
+    assertTrue($summary['available'] === true, 'the register could be read');
+    assertSame(12000.0, $summary['total'], 'total');
+    assertSame(1, $summary['count'], 'count');
+    assertSame(12000.0, $summary['average'], 'average is the total over the count');
+    assertSame('Aarti Plastics', $summary['largest']['party'], 'the largest payment names its party');
+});
+
+check('a Billing row for another company is never joined on', function () use ($ctx, $auth) {
+    resetDatabase();
+    // Same Books voucher id, a different company's row. If the scope clause
+    // were missing this would put one company's narration on another's screen.
+    paidEntry(freshContext(999));
+
+    $row = (new MoneyActivityService($ctx, $auth))->recent('out', Period::resolve(['key' => 'month']), 8)['rows'][0];
+    assertSame(null, $row['narration'], 'company 55 sees none of 999\'s detail');
+    assertTrue($row['recorded_here'] === false, 'and does not claim the entry');
+});
+
+check('money paid is refused to a profile that may only take money in', function () use ($ctx) {
+    resetDatabase();
+    $biller = userWithProfile($ctx, 'user-biller-money', 'biller');
+    $service = new MoneyActivityService($ctx, $biller);
+
+    assertThrows(
+        static fn () => $service->recent('out', Period::resolve(['key' => 'month']), 8),
+        'cannot',
+        'a biller reading money paid',
+    );
+
+    // The same profile may read money received, which it is allowed to record.
+    assertTrue(
+        is_array($service->recent('in', Period::resolve(['key' => 'month']), 8)['rows']),
+        'but money received is theirs to see',
+    );
+});
+
+check('the party context answers for the party asked about and no other', function () use ($ctx, $auth) {
+    resetDatabase();
+    $service = new MoneyActivityService($ctx, $auth);
+
+    $theirs = $service->partyContext('out', 601);
+    assertSame(1, $theirs['entries_in_window'], 'one payment to this supplier in the window');
+    assertSame('2026-09-15', $theirs['last']['date'], 'and it is the one Books returned');
+    assertSame(180, $theirs['looked_back_days'], 'the window is stated, not implied');
+
+    $nobody = $service->partyContext('out', 999999);
+    assertSame(0, $nobody['entries_in_window'], 'a supplier with nothing gets nothing');
+    assertSame(null, $nobody['last'], 'and no last payment is invented for them');
 });
 
 echo "\nTenant isolation\n";

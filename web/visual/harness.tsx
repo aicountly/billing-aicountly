@@ -24,6 +24,7 @@ import BillerDesk from '../src/dashboards/BillerDesk'
 import Receivables from '../src/dashboards/Receivables'
 import Payables from '../src/dashboards/Payables'
 import CashCompliance from '../src/dashboards/CashCompliance'
+import { MoneyScreen } from '../src/pages/money/MoneyScreen'
 import ExpensePage from '../src/pages/expense/ExpensePage'
 import SalesBillPage from '../src/pages/sale/SalesBillPage'
 import { saveSession, setAuthToken } from '../src/auth/tokens'
@@ -63,6 +64,8 @@ const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
   receivables: { path: '/dashboard/receivables', element: <Receivables /> },
   payables: { path: '/dashboard/payables', element: <Payables /> },
   'cash-compliance': { path: '/dashboard/cash-compliance', element: <CashCompliance /> },
+  'money-out': { path: '/money-out/new', element: <MoneyScreen direction="out" /> },
+  'money-in': { path: '/money-in/new', element: <MoneyScreen direction="in" /> },
   expense: { path: '/more/expense', element: <ExpensePage /> },
   sale: { path: '/sales/new', element: <SalesBillPage /> },
 }
@@ -84,14 +87,19 @@ const RESPONSES: Array<[RegExp, unknown]> = [
     { item_id: 2, item_name: 'Blue Ball Pen', item_sku: 'PEN-BL', unit_id: 1, hsn_sac: '9608', mrp: '12' },
     { item_id: 3, item_name: 'Stapler', item_sku: 'STP-01', unit_id: 1, hsn_sac: '8472', mrp: '450' },
   ]],
-  [/v1\/catalog\/expense-accounts/, fixtures.expenseAccounts],
-  [/v1\/catalog\/cash-bank/, fixtures.cashBankAccounts],
-  [/v1\/open-bills/, fixtures.openBills],
+  [/v1\/transactions\/(payment|receipt)/, fixtures.savedPayment],
   [/v1\/transactions\/sale/, fixtures.savedSale],
+  [/v1\/money\/party-context/, fixtures.moneyPartyContext],
+  [/v1\/money\/recent/, fixtures.moneyRecent],
+  [/v1\/open-bills/, fixtures.openBills],
+  [/v1\/catalog\/expense-accounts/, fixtures.expenseAccounts],
   [/v1\/catalog\/tax-categories/, fixtures.taxCategories],
   [/v1\/expenses\/recent/, fixtures.recentExpenses],
   [/v1\/transactions\/expense/, fixtures.savedExpense],
   [/v1\/expenses\/capabilities/, fixtures.expenseCapabilities],
+  // One entry, shared: this list is matched in order and a second
+  // cash-bank pattern below would never be reached.
+  [/v1\/catalog\/cash-bank/, fixtures.cashBankAccounts],
   [/v1\/manage\/companies/, { data: [{ cmp_id: 1, cmp_name: 'Sharma Enterprises' }], meta: { total: 1 } }],
   [/v1\/manage\/companyinfo/, {
     cmp_id: 1,
@@ -121,7 +129,12 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Res
   if (/v1\/catalog\/parties/.test(url)) {
     const query = new URL(url, window.location.origin).searchParams
     const term = (query.get('q') ?? '').toLowerCase()
-    const pool = query.get('side') === 'supplier' ? fixtures.suppliers : fixtures.customers
+    // Suppliers on the supplier side; on the customer side both lists, because
+    // the money screens' fixtures name a party out of `suppliers` and reach it
+    // through a customer-side picker. A ledger being both is a real thing, and
+    // a booth that hides one of them makes a screen look broken that is not.
+    const pool =
+      query.get('side') === 'supplier' ? fixtures.suppliers : [...fixtures.customers, ...fixtures.suppliers]
     const rows = pool.filter((row) => row.acc_name.toLowerCase().includes(term))
     return new Response(JSON.stringify({ data: rows, meta: { total: rows.length, limit: 20, offset: 0 } }), {
       status: 200,
