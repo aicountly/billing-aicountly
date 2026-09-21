@@ -17,9 +17,9 @@ import { useSearchParams } from 'react-router-dom'
 import { Info, RefreshCw } from 'lucide-react'
 import { ApiError } from '../../services/api'
 import { useApi } from '../../hooks/useApi'
-import { useDebounced } from '../../hooks/useDebounced'
+import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { useBilling } from '../../context/BillingContext'
-import { Notice } from '../../ui'
+import { ToastStack, useToasts } from '../../ui'
 import {
   applyTab,
   activeFilterCount,
@@ -114,7 +114,7 @@ export function Parties() {
   const query = useMemo(() => readPartyQuery(params), [params])
 
   const [searchInput, setSearchInput] = useState(query.search)
-  const settledSearch = useDebounced(searchInput, 400)
+  const settledSearch = useDebouncedValue(searchInput, 400)
 
   const [selected, setSelected] = useState<ReadonlySet<number>>(() => new Set())
   const [open, setOpen] = useState<Party | null>(null)
@@ -124,7 +124,7 @@ export function Parties() {
   const [bannerHidden, setBannerHidden] = useState(false)
   const [view, setView] = useState<'table' | 'cards'>('table')
   const [exporting, setExporting] = useState(false)
-  const [exportError, setExportError] = useState<string | null>(null)
+  const { toasts, push, dismiss } = useToasts()
 
   const update = useCallback(
     (next: Partial<PartyQuery>) => {
@@ -205,12 +205,16 @@ export function Parties() {
   async function exportList() {
     if (exporting) return
     setExporting(true)
-    setExportError(null)
     try {
       const { blob, filename } = await partiesApi.exportCsv(query)
       saveFile(blob, filename)
+      push({ tone: 'success', title: 'Export ready', detail: filename })
     } catch (error) {
-      setExportError(error instanceof ApiError ? error.message : String(error))
+      push({
+        tone: 'danger',
+        title: 'That file could not be built',
+        detail: error instanceof ApiError ? error.message : String(error),
+      })
     } finally {
       setExporting(false)
     }
@@ -218,25 +222,30 @@ export function Parties() {
 
   function exportSelected() {
     saveFile(new Blob([`﻿${csvOf(selectedRows)}`], { type: 'text/csv;charset=utf-8' }), 'parties-selected.csv')
+    push({
+      tone: 'success',
+      title: 'Export ready',
+      detail: `${selectedRows.length} ${selectedRows.length === 1 ? 'party' : 'parties'} as they are shown here.`,
+    })
   }
 
-  async function copyEmails(): Promise<number> {
+  async function copyEmails(): Promise<void> {
     const addresses = selectedRows.map((row) => row.email).filter((email): email is string => Boolean(email))
-    if (addresses.length > 0) {
-      await navigator.clipboard?.writeText(addresses.join(', ')).catch(() => undefined)
+    if (addresses.length === 0) {
+      push({ tone: 'info', title: 'Nothing to copy', detail: 'None of the selected parties has an email address on file.' })
+      return
     }
-    return addresses.length
+    await navigator.clipboard?.writeText(addresses.join(', ')).catch(() => undefined)
+    push({
+      tone: 'success',
+      title: 'Copied',
+      detail: `${addresses.length} email ${addresses.length === 1 ? 'address' : 'addresses'}.`,
+    })
   }
 
   return (
     <div className="billing-parties">
       <PartiesHeading onExport={exportList} exporting={exporting} mayExport={can('export.data')} />
-
-      {exportError && (
-        <Notice tone="danger" title="That file could not be built" onDismiss={() => setExportError(null)}>
-          {exportError}
-        </Notice>
-      )}
 
       {!bannerHidden && (
         <PartyQualityBanner
@@ -383,6 +392,8 @@ export function Parties() {
       <DuplicateDrawer open={duplicatesOpen} onClose={() => setDuplicatesOpen(false)} />
       <LedgerMappingDrawer open={mappingOpen} onClose={() => setMappingOpen(false)} rows={rows} />
       <PartyDetailsDrawer party={open} onClose={() => setOpen(null)} />
+
+      <ToastStack toasts={toasts} onDismiss={dismiss} />
     </div>
   )
 }

@@ -193,15 +193,17 @@ if (str_contains($path, '/masters/accounts') && !str_contains($path, '/masters/a
 
     if (str_contains($nature, 'cash_bank')) {
         echo json_encode(['data' => [
-            ['acc_id' => 9001, 'acc_name' => 'Cash in hand'],
-            ['acc_id' => 9002, 'acc_name' => 'HDFC Current'],
-        ], 'meta' => ['total' => 2, 'limit' => 100, 'offset' => 0]]);
+            ['acc_id' => 101, 'acc_name' => 'Cash in hand'],
+            ['acc_id' => 102, 'acc_name' => 'HDFC Current'],
+        ], 'meta' => ['total' => 2, 'limit' => 200, 'offset' => 0]]);
         exit;
     }
     if (str_contains($nature, 'indirect_expenses')) {
         echo json_encode(['data' => [
-            ['acc_id' => 7001, 'acc_name' => 'Printing and stationery'],
-        ], 'meta' => ['total' => 1, 'limit' => 100, 'offset' => 0]]);
+            ['acc_id' => 810, 'acc_name' => 'Office Supplies'],
+            ['acc_id' => 811, 'acc_name' => 'Travel & Conveyance'],
+            ['acc_id' => 819, 'acc_name' => 'Other Expenses'],
+        ], 'meta' => ['total' => 3, 'limit' => 200, 'offset' => 0]]);
         exit;
     }
 

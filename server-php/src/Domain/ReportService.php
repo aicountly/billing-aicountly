@@ -306,12 +306,13 @@ final class ReportService
      * prefix gets skipped past.
      */
     /**
-     * One CSV cell, with the spreadsheet-formula guard on it.
+     * One CSV cell, neutralised against spreadsheet formula injection.
      *
-     * Public because the party directory exports through the same rule. A
-     * leading `=`, `+`, `-` or `@` makes Excel treat a customer's name as a
-     * formula, and two copies of that defence is one copy that will be
-     * forgotten.
+     * Public because the item catalogue and the party directory both export
+     * through the same rule: a supplier's name that begins with `=` is a
+     * formula the moment somebody opens the file, and there must be exactly
+     * one place that decides what to do about it. Three copies of that defence
+     * is two copies that will be forgotten.
      */
     public static function cell(mixed $value): string
     {

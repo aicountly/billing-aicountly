@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace Aicountly\Api;
 
+use Aicountly\Api\Controllers\BankWithdrawalsController;
 use Aicountly\Api\Controllers\CatalogController;
 use Aicountly\Api\Controllers\DashboardController;
 use Aicountly\Api\Controllers\DashboardsController;
 use Aicountly\Api\Controllers\DuesController;
+use Aicountly\Api\Controllers\ExpensesController;
 use Aicountly\Api\Controllers\ManageController;
+use Aicountly\Api\Controllers\MoneyController;
 use Aicountly\Api\Controllers\PartiesController;
 use Aicountly\Api\Controllers\ProfilesController;
 use Aicountly\Api\Controllers\ReportsController;
@@ -42,8 +45,18 @@ final class Routes
         // Read-through to the products that own the data.
         $router->get('v1/catalog/items', [CatalogController::class, 'items']);
         $router->get('v1/catalog/items/search', [CatalogController::class, 'searchItems']);
+        // The Items screen: the five counts above the list, the group filter,
+        // and the list as a file. All three are Inventory's data, read on the
+        // request — there is no item table in this product.
+        $router->get('v1/catalog/items/stats', [CatalogController::class, 'itemStats']);
+        $router->get('v1/catalog/items/export', [CatalogController::class, 'exportItems']);
+        $router->get('v1/catalog/item-groups', [CatalogController::class, 'itemGroups']);
         $router->get('v1/catalog/items/favourites', [CatalogController::class, 'favourites']);
         $router->get('v1/catalog/items/barcode/{code}', [CatalogController::class, 'itemByBarcode']);
+        // LAST of the four-segment /catalog/items routes. The router takes the
+        // first match and `{id}` matches any segment, so declaring it above
+        // `search`, `stats`, `export` or `favourites` would swallow all four.
+        $router->get('v1/catalog/items/{id}', [CatalogController::class, 'item']);
         $router->get('v1/catalog/stock', [CatalogController::class, 'stock']);
         $router->get('v1/catalog/low-stock', [CatalogController::class, 'lowStock']);
         $router->get('v1/catalog/warehouses', [CatalogController::class, 'warehouses']);
@@ -57,8 +70,24 @@ final class Routes
         //     | expense | bank_deposit | bank_withdrawal | bank_transfer
         $router->post('v1/transactions/{kind}', [TransactionsController::class, 'create']);
         $router->get('v1/transactions/unfinished', [TransactionsController::class, 'unfinished']);
-        // Invoices a credit note (or bills a debit note) can be raised against.
+        // Around the expense form: what was recorded lately, and what this
+        // deployment can do with a bill file. Recording one is still
+        // POST v1/transactions/expense, above.
+        $router->get('v1/expenses/recent', [ExpensesController::class, 'recent']);
+        $router->get('v1/expenses/capabilities', [ExpensesController::class, 'capabilities']);
+        $router->post('v1/expenses/read-bill', [ExpensesController::class, 'readBill']);
+        // Around the bank-withdrawal form: what this product withdrew lately,
+        // and how much has come out of the chosen bank in the last month.
+        // Recording one is still POST v1/transactions/bank_withdrawal, above.
+        $router->get('v1/bank-withdrawals/recent', [BankWithdrawalsController::class, 'recent']);
+        $router->get('v1/bank-withdrawals/summary', [BankWithdrawalsController::class, 'summary']);
+        // Invoices a credit note (or bills a debit note) can be raised against,
+        // and — for one of them — the lines that were billed on it, so the note
+        // can start from what was sold instead of an empty table.
         $router->get('v1/original-documents', [TransactionsController::class, 'originalDocuments']);
+        $router->get('v1/original-documents/{voucherId}', [TransactionsController::class, 'originalDocument']);
+        // How many credit notes this month, against the window before it.
+        $router->get('v1/credit-notes/trend', [TransactionsController::class, 'creditNoteTrend']);
         $router->get('v1/transactions/{id}', [TransactionsController::class, 'show']);
         $router->post('v1/transactions/{id}/retry', [TransactionsController::class, 'retry']);
         $router->get('v1/transactions/{id}/statutory', [TransactionsController::class, 'statutoryStatus']);
@@ -70,6 +99,11 @@ final class Routes
         $router->get('v1/parties/overview', [PartiesController::class, 'overview']);
         $router->get('v1/parties/duplicates', [PartiesController::class, 'duplicates']);
         $router->get('v1/parties/export', [PartiesController::class, 'export']);
+
+        // The money screens' own context: the period's entries, their totals,
+        // and when a party was last paid. Books' register, read on the request.
+        $router->get('v1/money/recent', [MoneyController::class, 'recent']);
+        $router->get('v1/money/party-context', [MoneyController::class, 'partyContext']);
 
         // Dues — every figure read live from Books.
         $router->get('v1/receivables', [DuesController::class, 'receivables']);

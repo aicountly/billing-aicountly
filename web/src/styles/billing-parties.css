@@ -16,8 +16,15 @@
   --billing-party-purple-soft: #f2edff;
 
   display: grid;
+  /* minmax(0, …) rather than the implicit `auto`: a grid item's default
+     min-width is its own content, so one 240px name cell inside a card widens
+     the column, the page, and the heading above it — which is how a phone ends
+     up scrolling the title sideways. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 18px;
 }
+
+.billing-parties > * { min-width: 0; }
 
 /* ------------------------------------------------------------------ header */
 
@@ -82,7 +89,7 @@
   color: var(--billing-action);
 }
 
-.billing-parties__banner-text { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.billing-parties__banner-text { display: grid; gap: 2px; min-width: 0; flex: 1 1 10rem; }
 .billing-parties__banner-text strong { font-size: 13px; }
 .billing-parties__banner-text span { color: var(--billing-muted); font-size: 12px; }
 .billing-parties__banner-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
@@ -183,7 +190,10 @@
   border-bottom: 1px solid var(--billing-border);
 }
 
-.billing-parties__tabs { display: flex; align-items: center; gap: 2px; overflow-x: auto; }
+/* `min-width: 0` is what makes `overflow-x: auto` mean anything here: a flex
+   item's default floor is its own content, so the strip would widen the row
+   rather than scroll inside it. */
+.billing-parties__tabs { display: flex; align-items: center; gap: 2px; overflow-x: auto; min-width: 0; }
 
 .billing-parties__tab {
   position: relative;
@@ -220,7 +230,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-.billing-parties__toolbar { display: flex; align-items: center; gap: 8px; padding-bottom: 8px; flex-wrap: wrap; }
+.billing-parties__toolbar { display: flex; align-items: center; gap: 8px; padding-bottom: 8px; flex-wrap: wrap; min-width: 0; }
 
 .billing-parties__count-badge {
   min-width: 18px;
@@ -360,7 +370,8 @@
 .billing-parties__sort:hover { color: var(--billing-action); }
 .billing-parties__sort[data-active='true'] { color: var(--billing-action); }
 
-.billing-parties__name { display: flex; align-items: center; gap: 10px; min-width: 15rem; }
+.billing-parties__name { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.billing-parties__table .billing-parties__name { min-width: 15rem; }
 
 .billing-parties__avatar {
   width: 32px;
@@ -593,6 +604,9 @@
   .billing-parties__viewtoggle { display: none; }
   .billing-parties__facts { grid-template-columns: minmax(0, 1fr); }
   .billing-parties__foot { align-items: flex-start; flex-direction: column; }
+  .billing-parties__banner { align-items: flex-start; flex-wrap: wrap; }
+  .billing-parties__card-figures { gap: 12px; }
+  .billing-parties__cards { padding: 12px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

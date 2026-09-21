@@ -12,7 +12,6 @@
  * the record, rather than being greyed out with no explanation.
  */
 
-import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Download,
@@ -369,11 +368,9 @@ export function PartyBulkBar({
   count: number
   onClear: () => void
   onExportSelected: () => void
-  onCopyEmails: () => Promise<number>
+  onCopyEmails: () => Promise<void>
   mayExport: boolean
 }) {
-  const [copied, setCopied] = useState<number | null>(null)
-
   return (
     <div className="billing-parties__bulkbar" role="status">
       <strong>
@@ -386,24 +383,9 @@ export function PartyBulkBar({
         </button>
       )}
 
-      <button
-        type="button"
-        className="billing-button billing-button--small"
-        onClick={() => {
-          void onCopyEmails().then((found) => {
-            setCopied(found)
-            window.setTimeout(() => setCopied(null), 2400)
-          })
-        }}
-      >
+      <button type="button" className="billing-button billing-button--small" onClick={() => void onCopyEmails()}>
         Copy email addresses
       </button>
-
-      {copied !== null && (
-        <span className="billing-parties__refreshing">
-          {copied === 0 ? 'None of them has an email address on file.' : `${copied} copied.`}
-        </span>
-      )}
 
       <span className="billing-parties__filters-spacer" />
 
