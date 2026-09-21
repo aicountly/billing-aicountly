@@ -45,6 +45,20 @@ final class CatalogController extends Controller
         );
     }
 
+    /**
+     * One item, by its Inventory id.
+     *
+     * For a screen that was handed an id rather than a name — the biller desk
+     * and the global search both link into the bill screen that way. The id is
+     * a request, not a fact, so the name, rate and unit are read from the
+     * product that owns them rather than carried in the URL.
+     */
+    public static function item(string $id): void
+    {
+        [$auth, $ctx] = self::enter();
+        self::relay((new InventoryClient())->withSession($auth->sesKey())->item($ctx, (int) $id), $ctx, $auth);
+    }
+
     /** Scan-to-bill: the barcode goes straight to Inventory. */
     public static function itemByBarcode(string $code): void
     {

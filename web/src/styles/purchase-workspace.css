@@ -312,8 +312,7 @@
 }
 
 .purchase-input.is-invalid,
-.purchase-select.is-invalid,
-.billing-combobox .billing-combobox__input.is-invalid { border-color: var(--billing-danger); }
+.purchase-select.is-invalid { border-color: var(--billing-danger); }
 
 .purchase-input--money { text-align: right; font-variant-numeric: tabular-nums; }
 

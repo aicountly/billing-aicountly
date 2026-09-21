@@ -13,7 +13,7 @@ import { useMemo } from 'react'
 import { ExternalLink, Search } from 'lucide-react'
 import { api } from '../../services/api'
 import type { CatalogParty } from '../../services/types'
-import { Combobox } from '../../components/Combobox'
+import { Combo } from '../../components/Combo'
 import { money } from '../../ui'
 import { DerivedValue, Field } from './PurchaseFields'
 import { stateFromGstin, type GstMode } from './gst'
@@ -88,7 +88,6 @@ export function SupplierBillDetails({
       <div className="purchase-grid purchase-grid--4">
         <Field
           label="Supplier"
-          htmlFor="purchase-supplier"
           required
           error={showErrors ? errors.supplier : undefined}
           hint={
@@ -112,33 +111,23 @@ export function SupplierBillDetails({
             )
           }
         >
-          <Combobox
-            id="purchase-supplier"
+          <Combo<CatalogParty>
+            label="Supplier"
             placeholder="Type a supplier name..."
-            selectedLabel={form.supplier?.name ?? null}
+            selected={form.supplier?.name ?? null}
             invalid={showErrors && Boolean(errors.supplier)}
             autoFocus
-            leading={<Search size={14} aria-hidden />}
             search={searchSuppliers}
             keyOf={(party) => party.acc_id}
-            emptyMessage="No suppliers match that."
+            onClear={form.supplier ? () => onSupplier(null) : undefined}
+            emptyAction={<span>Suppliers are Smart Books’ accounts. Add one there and it appears here.</span>}
             renderOption={(party) => {
               const state = stateFromGstin(party.gstin)
-              return (
-                <span>
-                  <strong style={{ display: 'block', fontSize: 13 }}>{party.acc_name}</strong>
-                  <small style={{ color: 'var(--billing-muted)', fontSize: 11 }}>
-                    {party.gstin ? party.gstin : 'No GSTIN'}
-                    {state ? ` · ${state.label}` : ''}
-                  </small>
-                </span>
-              )
+              return {
+                name: party.acc_name,
+                meta: [party.gstin ?? 'No GSTIN', state ? state.label : null],
+              }
             }}
-            footer={() => (
-              <p className="billing-combobox__state" style={{ borderTop: '1px solid var(--billing-border)' }}>
-                Suppliers are Smart Books&apos; accounts. Add one there and it appears here.
-              </p>
-            )}
             onPick={(party) =>
               onSupplier({ id: party.acc_id, name: party.acc_name, gstin: party.gstin ?? null })
             }

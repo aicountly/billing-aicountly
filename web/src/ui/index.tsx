@@ -6,7 +6,9 @@
  * should not feel they have changed application.
  */
 
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
+import { AlertCircle, CheckCircle2, Info, X } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
 // Buttons
@@ -436,4 +438,101 @@ export function date(value: string | null | undefined): string {
   if (Number.isNaN(parsed.getTime())) return value
 
   return new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }).format(parsed)
+}
+
+// ---------------------------------------------------------------------------
+// Toasts
+// ---------------------------------------------------------------------------
+
+export interface ToastMessage {
+  id: number
+  tone: 'success' | 'danger' | 'info'
+  title: string
+  detail?: string
+}
+
+/**
+ * A short confirmation that does not stop the user working.
+ *
+ * Saving a payment is an ordinary thing somebody does twenty times before
+ * lunch, and a modal for it is twenty extra clicks. A toast says it landed and
+ * gets out of the way — so a SUCCESS dismisses itself, and a FAILURE does not:
+ * a message that disappears before it is read is the same as no message, and
+ * the failure is the one people need to act on.
+ */
+export function useToasts(): {
+  toasts: ToastMessage[]
+  push: (toast: Omit<ToastMessage, 'id'>) => void
+  dismiss: (id: number) => void
+} {
+  const [toasts, setToasts] = useState<ToastMessage[]>([])
+  const nextId = useRef(1)
+
+  const dismiss = useCallback((id: number) => {
+    setToasts((current) => current.filter((toast) => toast.id !== id))
+  }, [])
+
+  const push = useCallback((toast: Omit<ToastMessage, 'id'>) => {
+    const id = nextId.current++
+    // Capped at three. A stack that grows without limit covers the very button
+    // the person is trying to press next.
+    setToasts((current) => [...current, { ...toast, id }].slice(-3))
+  }, [])
+
+  return { toasts, push, dismiss }
+}
+
+export function ToastStack({ toasts, onDismiss }: { toasts: ToastMessage[]; onDismiss: (id: number) => void }) {
+  if (toasts.length === 0) return null
+
+  return (
+    <div className="billing-toasts">
+      {toasts.map((toast) => (
+        <Toast key={toast.id} toast={toast} onDismiss={onDismiss} />
+      ))}
+    </div>
+  )
+}
+
+function Toast({ toast, onDismiss }: { toast: ToastMessage; onDismiss: (id: number) => void }) {
+  const dismissable = toast.tone !== 'danger'
+
+  useEffect(() => {
+    if (!dismissable) return
+    const timer = setTimeout(() => onDismiss(toast.id), 6000)
+    return () => clearTimeout(timer)
+  }, [dismissable, toast.id, onDismiss])
+
+  const Mark = toast.tone === 'success' ? CheckCircle2 : toast.tone === 'danger' ? AlertCircle : Info
+
+  return (
+    <div
+      className={`billing-toast billing-toast--${toast.tone}`}
+      role={toast.tone === 'danger' ? 'alert' : 'status'}
+      aria-live={toast.tone === 'danger' ? 'assertive' : 'polite'}
+    >
+      <Mark size={18} className="billing-toast__mark" aria-hidden />
+      <div className="billing-toast__body">
+        <strong className="billing-toast__title">{toast.title}</strong>
+        {toast.detail && <span className="billing-toast__detail">{toast.detail}</span>}
+      </div>
+      <button type="button" className="billing-toast__close" onClick={() => onDismiss(toast.id)} aria-label="Dismiss">
+        <X size={15} aria-hidden />
+      </button>
+    </div>
+  )
+}
+
+/**
+ * The symbol in front of an amount being TYPED, for the same currency money()
+ * would format it in.
+ *
+ * Derived from Intl rather than written as a literal, so the day a document
+ * arrives in another currency the prefix follows the formatter instead of
+ * contradicting it.
+ */
+export function currencySymbol(currency = 'INR'): string {
+  const parts = new Intl.NumberFormat('en-IN', { style: 'currency', currency, maximumFractionDigits: 0 }).formatToParts(0)
+
+  return parts.find((part) => part.type === 'currency')?.value ?? currency
 }

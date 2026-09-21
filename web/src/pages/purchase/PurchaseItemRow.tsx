@@ -7,10 +7,10 @@
  */
 
 import { memo, useCallback, useMemo } from 'react'
-import { Search, Trash2 } from 'lucide-react'
+import { Trash2 } from 'lucide-react'
 import { api } from '../../services/api'
 import type { CatalogItem } from '../../services/types'
-import { Combobox } from '../../components/Combobox'
+import { Combo } from '../../components/Combo'
 import { money } from '../../ui'
 import { lineTotals, type PurchaseLine, type PurchaseType } from './model'
 import type { TaxRate } from './gst'
@@ -91,34 +91,28 @@ function PurchaseItemRowInner({
   }
 
   return (
-    <tr>
+    <tr onKeyDown={onEnter}>
       <td className="purchase-table__index">{index + 1}</td>
 
       <td>
         {isGoods ? (
-          <Combobox
-            dense
+          <Combo<CatalogItem>
+            compact
+            /* The grid scrolls sideways, and a list drawn inside that scroller
+               is clipped by it. */
             portal
-            ariaLabel={`Item on line ${index + 1}`}
+            label={`Item on line ${index + 1}`}
             placeholder="Type or scan item..."
-            selectedLabel={line.label || null}
+            selected={line.label || null}
             invalid={show && Boolean(errors?.item)}
-            leading={<Search size={13} aria-hidden />}
             inputRef={itemRef}
             search={searchItems}
             keyOf={(item) => item.item_id}
-            emptyMessage="No items found."
-            renderOption={(item) => (
-              <span>
-                <strong style={{ display: 'block', fontSize: 13 }}>{item.item_name}</strong>
-                <small style={{ color: 'var(--billing-muted)', fontSize: 11 }}>
-                  {[item.item_sku, item.hsn_sac ? `HSN ${item.hsn_sac}` : null].filter(Boolean).join(' · ') ||
-                    'No SKU'}
-                </small>
-              </span>
-            )}
+            renderOption={(item) => ({
+              name: item.item_name,
+              meta: [item.item_sku, item.hsn_sac ? `HSN ${item.hsn_sac}` : null],
+            })}
             onPick={(item) => onApplyItem(item, line.key)}
-            onKeyDown={onEnter}
           />
         ) : (
           <input
@@ -130,7 +124,6 @@ function PurchaseItemRowInner({
             value={line.label}
             ref={itemRef}
             onChange={(event) => onPatch(line.key, { label: event.target.value })}
-            onKeyDown={onEnter}
           />
         )}
 
@@ -161,7 +154,6 @@ function PurchaseItemRowInner({
           placeholder="e.g. Blue Pen"
           value={line.description}
           onChange={(event) => onPatch(line.key, { description: event.target.value })}
-          onKeyDown={onEnter}
         />
       </td>
 
@@ -174,7 +166,6 @@ function PurchaseItemRowInner({
           aria-invalid={show && Boolean(errors?.qty)}
           value={line.qty}
           onChange={(event) => onPatch(line.key, { qty: event.target.value })}
-          onKeyDown={onEnter}
         />
         {show && errors?.qty && (
           <span className="purchase-table__meta" style={{ color: 'var(--billing-danger)' }} role="alert">
@@ -214,7 +205,6 @@ function PurchaseItemRowInner({
           // Only a human typing over the rate counts as an override; the
           // backend checks `rate.override` against exactly this flag.
           onChange={(event) => onPatch(line.key, { rate: event.target.value, rateWasChanged: true })}
-          onKeyDown={onEnter}
         />
         {show && errors?.rate && (
           <span className="purchase-table__meta" style={{ color: 'var(--billing-danger)' }} role="alert">

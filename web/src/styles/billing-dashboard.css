@@ -275,6 +275,11 @@
   box-shadow: var(--billing-shadow-lg);
 }
 
+/* A menu opened from inside `.billing-table-scroll` cannot be absolutely
+   positioned: that scroller clips it, and the menu appears cut in half or not
+   at all. Anchored menus are placed in the viewport by the component instead. */
+.billing-menu--anchored { position: fixed; right: auto; top: auto; min-width: 12rem; }
+
 .billing-menu__item {
   display: flex;
   align-items: center;
@@ -893,6 +898,51 @@
 
 .billing-drawer__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
 
+/* ----------------------------------------------------------------- toasts */
+
+.billing-toasts {
+  position: fixed;
+  z-index: 90;
+  right: 18px;
+  bottom: 18px;
+  display: grid;
+  gap: 10px;
+  width: min(24rem, calc(100vw - 36px));
+}
+
+.billing-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 13px 14px;
+  border: 1px solid var(--billing-border);
+  border-radius: 12px;
+  background: var(--billing-surface);
+  box-shadow: var(--billing-shadow-lg);
+}
+
+.billing-toast--success { border-color: #bfe3b8; }
+.billing-toast--danger { border-color: var(--billing-danger); }
+
+.billing-toast__mark { flex-shrink: 0; margin-top: 1px; }
+.billing-toast--success .billing-toast__mark { color: var(--success); }
+.billing-toast--danger .billing-toast__mark { color: var(--billing-danger); }
+.billing-toast--info .billing-toast__mark { color: var(--billing-action); }
+
+.billing-toast__body { min-width: 0; flex: 1 1 auto; }
+.billing-toast__title { display: block; font-weight: 650; }
+.billing-toast__detail { display: block; margin-top: 2px; color: var(--billing-muted); font-size: 13px; }
+
+.billing-toast__close {
+  flex-shrink: 0;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: var(--billing-muted);
+  cursor: pointer;
+  line-height: 1;
+}
+
 /* ------------------------------------------------------------ responsive */
 
 @media (max-width: 1200px) {
@@ -917,6 +967,7 @@
 }
 
 @media (max-width: 560px) {
+  .billing-toasts { right: 12px; left: 12px; bottom: 12px; width: auto; }
   .billing-main { padding-inline: 14px; }
   .billing-dashboard-nav { gap: 18px; }
   .billing-metrics,
@@ -949,118 +1000,145 @@
   .billing-panel { break-inside: avoid; box-shadow: none; }
 }
 
-/* ------------------------------------------------------------- combobox */
+/* ------------------------------------------------------------- type-ahead */
 
-/* The shared type-ahead (components/Combobox.tsx). Styled here rather than in
-   the purchase feature's sheet because the counter's pickers use it too, and a
-   search box that looks different on two screens reads as two products. */
+/* components/Combo.tsx. It lives in the shared sheet because the bill screen
+   and the purchase grid both use it, and a search box that looks different on
+   two screens reads as two products. */
 
-.billing-combobox { position: relative; min-width: 0; }
+.billing-combo { position: relative; min-width: 0; }
 
-.billing-combobox__label {
-  display: block;
-  margin-bottom: 0.25rem;
-  font-size: 0.8rem;
-  color: var(--billing-muted);
-}
+.billing-combo__field { position: relative; display: flex; align-items: center; }
 
-.billing-combobox__control { position: relative; }
-
-.billing-combobox__leading {
+.billing-combo__icon {
   position: absolute;
-  left: 0.5rem;
-  top: 50%;
-  transform: translateY(-50%);
-  display: inline-flex;
+  left: 11px;
   color: var(--billing-muted);
   pointer-events: none;
 }
 
-.billing-combobox__input {
+.billing-combo__input {
   width: 100%;
-  padding: 0.5rem 0.55rem;
+  min-height: 42px;
+  padding: 0 34px 0 32px;
   border: 1px solid var(--billing-border-strong);
-  border-radius: var(--billing-radius-sm);
+  border-radius: 9px;
   background: var(--billing-surface);
   color: var(--billing-text);
-  font-size: 1rem;
-  transition: border-color 140ms ease, box-shadow 140ms ease;
-}
-
-.billing-combobox__input.has-leading { padding-left: 1.7rem; }
-
-.billing-combobox__input:hover:not(:disabled) { border-color: #acbdb1; }
-
-.billing-combobox__input:focus {
-  border-color: var(--billing-action);
-  box-shadow: 0 0 0 3px rgb(24 122 18 / 10%);
   outline: none;
 }
 
-.billing-combobox__input.is-invalid { border-color: var(--billing-danger); }
-
-.billing-combobox__input:disabled {
-  background: var(--billing-surface-2);
-  color: var(--billing-muted);
-  cursor: not-allowed;
+.billing-combo__input:focus {
+  border-color: var(--billing-action);
+  box-shadow: 0 0 0 3px rgb(24 122 18 / 11%);
 }
 
-/* The dense variant sits in the purchase grid, where a 44px control per cell
-   would push a ten-line bill past the fold. */
-.billing-combobox--dense .billing-combobox__input {
+.billing-combo--compact .billing-combo__input {
   min-height: 36px;
-  padding: 0.35rem 0.5rem;
-  font-size: 13px;
+  padding-left: 29px;
+  border-color: var(--billing-border);
+  border-radius: 7px;
 }
 
-.billing-combobox--dense .billing-combobox__input.has-leading { padding-left: 1.65rem; }
+.billing-combo--invalid .billing-combo__input,
+.billing-combo--invalid .billing-combo__input:focus { border-color: var(--billing-danger); }
+.billing-combo--invalid .billing-combo__input:focus { box-shadow: 0 0 0 3px rgb(180 35 24 / 12%); }
 
-.billing-combobox__list {
+.billing-combo__busy { position: absolute; right: 11px; color: var(--billing-muted); }
+
+.billing-combo__clear {
   position: absolute;
-  z-index: 20;
-  top: 100%;
+  right: 7px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--billing-muted);
+  cursor: pointer;
+}
+
+.billing-combo__clear:hover { background: var(--billing-surface-2); color: var(--billing-text); }
+
+.billing-combo__list {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 4px);
   left: 0;
   right: 0;
-  margin-top: 0.2rem;
-  max-height: 16rem;
+  min-width: 260px;
+  max-height: 19rem;
   overflow-y: auto;
-  background: var(--billing-surface);
+  padding: 4px;
+  margin: 0;
+  list-style: none;
   border: 1px solid var(--billing-border-strong);
   border-radius: var(--billing-radius-sm);
+  background: var(--billing-surface);
   box-shadow: var(--billing-shadow-lg);
 }
 
-/* Portalled: measured against the viewport so a table's own scrolling cannot
-   clip it. `right` is released because the width is set from the anchor. */
-.billing-combobox__list--floating {
-  position: fixed;
-  top: auto;
-  right: auto;
-  margin-top: 0;
-  z-index: 60;
-}
-
-.billing-combobox__state {
-  margin: 0;
-  padding: 0.6rem;
-  color: var(--billing-muted);
-  font-size: 13px;
-}
-
-.billing-combobox__state--error { color: var(--billing-danger); }
-
-.billing-combobox__option {
+.billing-combo__option {
   display: block;
   width: 100%;
-  padding: 0.55rem 0.6rem;
+  padding: 8px 10px;
   border: 0;
+  border-radius: 8px;
   background: transparent;
-  color: var(--billing-text);
   text-align: left;
   cursor: pointer;
 }
 
-.billing-combobox__option.is-active { background: var(--billing-surface-2); }
+.billing-combo__option[aria-selected='true'] { background: var(--billing-mint); }
+
+.billing-combo__option-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.billing-combo__option-name { font-weight: 650; font-size: 13px; }
+
+.billing-combo__option-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: 2px;
+  color: var(--billing-muted);
+  font-size: 11.5px;
+}
+
+.billing-combo__status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  color: var(--billing-muted);
+  font-size: 13px;
+}
+
+.billing-combo__status--error { color: var(--billing-danger); }
+
+.billing-combo__retry {
+  border: 0;
+  background: none;
+  color: var(--billing-action);
+  font-weight: 650;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* Portalled: measured against the viewport, so a grid's own sideways scrolling
+   cannot clip the list. `left`, `right` and `top` are set from the anchor. */
+.billing-combo__list--floating {
+  position: fixed;
+  top: auto;
+  right: auto;
+  z-index: 60;
+}
 
 /* ------------------------------------------------------- drawer, on the right */
 
