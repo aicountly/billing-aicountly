@@ -305,7 +305,15 @@ final class ReportService
      * tabs and carriage returns are stripped first, because they are how the
      * prefix gets skipped past.
      */
-    private static function cell(mixed $value): string
+    /**
+     * One CSV cell, neutralised against spreadsheet formula injection.
+     *
+     * Public because the item catalogue exports through the same rule: a
+     * supplier's name that begins with `=` is a formula the moment somebody
+     * opens the file, and there must be exactly one place that decides what to
+     * do about it.
+     */
+    public static function cell(mixed $value): string
     {
         if ($value === null || is_bool($value)) {
             return $value === true ? 'yes' : ($value === false ? 'no' : '');

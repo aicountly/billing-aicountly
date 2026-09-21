@@ -66,6 +66,8 @@ final class OverviewService
                     'Invoices dated ' . $period->from . ' to ' . $period->to . ', at their full value including tax. '
                         . 'Credit notes are not netted off — they are counted separately.',
                     $comparison,
+                    'neutral',
+                    ['summary' => self::dayRange($period) . ' · including tax, before credit notes'],
                 )
                 : Metric::unavailable(
                     'sales',
@@ -93,9 +95,14 @@ final class OverviewService
                         . 'This is a balance, not a figure for the period.',
                     null,
                     ($receivables['overdue'] ?? 0) > 0 ? 'warning' : 'neutral',
-                    ['detail' => $receivables['overdue'] > 0
-                        ? self::money($receivables['overdue']) . ' of it is overdue'
-                        : 'Nothing overdue'],
+                    [
+                        'detail'  => $receivables['overdue'] > 0
+                            ? self::money($receivables['overdue']) . ' of it is overdue'
+                            : 'Nothing overdue',
+                        'summary' => 'As at ' . self::day($today) . ' · ' . ($receivables['overdue'] > 0
+                            ? self::money($receivables['overdue']) . ' overdue'
+                            : 'nothing overdue'),
+                    ],
                 )
                 : Metric::unavailable('to_collect', 'To collect', Metric::BASIS_AS_OF, 'What customers still owe as at ' . $today . '.', 'Smart Books did not answer.');
         }
@@ -111,9 +118,16 @@ final class OverviewService
                     'What is still owed to suppliers as at ' . $today . ', bill by bill, after every payment allocated to date.',
                     null,
                     ($payables['overdue'] ?? 0) > 0 ? 'warning' : 'neutral',
-                    ['detail' => $payables['overdue'] > 0
-                        ? self::money($payables['overdue']) . ' of it is overdue'
-                        : 'Nothing overdue'],
+                    [
+                        'detail'  => $payables['overdue'] > 0
+                            ? self::money($payables['overdue']) . ' of it is overdue'
+                            : 'Nothing overdue',
+                        // The week ahead rather than what is already late: this is
+                        // the card somebody checks before deciding what to pay next.
+                        'summary' => 'As at ' . self::day($today) . ' · ' . (($payables['due_this_week'] ?? 0) > 0
+                            ? self::money($payables['due_this_week']) . ' due within 7 days'
+                            : 'nothing due within 7 days'),
+                    ],
                 )
                 : Metric::unavailable('to_pay', 'To pay', Metric::BASIS_AS_OF, 'What is still owed to suppliers as at ' . $today . '.', 'Smart Books did not answer.');
         }
@@ -132,7 +146,12 @@ final class OverviewService
                         . 'It is the accounts\' own figure, not invoices less expenses.',
                     null,
                     'neutral',
-                    ['detail' => count($cashBank['accounts'] ?? []) . ' account(s)'],
+                    [
+                        'detail'  => count($cashBank['accounts'] ?? []) . ' account(s)',
+                        'summary' => 'As at ' . self::day($today) . ' · '
+                            . count($cashBank['accounts'] ?? []) . ' '
+                            . (count($cashBank['accounts'] ?? []) === 1 ? 'account' : 'accounts'),
+                    ],
                 );
             } else {
                 $metrics[] = Metric::unavailable(
@@ -150,6 +169,11 @@ final class OverviewService
 
         // --- Things worth doing something about ------------------------------
         $panels['actions'] = $this->actions($period);
+
+        // --- The briefing strip, counted from what is already on this page ---
+        // Built from the two arrays above rather than from fresh reads, so the
+        // sentence at the top and the list underneath it cannot disagree.
+        $panels['briefing'] = BriefingService::build($period, $panels['actions'], $metrics);
 
         // --- Recent invoices --------------------------------------------------
         $panels['recent_documents'] = $may('sale.view')
@@ -356,5 +380,24 @@ final class OverviewService
     private static function money(float $value): string
     {
         return '₹' . number_format($value, 2);
+    }
+
+    /**
+     * One ISO date as a person writes it. Falls back to the ISO string rather
+     * than to today, because a date that could not be parsed is not today.
+     */
+    private static function day(string $iso): string
+    {
+        $parsed = \DateTimeImmutable::createFromFormat('!Y-m-d', $iso);
+
+        return $parsed === false ? $iso : $parsed->format('j M');
+    }
+
+    /** Both ends of the window, in the same short form. */
+    private static function dayRange(Period $period): string
+    {
+        return $period->from === $period->to
+            ? self::day($period->from)
+            : self::day($period->from) . '–' . self::day($period->to);
     }
 }

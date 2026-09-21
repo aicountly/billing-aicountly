@@ -134,7 +134,8 @@ export const overview: OverviewDashboard = {
       value: 842500,
       status: 'ready',
       basis: 'period',
-      definition: 'Invoices dated 2026-09-01 to 2026-09-16, at their full value including tax.',
+      definition: 'Invoices dated 2026-09-01 to 2026-09-16, at their full value including tax. Credit notes are not netted off — they are counted separately.',
+      summary: '1 Sep–16 Sep · including tax, before credit notes',
       comparison: { available: true, percent: 12, direction: 'up', label: '+12.0% vs the previous 16 days', tone: 'positive', previous: 752000 },
       tone: 'neutral',
     },
@@ -148,6 +149,7 @@ export const overview: OverviewDashboard = {
       comparison: null,
       tone: 'warning',
       detail: '₹74,500.00 of it is overdue',
+      summary: 'As at 16 Sep · ₹74,500.00 overdue',
     },
     {
       id: 'to_pay',
@@ -159,6 +161,7 @@ export const overview: OverviewDashboard = {
       comparison: null,
       tone: 'warning',
       detail: '₹18,500.00 of it is overdue',
+      summary: 'As at 16 Sep · ₹48,000.00 due within 7 days',
     },
     {
       id: 'cash_bank',
@@ -170,6 +173,7 @@ export const overview: OverviewDashboard = {
       comparison: null,
       tone: 'neutral',
       detail: '2 account(s)',
+      summary: 'As at 16 Sep · 2 accounts',
     },
   ],
   panels: {
@@ -209,6 +213,18 @@ export const overview: OverviewDashboard = {
         action: { label: 'Review', path: '/dashboard/cash-compliance' },
       },
     ],
+    briefing: {
+      available: true,
+      headline: '3 overdue customer accounts and 2 supplier accounts due this week, with 1 more below need a look today.',
+      points: [
+        { id: 'overdue_receivables', text: '3 overdue customer accounts', tone: 'danger', count: 3, path: '/dashboard/receivables' },
+        { id: 'supplier_bills_due', text: '2 supplier accounts due this week', tone: 'warning', count: 2, path: '/dashboard/payables' },
+        { id: 'statutory_failed', text: '1 statutory document to fix', tone: 'warning', count: 1, path: '/dashboard/cash-compliance' },
+      ],
+      movement: { text: 'Sales +12.0% vs the previous 16 days', tone: 'positive', path: '/sales' },
+      basis: 'Counted from your own records, in Asia/Kolkata. Not generated text.',
+      generated_at: '2026-09-16T09:12:00Z',
+    },
     recent_documents: {
       available: true,
       reason: null,
@@ -746,6 +762,177 @@ export const savedExpense = {
 }
 
 // ---------------------------------------------------------------------------
+// The Items workspace
+// ---------------------------------------------------------------------------
+
+/**
+ * A catalogue with every shape the screen has to survive in it.
+ *
+ * Deliberately awkward: an item with no SKU, one with a name longer than the
+ * column, an amount in lakhs, a service with no stock, an item running low,
+ * one out of stock, one withdrawn, and one Inventory said nothing useful about
+ * at all. Photographing a screen where every row is tidy proves nothing.
+ */
+export const catalogItems = [
+  row(1, 'Ballpoint Pens', {
+    description: 'Smooth writing | Blue',
+    sku: 'PEN-001',
+    hsn: '960810',
+    type: 'stock',
+    group: [3, 'Stationery'],
+    rate: 12,
+    stock: [1250, 100],
+  }),
+  row(2, 'A4 Notebook', {
+    description: '200 Pages | Single Line',
+    sku: 'NB-002',
+    hsn: '482020',
+    type: 'stock',
+    group: [3, 'Stationery'],
+    rate: 45,
+    stock: [320, 60],
+  }),
+  row(3, 'Laptop — Dell Inspiron 15 3520 with 16GB RAM and 512GB NVMe storage', {
+    description: '15.6" | 16GB | 512GB SSD',
+    sku: 'LAP-001',
+    hsn: '847130',
+    type: 'stock',
+    group: [4, 'Computers'],
+    rate: 52000,
+    stock: [15, 5],
+  }),
+  row(4, 'Installation Service', {
+    description: 'On-site installation',
+    sku: 'SERV-001',
+    hsn: '998719',
+    type: 'service',
+    group: [7, 'Services'],
+    rate: 1500,
+  }),
+  row(5, 'Office Chair', {
+    description: 'Ergonomic | Adjustable',
+    sku: 'CHR-001',
+    hsn: '940130',
+    type: 'stock',
+    group: [5, 'Furniture'],
+    rate: 3800,
+    stock: [8, 10],
+  }),
+  row(6, 'Annual AMC', {
+    description: 'Comprehensive support',
+    sku: 'AMC-001',
+    hsn: '998719',
+    type: 'service',
+    group: [7, 'Services'],
+    rate: 5000,
+  }),
+  row(7, 'Whiteboard Marker', {
+    description: null,
+    sku: null,
+    hsn: '960910',
+    type: 'stock',
+    group: [3, 'Stationery'],
+    rate: 25,
+    stock: [0, 24],
+  }),
+  row(8, 'Industrial Air Compressor', {
+    description: '7.5 HP | Two stage',
+    sku: 'ACP-220',
+    hsn: '841430',
+    type: 'stock',
+    group: [6, 'Machinery'],
+    rate: 248500,
+    stock: [2, 1],
+  }),
+  row(9, 'Legacy Fax Rolls', {
+    description: 'Withdrawn from sale',
+    sku: 'FAX-010',
+    hsn: '481140',
+    type: 'stock',
+    group: [3, 'Stationery'],
+    rate: 90,
+    stock: [40, 10],
+    active: false,
+  }),
+  // Inventory answered, but said nothing about what this is or how many there
+  // are. The row still has to draw — as "—" and "Unavailable", never as 0.
+  row(10, 'Imported Gift Set', { description: null, sku: 'GFT-001', hsn: null, type: null, group: null, rate: null }),
+
+  // The three the credit note screen resolves by search and by scan. THE IDS
+  // MATTER: originalDocument's bill lines are items 401 and 402, and a booth
+  // where the bill being credited names an item the search cannot find is a
+  // booth that cannot photograph the line picker. One catalogue, because two
+  // would be two answers to "what does this company sell".
+  row(401, 'Wireless Mouse', { description: 'Wireless | Black', sku: 'M221-BLK', hsn: '8471', type: 'stock', group: [4, 'Computers'], rate: 850, stock: [64, 20] }),
+  row(402, 'USB-C Cable 1M', { description: '1 metre | Braided', sku: 'CB11-1M', hsn: '8544', type: 'stock', group: [4, 'Computers'], rate: 450, stock: [210, 50] }),
+  row(403, 'Laptop Stand', { description: 'Aluminium | Adjustable', sku: 'LS-ALU', hsn: '8473', type: 'stock', group: [4, 'Computers'], rate: 1299, stock: [18, 6] }),
+]
+
+/** One fixture row in the shape the API's normaliser produces. */
+function row(
+  id: number,
+  name: string,
+  options: {
+    description?: string | null
+    sku?: string | null
+    hsn?: string | null
+    type?: 'stock' | 'service' | null
+    group?: [number, string] | null
+    rate?: number | null
+    /** [available, reorder level] — omitted entirely means "Inventory did not say". */
+    stock?: [number, number]
+    active?: boolean
+  },
+) {
+  const isService = options.type === 'service'
+  const available = options.stock?.[0]
+  const threshold = options.stock?.[1] ?? null
+
+  let state: 'in' | 'low' | 'out' | 'none' | 'unknown' = 'unknown'
+  if (isService) state = 'none'
+  else if (available === undefined) state = 'unknown'
+  else if (available <= 0) state = 'out'
+  else if (threshold !== null && available <= threshold) state = 'low'
+  else state = 'in'
+
+  return {
+    item_id: id,
+    item_name: name,
+    item_sku: options.sku ?? null,
+    hsn_sac: options.hsn ?? null,
+    unit_id: 1,
+    mrp: options.rate === null || options.rate === undefined ? null : String(options.rate),
+    description: options.description ?? null,
+    barcode: null,
+    type: options.type === undefined ? 'stock' : options.type,
+    group: options.group ? { id: options.group[0], name: options.group[1] } : null,
+    unit_name: isService ? null : 'Nos',
+    rate: options.rate ?? null,
+    currency: 'INR',
+    is_active: options.active ?? (options.type === null ? null : true),
+    image_url: null,
+    stock: { available: isService ? null : (available ?? null), threshold: isService ? null : threshold, state },
+    source: 'inventory',
+  }
+}
+
+export const catalogItemStats = {
+  total: { value: 1248, available: true, reason: null },
+  stock: { value: 892, available: true, reason: null },
+  services: { value: 356, available: true, reason: null },
+  low_stock: { value: 24, available: true, reason: null },
+  inactive: { value: 62, available: true, reason: null },
+}
+
+export const catalogItemGroups = [
+  { group_id: 4, group_name: 'Computers' },
+  { group_id: 5, group_name: 'Furniture' },
+  { group_id: 6, group_name: 'Machinery' },
+  { group_id: 7, group_name: 'Services' },
+  { group_id: 3, group_name: 'Stationery' },
+]
+
+// ---------------------------------------------------------------------------
 // Sales → Credit note
 // ---------------------------------------------------------------------------
 
@@ -911,13 +1098,6 @@ export const creditNoteTrend = {
   ],
   source: 'books',
 }
-
-/** Items the credit note's own search and scan resolve against. */
-export const catalogItems = [
-  { item_id: 401, item_name: 'Wireless Mouse', item_sku: 'M221-BLK', unit_id: 1, hsn_sac: '8471', mrp: '850' },
-  { item_id: 402, item_name: 'USB-C Cable 1M', item_sku: 'CB11-1M', unit_id: 1, hsn_sac: '8544', mrp: '450' },
-  { item_id: 403, item_name: 'Laptop Stand', item_sku: 'LS-ALU', unit_id: 1, hsn_sac: '8473', mrp: '1299' },
-]
 
 /** What the API returns when the harness "issues" a credit note. */
 export const savedCreditNote = {
