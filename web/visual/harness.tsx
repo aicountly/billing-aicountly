@@ -27,6 +27,7 @@ import CashCompliance from '../src/dashboards/CashCompliance'
 import { MoneyScreen } from '../src/pages/money/MoneyScreen'
 import ExpensePage from '../src/pages/expense/ExpensePage'
 import SalesBillPage from '../src/pages/sale/SalesBillPage'
+import CreditNotePage from '../src/pages/credit-note/CreditNotePage'
 import { saveSession, setAuthToken } from '../src/auth/tokens'
 import { setScope } from '../src/services/api'
 import * as fixtures from './fixtures'
@@ -56,6 +57,11 @@ const FAILABLE: Array<[string, RegExp]> = [
   ['tax', /v1\/catalog\/tax-categories/],
   ['stock', /v1\/catalog\/stock/],
   ['open-bills', /v1\/open-bills/],
+  ['bills', /v1\/original-documents(\?|$)/],
+  ['bill-lines', /v1\/original-documents\/\d+/],
+  ['warehouses', /v1\/catalog\/warehouses/],
+  ['trend', /v1\/credit-notes\/trend/],
+  ['issue', /v1\/transactions\/credit_note/],
 ]
 
 const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
@@ -68,6 +74,7 @@ const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
   'money-in': { path: '/money-in/new', element: <MoneyScreen direction="in" /> },
   expense: { path: '/more/expense', element: <ExpensePage /> },
   sale: { path: '/sales/new', element: <SalesBillPage /> },
+  'credit-note': { path: '/more/credit-note', element: <CreditNotePage /> },
 }
 
 /** The fixture behind each endpoint the screens call. */
@@ -92,6 +99,11 @@ const RESPONSES: Array<[RegExp, unknown]> = [
   [/v1\/money\/party-context/, fixtures.moneyPartyContext],
   [/v1\/money\/recent/, fixtures.moneyRecent],
   [/v1\/open-bills/, fixtures.openBills],
+  [/v1\/original-documents\/\d+/, fixtures.originalDocument],
+  [/v1\/original-documents/, fixtures.originalDocuments],
+  [/v1\/credit-notes\/trend/, fixtures.creditNoteTrend],
+  [/v1\/catalog\/warehouses/, fixtures.warehouses],
+  [/v1\/transactions\/credit_note/, fixtures.savedCreditNote],
   [/v1\/catalog\/expense-accounts/, fixtures.expenseAccounts],
   [/v1\/catalog\/tax-categories/, fixtures.taxCategories],
   [/v1\/expenses\/recent/, fixtures.recentExpenses],
@@ -111,6 +123,16 @@ const RESPONSES: Array<[RegExp, unknown]> = [
   }],
 ]
 
+/**
+ * Every item the booth knows, across both screens' fixtures.
+ *
+ * The two lists carry different fields — one has barcodes, the other does not
+ * — so they are read loosely here rather than being forced into one shape the
+ * real Inventory payload does not have either.
+ */
+type LooseItem = Record<string, string | number | null | undefined>
+const everyItem = (): LooseItem[] => [...fixtures.catalogItems, ...fixtures.saleItems] as unknown as LooseItem[]
+
 const originalFetch = window.fetch.bind(window)
 
 window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
@@ -125,29 +147,13 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Res
     }
   }
 
-  // Party search really searches, so the empty state is reachable here too.
-  if (/v1\/catalog\/parties/.test(url)) {
-    const query = new URL(url, window.location.origin).searchParams
-    const term = (query.get('q') ?? '').toLowerCase()
-    // Suppliers on the supplier side; on the customer side both lists, because
-    // the money screens' fixtures name a party out of `suppliers` and reach it
-    // through a customer-side picker. A ledger being both is a real thing, and
-    // a booth that hides one of them makes a screen look broken that is not.
-    const pool =
-      query.get('side') === 'supplier' ? fixtures.suppliers : [...fixtures.customers, ...fixtures.suppliers]
-    const rows = pool.filter((row) => row.acc_name.toLowerCase().includes(term))
-    return new Response(JSON.stringify({ data: rows, meta: { total: rows.length, limit: 20, offset: 0 } }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    })
-  }
-
-  // Item search searches too, so "no matches" and the scan path are both
-  // reachable — a barcode is looked up by its own route.
+  // Item search really searches, so a line can be added by hand in the booth
+  // and "no matches" is reachable. One list for both screens: the credit note
+  // credits what a bill sold, so the two booths have to agree about items.
   if (/v1\/catalog\/items\/search/.test(url)) {
     const term = (new URL(url, window.location.origin).searchParams.get('q') ?? '').toLowerCase()
-    const rows = fixtures.saleItems.filter(
-      (row) => row.item_name.toLowerCase().includes(term) || (row.item_sku ?? '').toLowerCase().includes(term),
+    const rows = everyItem().filter(
+      (row) => (row.item_name ?? '').toLowerCase().includes(term) || (row.item_sku ?? '').toLowerCase().includes(term),
     )
     return new Response(JSON.stringify({ data: rows, meta: { total: rows.length, limit: 20, offset: 0 } }), {
       status: 200,
@@ -155,11 +161,28 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Res
     })
   }
 
+  // Scan: a real barcode where the fixture carries one, an SKU otherwise —
+  // the credit note booth scans by SKU. Anything else 404s, which is the path
+  // the bill screen falls back to the ordinary search on.
   if (/v1\/catalog\/items\/barcode\//.test(url)) {
-    const code = decodeURIComponent(url.split('/barcode/')[1]?.split('?')[0] ?? '')
-    const hit = fixtures.saleItems.find((row) => row.barcode === code)
-    return new Response(JSON.stringify(hit ? { data: hit } : { error: { code: 'not_found', message: 'No such barcode.' } }), {
-      status: hit ? 200 : 404,
+    const code = decodeURIComponent(url.split('/barcode/')[1]?.split('?')[0] ?? '').toLowerCase()
+    const item = everyItem().find(
+      (row) => (row.barcode ?? '').toLowerCase() === code || (row.item_sku ?? '').toLowerCase() === code,
+    )
+    return new Response(JSON.stringify(item ? { data: item } : { error: { code: 'not_found', message: 'No such code.' } }), {
+      status: item ? 200 : 404,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  // Party search really searches, so the empty state is reachable here too.
+  if (/v1\/catalog\/parties/.test(url)) {
+    const term = (new URL(url, window.location.origin).searchParams.get('q') ?? '').toLowerCase()
+    const side = new URL(url, window.location.origin).searchParams.get('side') ?? 'customer'
+    const pool = side === 'supplier' ? fixtures.suppliers : fixtures.customers
+    const rows = pool.filter((row) => row.acc_name.toLowerCase().includes(term))
+    return new Response(JSON.stringify({ data: rows, meta: { total: rows.length, limit: 20, offset: 0 } }), {
+      status: 200,
       headers: { 'Content-Type': 'application/json' },
     })
   }
@@ -175,7 +198,7 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Res
   // One item by id, as the biller desk and the global search link into the bill.
   const byId = /v1\/catalog\/items\/(\d+)/.exec(url)
   if (byId) {
-    const hit = fixtures.saleItems.find((row) => row.item_id === Number(byId[1]))
+    const hit = everyItem().find((row) => row.item_id === Number(byId[1]))
     return new Response(JSON.stringify(hit ? { data: hit } : { error: { code: 'not_found', message: 'No such item.' } }), {
       status: hit ? 200 : 404,
       headers: { 'Content-Type': 'application/json' },
