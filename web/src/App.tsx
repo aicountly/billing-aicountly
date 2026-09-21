@@ -120,6 +120,13 @@ const Dues = lazy(() => import('./receivables/DuesScreen').then((module) => ({ d
  */
 const NewPurchase = lazy(() => import('./pages/purchase/NewPurchasePage'))
 
+/**
+ * Money to Pay is split out for the same reason: it carries its own stylesheet,
+ * its charts and its filter panel, and a biller who may not see payables at all
+ * should never download any of it.
+ */
+const MoneyToPay = lazy(() => import('./pages/payables/MoneyToPay'))
+
 initAnalytics()
 
 function PageViews() {
@@ -270,8 +277,13 @@ function Shell() {
         </Route>
 
         {/* The bill-by-bill lists. The dashboards summarise them and link here. */}
+        {/* Money to Collect keeps the shared DuesScreen. Money to Pay has its
+            own workspace: server-side search, filters, sort and paging over one
+            reading of Books, which the shared screen does in the browser over
+            every row. The two are not yet one screen — see the note on
+            DuesScreen — and this is the seam where that shows. */}
         <Route path="receivables" element={<Suspense fallback={<Loading />}><RequireScope><Dues side="receivable" /></RequireScope></Suspense>} />
-        <Route path="payables" element={<Suspense fallback={<Loading />}><RequireScope><Dues side="payable" /></RequireScope></Suspense>} />
+        <Route path="payables" element={<Suspense fallback={<Loading />}><RequireScope><MoneyToPay /></RequireScope></Suspense>} />
 
         <Route path="parties">
           <Route index element={<RequireScope><Parties /></RequireScope>} />

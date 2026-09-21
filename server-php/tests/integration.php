@@ -562,6 +562,274 @@ check('an unreachable Books is reported, not shown as zero', function () use ($c
     stubRecover();
 });
 
+echo "\nMoney to pay — the workspace behind /payables\n";
+
+/** The stub's creditor bills are laid out relative to this date. */
+const PAYABLES_AS_ON = '2026-09-19';
+
+/** @return array<string, mixed> */
+function payablesWorkspace(Context $ctx, Auth $auth, array $query = []): array
+{
+    return (new DuesService($ctx, $auth))->payablesWorkspace(['as_on' => PAYABLES_AS_ON] + $query);
+}
+
+check('the headline figures, the ageing and the buckets all add up to the same total', function () use ($ctx, $auth) {
+    resetDatabase();
+    $work = payablesWorkspace($ctx, $auth);
+
+    // Eight open bills; the ninth is settled and a zero balance is not a payable.
+    assertSame(238500.0, $work['summary']['total'], 'total outstanding');
+    assertSame(8, $work['summary']['bill_count'], 'the settled bill is not a payable');
+    assertSame(3, $work['summary']['supplier_count'], 'three suppliers');
+
+    assertSame(85500.0, $work['summary']['overdue'], 'overdue');
+    assertSame(4, $work['summary']['overdue_count'], 'overdue count');
+    assertSame(25000.0, $work['summary']['due_today'], 'due today');
+    assertSame(1, $work['summary']['due_today_count'], 'due today count');
+    // Today plus the next seven days, the same window the dashboards use.
+    assertSame(40000.0, $work['summary']['due_this_week'], 'due this week');
+    assertSame(2, $work['summary']['due_this_week_count'], 'due this week count');
+
+    assertTrue($work['ageing_reconciles'], 'the buckets reconcile with the headline');
+    $byBucket = [];
+    foreach ($work['ageing_buckets'] as $bucket) {
+        $byBucket[$bucket['key']] = $bucket;
+    }
+    assertSame(150000.0, $byBucket['current']['amount'], 'not yet due');
+    assertSame(8000.0, $byBucket['1_30']['amount'], '1-30 days');
+    assertSame(12500.0, $byBucket['31_60']['amount'], '31-60 days');
+    assertSame(25000.0, $byBucket['61_90']['amount'], '61-90 days');
+    assertSame(40000.0, $byBucket['90_plus']['amount'], 'over 90 days');
+    // A bill with no due date of its own is never filed under "not yet due".
+    assertSame(3000.0, $byBucket['no_due_date']['amount'], 'no due date');
+
+    $sum = 0.0;
+    foreach ($work['ageing_buckets'] as $bucket) {
+        $sum += $bucket['amount'];
+    }
+    assertSame(238500.0, round($sum, 2), 'the bars add up to the card above them');
+});
+
+check('every bill carries the state it is in, and a part payment is not rounded away', function () use ($ctx, $auth) {
+    resetDatabase();
+    $work = payablesWorkspace($ctx, $auth, ['page_size' => 100]);
+
+    $byNumber = [];
+    foreach ($work['bills'] as $bill) {
+        $byNumber[$bill['bill_no']] = $bill;
+    }
+
+    assertSame('overdue', $byNumber['BILL/2001']['status'], '95 days past its due date');
+    assertSame(95, $byNumber['BILL/2001']['days_overdue'], 'and says how far past');
+    assertSame(null, $byNumber['BILL/2001']['days_to_due'], 'an overdue bill has no days remaining');
+    assertSame('due_today', $byNumber['BILL/2005']['status'], 'due today');
+    assertSame(0, $byNumber['BILL/2005']['days_to_due'], 'nought days left, not one');
+    assertSame('due_soon', $byNumber['BILL/2006']['status'], 'inside the week');
+    assertSame('upcoming', $byNumber['BILL/2007']['status'], 'beyond it');
+    assertSame('no_due_date', $byNumber['BILL/2008']['status'], 'and one nobody dated');
+
+    // Books gave a bill value above the balance, so part of it has been paid.
+    assertTrue($byNumber['BILL/2001']['partially_paid'], 'part paid');
+    assertSame(20000.0, $byNumber['BILL/2001']['received'], 'and by how much');
+    // Books gave no bill value for this one, so nothing is claimed either way.
+    assertTrue(!$byNumber['BILL/2002']['partially_paid'], 'no value, no claim of a part payment');
+    assertSame(null, $byNumber['BILL/2002']['bill_amount'], 'and no invented bill value');
+
+    // The supplier\'s reference is its own column, not the bill number again.
+    assertSame('PO-4587', $byNumber['BILL/2001']['reference'], 'the reference is kept apart');
+    assertSame(null, $byNumber['BILL/2002']['reference'], 'and absent when there is none');
+    // A deployment that files the number under reference_no still gets a bill
+    // number, rather than a list of bills all headed "not recorded".
+    assertTrue(isset($byNumber['BILL/2003']), 'a reference stands in when nothing else names the bill');
+    assertSame(null, $byNumber['BILL/2003']['reference'], 'and is not then repeated as its own reference');
+    // BILL/2004 and bill-2004 are one number written two ways.
+    assertSame(null, $byNumber['BILL/2004']['reference'], 'the same number twice is shown once');
+
+    // A row spelling its fields the other way is read, not skipped.
+    assertSame(603, $byNumber['BILL/2005']['account_id'], 'acc_id is an account_id');
+    assertSame('Airtel Business', $byNumber['BILL/2005']['account_name'], 'acc_name is an account_name');
+    assertSame(25000.0, $byNumber['BILL/2005']['balance'], 'pending_amount is a balance');
+});
+
+check('the quick filters and the search narrow the rows without moving the headline', function () use ($ctx, $auth) {
+    resetDatabase();
+
+    $overdue = payablesWorkspace($ctx, $auth, ['status' => 'overdue', 'page_size' => 100]);
+    assertSame(4, $overdue['pagination']['total'], 'four overdue bills');
+    assertSame(85500.0, $overdue['filtered']['amount'], 'and what they come to');
+    // The cards describe the position, not the filter. This is the whole reason
+    // the analysis is computed before the rows are narrowed.
+    assertSame(238500.0, $overdue['summary']['total'], 'the headline is still the headline');
+
+    $today = payablesWorkspace($ctx, $auth, ['status' => 'due_today']);
+    assertSame(1, $today['pagination']['total'], 'one due today');
+
+    $week = payablesWorkspace($ctx, $auth, ['status' => 'due_this_week']);
+    assertSame(2, $week['pagination']['total'], 'two due this week');
+
+    $notDue = payablesWorkspace($ctx, $auth, ['status' => 'not_due']);
+    assertSame(3, $notDue['pagination']['total'], 'three not yet due — the undated one is not among them');
+
+    // Three open bills for Metro — the fourth is settled and is not a payable.
+    $search = payablesWorkspace($ctx, $auth, ['search' => 'metro']);
+    assertSame(3, $search['pagination']['total'], 'search finds a supplier by name');
+
+    $reference = payablesWorkspace($ctx, $auth, ['search' => 'PO-4587']);
+    assertSame(1, $reference['pagination']['total'], 'and a bill by its reference');
+
+    $supplier = payablesWorkspace($ctx, $auth, ['supplier_id' => 603]);
+    assertSame(2, $supplier['pagination']['total'], 'and one supplier on their own');
+
+    $bucket = payablesWorkspace($ctx, $auth, ['age_bucket' => '90_plus']);
+    assertSame(1, $bucket['pagination']['total'], 'and one ageing bucket on its own');
+
+    $band = payablesWorkspace($ctx, $auth, ['amount_min' => 20000, 'amount_max' => 50000]);
+    assertSame(3, $band['pagination']['total'], 'and an amount band');
+
+    $none = payablesWorkspace($ctx, $auth, ['search' => 'nobody-by-that-name']);
+    assertSame(0, $none['pagination']['total'], 'and says plainly when nothing matches');
+    assertSame(0.0, $none['filtered']['amount'], 'with nothing totalled');
+});
+
+check('sorting and paging are done once, on the server, and do not lose a row', function () use ($ctx, $auth) {
+    resetDatabase();
+
+    $first = payablesWorkspace($ctx, $auth, ['sort_by' => 'amount', 'sort_dir' => 'desc', 'page' => 1, 'page_size' => 3]);
+    assertSame(8, $first['pagination']['total'], 'eight bills in all');
+    assertSame(3, $first['pagination']['pages'], 'three pages of three');
+    assertSame(3, count($first['bills']), 'three rows on the first');
+    assertSame(110000.0, $first['bills'][0]['balance'], 'largest first');
+    assertSame(1, $first['pagination']['from'], 'showing from');
+    assertSame(3, $first['pagination']['to'], 'showing to');
+
+    $last = payablesWorkspace($ctx, $auth, ['sort_by' => 'amount', 'sort_dir' => 'desc', 'page' => 3, 'page_size' => 3]);
+    assertSame(2, count($last['bills']), 'two rows on the last');
+    assertSame(3000.0, $last['bills'][1]['balance'], 'smallest last');
+
+    // A page beyond the end is the last page, not an empty screen.
+    $beyond = payablesWorkspace($ctx, $auth, ['page' => 99, 'page_size' => 3]);
+    assertSame(3, $beyond['pagination']['page'], 'a page past the end lands on the last one');
+
+    // Every row appears exactly once across the pages.
+    $seen = [];
+    for ($page = 1; $page <= 3; $page++) {
+        $rows = payablesWorkspace($ctx, $auth, ['sort_by' => 'supplier', 'page' => $page, 'page_size' => 3])['bills'];
+        foreach ($rows as $row) {
+            $seen[$row['row_key']] = true;
+        }
+    }
+    assertSame(8, count($seen), 'paging shows every bill once and none twice');
+
+    $byDays = payablesWorkspace($ctx, $auth, ['sort_by' => 'days', 'sort_dir' => 'asc', 'page_size' => 100])['bills'];
+    assertSame('BILL/2001', $byDays[0]['bill_no'], 'most overdue first when sorted by days');
+});
+
+check('what falls due next is the next thirty days, soonest first', function () use ($ctx, $auth) {
+    resetDatabase();
+    $upcoming = payablesWorkspace($ctx, $auth)['upcoming'];
+
+    assertSame(30, $upcoming['days'], 'a thirty-day window');
+    assertSame(3, $upcoming['count'], 'three bills fall due inside it');
+    assertSame(150000.0, $upcoming['amount'], 'and what they come to');
+
+    $dates = array_column($upcoming['rows'], 'due_date');
+    $sorted = $dates;
+    sort($sorted);
+    assertSame($sorted, $dates, 'soonest first');
+});
+
+check('the category split is Books\' own classification, or an honest nothing', function () use ($ctx, $auth) {
+    resetDatabase();
+    $categories = payablesWorkspace($ctx, $auth)['categories'];
+
+    assertTrue($categories['available'], 'the stub classifies its bills');
+    $byLabel = [];
+    foreach ($categories['rows'] as $row) {
+        $byLabel[$row['label']] = $row['amount'];
+    }
+    assertSame(175000.0, $byLabel['Raw Materials'], 'raw materials');
+    assertSame(40000.0, $byLabel['Services'], 'services');
+    assertSame(23500.0, $byLabel['Office Supplies'], 'office supplies');
+    assertSame(238500.0, round(array_sum($byLabel), 2), 'and the slices are the whole of it');
+});
+
+check('the export is the whole filtered set, not the page on screen', function () use ($ctx, $auth) {
+    resetDatabase();
+
+    $report = (new DuesService($ctx, $auth))->payablesExport([
+        'as_on' => PAYABLES_AS_ON, 'status' => 'overdue', 'page' => 2, 'page_size' => 1,
+    ]);
+
+    // Four overdue bills, even though the caller was on page two of one.
+    assertSame(4, count($report['rows']), 'every matching bill is in the file');
+    assertSame(85500.0, $report['total'], 'and the total is of those');
+
+    $csv = ReportService::toCsv($report);
+    assertTrue(str_contains($csv, 'PO-4587'), 'the reference is a column of its own');
+    assertTrue(str_contains($csv, 'Overdue'), 'and the state is in words');
+});
+
+check('exporting what you owe is a permission of its own', function () use ($ctx) {
+    resetDatabase();
+    // A purchase operator may see payables. Walking out with the list is separate.
+    $operator = userWithProfile($ctx, 'buy-sunil', 'purchase_operator');
+
+    assertTrue(Permissions::allows($ctx, $operator, 'payable.view'), 'they may see what is owed');
+    assertTrue(!Permissions::allows($ctx, $operator, 'export.data'), 'and may not export it');
+
+    // They can still open the screen, and the figures are the same figures.
+    $work = (new DuesService($ctx, $operator))->payablesWorkspace(['as_on' => PAYABLES_AS_ON]);
+    assertSame(238500.0, $work['summary']['total'], 'and they see what is owed');
+    assertTrue(Permissions::allows($ctx, $operator, 'payment.create'), 'and may record a payment');
+});
+
+check('a biller cannot open the workspace at all', function () use ($ctx) {
+    resetDatabase();
+    $biller = userWithProfile($ctx, 'counter-ravi', 'biller');
+
+    assertThrows(
+        static fn () => (new DuesService($ctx, $biller))->payablesWorkspace(['as_on' => PAYABLES_AS_ON]),
+        'cannot see money to pay',
+        'a biller opening Money to Pay',
+    );
+});
+
+check('the payables routes are registered and none of them shadows another', function () {
+    $router = new Router();
+    Routes::register($router);
+
+    $reflected = new \ReflectionProperty(Router::class, 'routes');
+    $registered = [];
+    foreach ($reflected->getValue($router) as $route) {
+        $registered[] = $route['method'] . ' ' . implode('/', $route['segments']);
+    }
+
+    foreach (['GET v1/payables', 'GET v1/payables/comparison', 'GET v1/payables/export'] as $wanted) {
+        assertSame(1, count(array_keys($registered, $wanted, true)), $wanted . ' is registered exactly once');
+    }
+
+    // The router matches on segment count first, so a three-segment GET whose
+    // first two segments are v1/payables would swallow the two above. Nothing
+    // else may claim that shape.
+    $threes = array_filter($registered, static fn (string $r) => str_starts_with($r, 'GET v1/payables/'));
+    assertSame(2, count($threes), 'only comparison and export sit under v1/payables');
+});
+
+check('an unreachable Books leaves the comparison out rather than inventing a trend', function () use ($ctx, $auth) {
+    resetDatabase();
+    stubFail('bill-by-bill', 500);
+
+    $comparison = (new DuesService($ctx, $auth))->payablesComparison('2026-08-19', 'last month');
+    stubRecover();
+
+    assertTrue(!$comparison['available'], 'no comparison');
+    assertSame(null, $comparison['total'], 'and no figure standing in for one');
+
+    $ready = (new DuesService($ctx, $auth))->payablesComparison('2026-08-19', 'last month');
+    assertTrue($ready['available'], 'and it comes back when Books does');
+    assertTrue($ready['total'] > 0, 'with a total Books gave');
+});
+
 echo "\nRecurring bills and reminders\n";
 
 check('a recurring rule raises a real Books invoice, not a Billing one', function () use ($ctx, $auth) {

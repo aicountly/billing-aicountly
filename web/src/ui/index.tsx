@@ -425,6 +425,29 @@ export function money(value: number | string | null | undefined, currency = 'INR
 }
 
 /**
+ * The same amount without its symbol.
+ *
+ * For a column already headed "Amount (₹)": repeating the symbol on every one
+ * of twenty-five rows costs width that the supplier name needs and tells the
+ * reader nothing the header did not.
+ */
+export function moneyPlain(value: number | string | null | undefined): string {
+  const amount = typeof value === 'string' ? Number.parseFloat(value) : (value ?? 0)
+  if (!Number.isFinite(amount)) return '—'
+
+  return new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount)
+}
+
+/** Day and month, for a list where the year is the same on every row. */
+export function dayMonth(value: string | null | undefined): string {
+  if (!value) return '—'
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return value
+
+  return new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short' }).format(parsed)
+}
+
+/**
  * The same amount without the paise, for a headline tile or a bar label.
  *
  * Still fully grouped (\u20b913,48,560), so it is read as a figure rather than an
