@@ -30,7 +30,7 @@ ten live reports with CSV export, and Billing profiles deciding who sees what.
 
 See [docs/BILLING_IMPLEMENTATION_STATUS.md](docs/BILLING_IMPLEMENTATION_STATUS.md)
 for what each figure means, and
-[docs/BILLING_API_DEPENDENCIES.md](docs/BILLING_API_DEPENDENCIES.md) for the two
+[docs/BILLING_API_DEPENDENCIES.md](docs/BILLING_API_DEPENDENCIES.md) for the
 capabilities no product in this deployment serves yet.
 
 Signing in is the AICOUNTLY portal's job, the same as every other AICOUNTLY
@@ -76,13 +76,15 @@ same-origin.
 `web/visual.html` is a development-only photo booth: it mounts the real page
 components against fixtures so the screens can be checked at any width without a
 portal session or a company's data. `?screen=` picks one — the five dashboards,
-`expense`, or `bank-withdrawal` — `?as=biller` narrows the profile,
-`?fail=recent,categories,balance,recent-withdrawals` makes those endpoints answer
-503, which is how the "one panel is down, the form still works" states get
-checked, and `?empty=paid-from,recent-withdrawals` makes them answer an empty
-list instead, which is the different screen a company with nothing recorded yet
-sees. `vite build` takes `index.html` only, so none of it reaches the deployed
-bundle.
+`money-in`, `money-out`, `expense`, `sale`, `credit-note` or `bank-withdrawal`
+— `?as=biller` narrows the profile, and `?fail=recent,categories` makes those
+endpoints answer 503, which is how the "one panel is down, the form still works"
+states get checked. The credit note screen adds `bills`, `bill-lines`,
+`warehouses`, `trend` and `issue` to that list, and the withdrawal screen adds
+`balance` and `recent-withdrawals`, so their degraded states are reachable too.
+`?empty=paid-from,recent-withdrawals` makes those answer an empty list instead,
+which is the different screen a company with nothing recorded yet sees. `vite
+build` takes `index.html` only, so none of it reaches the deployed bundle.
 
 The PHP API has no build step and no dependencies. To run it locally:
 

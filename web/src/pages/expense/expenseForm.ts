@@ -156,9 +156,10 @@ export function toExpenseRequest(draft: ExpenseDraft): Record<string, unknown> {
 }
 
 /**
- * Reading values out of a row whose key spelling we do not control.
+ * Reading a row whose key spelling we do not control.
  *
- * Shared with the bank withdrawal screen. Re-exported here because this module
- * is what the expense components already import them from.
+ * These moved to services/shapes.ts when the credit note screen needed the
+ * same three rules for Books' warehouse and invoice-line lists. Re-exported
+ * here so the form that has always imported them from this module still can.
  */
-export { readId, readText } from '../../utils/rows'
+export { readId, readNumber, readText } from '../../services/shapes'

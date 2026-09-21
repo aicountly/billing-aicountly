@@ -44,6 +44,7 @@ export function GlobalSearch() {
   const [active, setActive] = useState(0)
 
   const box = useRef<HTMLDivElement | null>(null)
+  const field = useRef<HTMLInputElement | null>(null)
 
   const maySeeParties = can('sale.view') || can('purchase.view') || can('receivable.view')
   const maySeeItems = can('sale.view') && (session?.settings.maintains_stock ?? true)
@@ -129,6 +130,24 @@ export function GlobalSearch() {
     return () => document.removeEventListener('mousedown', onPointerDown)
   }, [])
 
+  /**
+   * Ctrl / ⌘ + K, because the box says so.
+   *
+   * The browser's own binding is overridden deliberately: this is the search
+   * the person reading that placeholder is asking for, and the address bar is
+   * still one click away.
+   */
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'k') return
+      event.preventDefault()
+      field.current?.focus()
+      field.current?.select()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [])
+
   function choose(result: Result) {
     setOpen(false)
     setTerm('')
@@ -146,13 +165,16 @@ export function GlobalSearch() {
     <div className="billing-search" ref={box}>
       <Search size={15} className="billing-search__icon" aria-hidden />
       <input
+        ref={field}
         className="billing-search__input"
         type="search"
         role="combobox"
         aria-expanded={open}
         aria-controls={listId}
         aria-autocomplete="list"
-        placeholder={maySeeItems ? 'Search customers, items…' : 'Search customers, suppliers…'}
+        placeholder={
+          maySeeItems ? 'Search customers, items, bills… (Ctrl + K)' : 'Search customers, suppliers… (Ctrl + K)'
+        }
         value={term}
         onChange={(e) => setTerm(e.target.value)}
         onFocus={() => results && setOpen(true)}

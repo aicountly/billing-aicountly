@@ -12,7 +12,7 @@
  */
 
 import type { CashBank, CatalogAccount } from '../../services/types'
-import { readScalar } from '../../utils/rows'
+import { readScalar } from '../../services/shapes'
 
 export type AccountKind = 'bank' | 'cash'
 
