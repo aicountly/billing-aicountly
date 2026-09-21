@@ -27,6 +27,7 @@ import Payables from '../src/dashboards/Payables'
 import CashCompliance from '../src/dashboards/CashCompliance'
 import { MoneyScreen } from '../src/pages/money/MoneyScreen'
 import ExpensePage from '../src/pages/expense/ExpensePage'
+import ItemsPage from '../src/pages/items/ItemsPage'
 import BankWithdrawalPage from '../src/pages/bank-withdrawal/BankWithdrawalPage'
 import SalesBillPage from '../src/pages/sale/SalesBillPage'
 import CreditNotePage from '../src/pages/credit-note/CreditNotePage'
@@ -50,6 +51,16 @@ const asBiller = params.get('as') === 'biller'
  */
 const failing = new Set((params.get('fail') ?? '').split(',').filter(Boolean))
 
+/**
+ * The screen's OWN query string, as `?at=stock_status%3Dlow`.
+ *
+ * Screens that keep their state in the address bar — the Items workspace does —
+ * cannot be photographed in their filtered, sorted or paged states without it,
+ * because the booth mounts them in a MemoryRouter and the browser's query
+ * string never reaches the app's router.
+ */
+const at = params.get('at') ?? ''
+
 const FAILABLE: Array<[string, RegExp]> = [
   ['recent', /v1\/expenses\/recent/],
   ['categories', /v1\/catalog\/expense-accounts/],
@@ -60,6 +71,9 @@ const FAILABLE: Array<[string, RegExp]> = [
   // written summary is down" can both be photographed.
   ['briefing', /v1\/dashboards\/overview\/briefing/],
   ['overview', /v1\/dashboards\/overview(\?|$)/],
+  ['items', /v1\/catalog\/items(\?|$)/],
+  ['stats', /v1\/catalog\/items\/stats/],
+  ['groups', /v1\/catalog\/item-groups/],
   ['tax', /v1\/catalog\/tax-categories/],
   ['stock', /v1\/catalog\/stock/],
   ['open-bills', /v1\/open-bills/],
@@ -84,6 +98,7 @@ const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
   'money-out': { path: '/money-out/new', element: <MoneyScreen direction="out" /> },
   'money-in': { path: '/money-in/new', element: <MoneyScreen direction="in" /> },
   expense: { path: '/more/expense', element: <ExpensePage /> },
+  items: { path: '/items', element: <ItemsPage /> },
   sale: { path: '/sales/new', element: <SalesBillPage /> },
   'credit-note': { path: '/more/credit-note', element: <CreditNotePage /> },
   'bank-withdrawal': { path: '/bank-cash/withdrawal', element: <BankWithdrawalPage /> },
@@ -130,6 +145,8 @@ const RESPONSES: Array<[RegExp, unknown]> = [
   [/v1\/transactions\/credit_note/, fixtures.savedCreditNote],
   [/v1\/catalog\/expense-accounts/, fixtures.expenseAccounts],
   [/v1\/catalog\/tax-categories/, fixtures.taxCategories],
+  [/v1\/catalog\/items\/stats/, fixtures.catalogItemStats],
+  [/v1\/catalog\/item-groups/, fixtures.catalogItemGroups],
   [/v1\/expenses\/recent/, fixtures.recentExpenses],
   [/v1\/transactions\/expense/, fixtures.savedExpense],
   [/v1\/expenses\/capabilities/, fixtures.expenseCapabilities],
@@ -175,6 +192,70 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Res
         headers: { 'Content-Type': 'application/json' },
       })
     }
+  }
+
+  /**
+   * The item list really filters, sorts and pages.
+   *
+   * Which is the only way the tabs, the search box, the sort arrows, the pager
+   * and BOTH empty states can be photographed — a fixture that answers the same
+   * ten rows to every request proves the table draws and nothing else.
+   */
+  if (/v1\/catalog\/items(\?|$)/.test(url)) {
+    const params = new URL(url, window.location.origin).searchParams
+    const term = (params.get('q') ?? '').toLowerCase()
+    const type = params.get('type')
+    const status = params.get('status')
+    const stockStatus = params.get('stock_status')
+    const groupId = params.get('group_id')
+    const sort = params.get('sort')
+    const descending = params.get('order') === 'desc'
+    const limit = Number(params.get('limit') ?? 25)
+    const offset = Number(params.get('offset') ?? 0)
+
+    let rows = fixtures.catalogItems.filter((item) => {
+      if (term && ![item.item_name, item.item_sku, item.hsn_sac].some((field) => (field ?? '').toLowerCase().includes(term))) return false
+      if (type && item.type !== type) return false
+      if (status === 'active' && item.is_active === false) return false
+      if (status === 'inactive' && item.is_active !== false) return false
+      if (stockStatus && item.stock.state !== stockStatus) return false
+      if (groupId && String(item.group?.id ?? '') !== groupId) return false
+      return true
+    })
+
+    if (sort) {
+      const value = (item: (typeof rows)[number]): string | number => {
+        if (sort === 'sku') return item.item_sku ?? ''
+        if (sort === 'hsn_sac') return item.hsn_sac ?? ''
+        if (sort === 'rate') return item.rate ?? 0
+        if (sort === 'stock') return item.stock.available ?? 0
+        if (sort === 'status') return item.is_active === false ? 0 : 1
+        return item.item_name
+      }
+      rows = [...rows].sort((a, b) => {
+        const left = value(a)
+        const right = value(b)
+        const comparison = typeof left === 'string' && typeof right === 'string' ? left.localeCompare(right) : Number(left) - Number(right)
+        return descending ? -comparison : comparison
+      })
+    }
+
+    const total = rows.length
+    const page = rows.slice(offset, offset + limit)
+
+    return new Response(
+      JSON.stringify({
+        data: page,
+        meta: {
+          total,
+          limit,
+          offset,
+          source: 'inventory',
+          upstream: { filters_ignored: [], sort_applied: sort ? true : null },
+        },
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    )
   }
 
   // Item search really searches, so a line can be added by hand in the booth
@@ -272,12 +353,13 @@ try {
 }
 
 const target = SCREENS[screen] ?? SCREENS.overview
+const entry = at === '' ? target.path : `${target.path}?${at}`
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <AuthProvider>
       <BillingProvider>
-        <MemoryRouter initialEntries={[target.path]}>
+        <MemoryRouter initialEntries={[entry]}>
           <Routes>
             <Route element={<AppShell />}>
               <Route path={target.path} element={target.element} />
