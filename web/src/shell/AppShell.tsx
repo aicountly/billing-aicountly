@@ -54,6 +54,7 @@ const QUICK_ACTIONS = [
   { label: 'Bank deposit', path: '/bank-cash/deposit', permission: 'contra.create' },
   { label: 'Bank withdrawal', path: '/bank-cash/withdrawal', permission: 'contra.create' },
   { label: 'Credit note', path: '/more/credit-note', permission: 'credit_note.create' },
+  { label: 'Debit note', path: '/more/debit-note', permission: 'debit_note.create' },
 ] as const
 
 /**
@@ -173,9 +174,9 @@ function Navigation({ menu }: { menu: MenuEntry[] }) {
    * merely shares its prefix.
    *
    * Some screens live under a path belonging to another section — the expense
-   * form is `/more/expense` and belongs to Purchases — and without this both
-   * Purchases and Settings light up, which tells the user they are in two
-   * places at once.
+   * form is `/more/expense` and the debit note is `/more/debit-note`, and both
+   * belong to Purchases — and without this both Purchases and Settings light
+   * up, which tells the user they are in two places at once.
    */
   const claimed = menu.some((entry) =>
     (entry.children ?? []).some(

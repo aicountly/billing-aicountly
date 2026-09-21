@@ -96,6 +96,29 @@ export const ownerSession: BillingSession = {
     { key: 'cash-compliance', label: 'Cash & Compliance', path: '/dashboard/cash-compliance' },
   ],
   landing: '/dashboard/overview',
+  // The same answers the deployed API gives today, so the screens in the booth
+  // show the same unavailable states a real user sees.
+  capabilities: {
+    document_extraction: {
+      available: false,
+      reason:
+        'Reading a document automatically needs a document-extraction service, and none is configured for this deployment. Typing the lines in records exactly the same thing.',
+    },
+    transaction_drafts: {
+      available: false,
+      reason:
+        'Saving an unfinished document on the server needs a draft state Smart Books does not expose to Billing yet. A draft is kept in this browser instead.',
+    },
+    transaction_attachments: {
+      available: false,
+      reason: 'Attaching a file to a document needs a storage service, and none is configured for this deployment.',
+    },
+    accounting_preview: {
+      available: false,
+      reason:
+        'Smart Books works out the ledgers and the tax when the document is posted, and does not offer a preview of them beforehand.',
+    },
+  },
 }
 
 /** A counter biller: one dashboard, no cost, no bank, no supplier dues. */
@@ -603,6 +626,67 @@ export const partyDuplicates = {
 }
 
 // ---------------------------------------------------------------------------
+// Purchases → debit note
+//
+// A supplier, three of their bills, and the masters the editor reads. Nothing
+// here is a Billing record: in the running product every one of these is a live
+// read from Books or Inventory, and the fixture stands in for the network only.
+//
+// The supplier and the items are NOT their own pool: they are appended to
+// `suppliers` and `catalogItems` below, because the booth's party and item
+// search really search — see the live handlers in harness.tsx — and a second,
+// unreachable pool here would just be dead data pretending to be a fixture.
+// ---------------------------------------------------------------------------
+
+export const debitNoteDocuments = {
+  party_account_id: 9012,
+  documents: [
+    {
+      voucher_id: 5521,
+      voucher_uuid: 'a1f0-5521',
+      document_no: 'PB-1024',
+      date: '2026-08-12',
+      party: 'Meenakshi Paper Mills',
+      party_id: 9012,
+      amount: 184500,
+      status: 'PARTIALLY_PAID',
+    },
+    {
+      voucher_id: 5488,
+      voucher_uuid: 'a1f0-5488',
+      document_no: 'PB-1011',
+      date: '2026-07-29',
+      party: 'Meenakshi Paper Mills',
+      party_id: 9012,
+      amount: 62400,
+      status: 'PAID',
+    },
+    {
+      voucher_id: 5402,
+      voucher_uuid: 'a1f0-5402',
+      document_no: 'PB-0987',
+      date: '2026-07-04',
+      party: 'Meenakshi Paper Mills',
+      party_id: 9012,
+      amount: 31900,
+      status: 'UNPAID',
+    },
+  ],
+  complete: true,
+  source: 'books',
+  note: 'Read from Smart Books just now.',
+}
+
+export const debitNoteOpenBills = {
+  account_id: 9012,
+  bills: [
+    { bill_no: 'PB-1024', bill_date: '2026-08-12', due_date: '2026-09-11', balance: 92250, voucher_id: 5521, voucher_uuid: 'a1f0-5521' },
+    { bill_no: 'PB-0987', bill_date: '2026-07-04', due_date: '2026-08-03', balance: 31900, voucher_id: 5402, voucher_uuid: 'a1f0-5402' },
+  ],
+  source: 'books',
+}
+
+// ---------------------------------------------------------------------------
 // Money to Collect / Money to Pay
 // ---------------------------------------------------------------------------
 
@@ -953,6 +1037,13 @@ export const saleItems = [
     sale_rate: 12000,
     tax_cat_id: 1,
   },
+  // The debit note screen's items. `purchase_rate` is what its lines default
+  // their rate to — never `mrp`, which would overstate a purchase reversal.
+  // `catalogItems` below is curated for the Items workspace table and is the
+  // wrong place to add these; this pool is the other half of `everyItem()`.
+  { item_id: 41, item_name: 'A4 Copy Paper 75 GSM', item_sku: 'A4-75-500', unit_id: 1, unit_name: 'Ream', hsn_sac: '4802', mrp: '320', purchase_rate: '268' },
+  { item_id: 42, item_name: 'Kraft Carton 12x9x6', item_sku: 'KC-1296', unit_id: 2, unit_name: 'Nos', hsn_sac: '4819', mrp: '46', purchase_rate: '31.5' },
+  { item_id: 43, item_name: 'Thermal Roll 79mm', item_sku: 'TR-79', unit_id: 2, unit_name: 'Nos', hsn_sac: '4811', mrp: '28', purchase_rate: '19' },
 ]
 
 /** What Inventory says is on the shelf, by item id. */
@@ -1059,6 +1150,11 @@ export const suppliers = [
   { acc_id: 603, acc_name: 'R.K. Industries', gstin: '29AAECR9876M1Z4' },
   { acc_id: 604, acc_name: 'Airtel Broadband', gstin: '29AAACB2894G1ZX' },
   { acc_id: 605, acc_name: 'Nandi & Associates', gstin: null },
+  // The debit note screen's suppliers — 9012 is the one its own fixtures
+  // (debitNoteDocuments, debitNoteOpenBills) are keyed to.
+  { acc_id: 9012, acc_name: 'Meenakshi Paper Mills', gstin: '33AAGCM1234K1ZP' },
+  { acc_id: 9013, acc_name: 'Coimbatore Stationers', gstin: '33AACCC5678L1Z2' },
+  { acc_id: 9014, acc_name: 'Nilgiri Packaging LLP', gstin: '33AABFN9012M1Z8' },
 ]
 
 /** What the API returns when the harness "saves" an expense. */
