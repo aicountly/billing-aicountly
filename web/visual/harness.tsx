@@ -26,6 +26,7 @@ import Payables from '../src/dashboards/Payables'
 import CashCompliance from '../src/dashboards/CashCompliance'
 import { MoneyScreen } from '../src/pages/money/MoneyScreen'
 import ExpensePage from '../src/pages/expense/ExpensePage'
+import SalesBillPage from '../src/pages/sale/SalesBillPage'
 import CreditNotePage from '../src/pages/credit-note/CreditNotePage'
 import { saveSession, setAuthToken } from '../src/auth/tokens'
 import { setScope } from '../src/services/api'
@@ -53,6 +54,9 @@ const FAILABLE: Array<[string, RegExp]> = [
   ['paid-from', /v1\/catalog\/cash-bank/],
   ['parties', /v1\/catalog\/parties/],
   ['capabilities', /v1\/expenses\/capabilities/],
+  ['tax', /v1\/catalog\/tax-categories/],
+  ['stock', /v1\/catalog\/stock/],
+  ['open-bills', /v1\/open-bills/],
   ['bills', /v1\/original-documents(\?|$)/],
   ['bill-lines', /v1\/original-documents\/\d+/],
   ['warehouses', /v1\/catalog\/warehouses/],
@@ -69,6 +73,7 @@ const SCREENS: Record<string, { path: string; element: React.ReactNode }> = {
   'money-out': { path: '/money-out/new', element: <MoneyScreen direction="out" /> },
   'money-in': { path: '/money-in/new', element: <MoneyScreen direction="in" /> },
   expense: { path: '/more/expense', element: <ExpensePage /> },
+  sale: { path: '/sales/new', element: <SalesBillPage /> },
   'credit-note': { path: '/more/credit-note', element: <CreditNotePage /> },
 }
 
@@ -90,6 +95,7 @@ const RESPONSES: Array<[RegExp, unknown]> = [
     { item_id: 3, item_name: 'Stapler', item_sku: 'STP-01', unit_id: 1, hsn_sac: '8472', mrp: '450' },
   ]],
   [/v1\/transactions\/(payment|receipt)/, fixtures.savedPayment],
+  [/v1\/transactions\/sale/, fixtures.savedSale],
   [/v1\/money\/party-context/, fixtures.moneyPartyContext],
   [/v1\/money\/recent/, fixtures.moneyRecent],
   [/v1\/open-bills/, fixtures.openBills],
@@ -110,10 +116,22 @@ const RESPONSES: Array<[RegExp, unknown]> = [
   [/v1\/manage\/companyinfo/, {
     cmp_id: 1,
     cmp_name: 'Sharma Enterprises',
+    gstin: '27AAACS1234F1Z5',
+    ro_address: 'Unit 4, Sai Industrial Estate\nAndheri East, Mumbai, Maharashtra\n400093',
     fy_list: [{ fy_id: 4, fy_name: 'FY 2026-27', fy_start: '2026-04-01', fy_end: '2027-03-31' }],
     branch_list: [{ bo_id: 1, bo_name: 'Main Branch', is_head_office: true }],
   }],
 ]
+
+/**
+ * Every item the booth knows, across both screens' fixtures.
+ *
+ * The two lists carry different fields — one has barcodes, the other does not
+ * — so they are read loosely here rather than being forced into one shape the
+ * real Inventory payload does not have either.
+ */
+type LooseItem = Record<string, string | number | null | undefined>
+const everyItem = (): LooseItem[] => [...fixtures.catalogItems, ...fixtures.saleItems] as unknown as LooseItem[]
 
 const originalFetch = window.fetch.bind(window)
 
@@ -129,11 +147,13 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Res
     }
   }
 
-  // Item search really searches, so a line can be added by hand in the booth.
+  // Item search really searches, so a line can be added by hand in the booth
+  // and "no matches" is reachable. One list for both screens: the credit note
+  // credits what a bill sold, so the two booths have to agree about items.
   if (/v1\/catalog\/items\/search/.test(url)) {
     const term = (new URL(url, window.location.origin).searchParams.get('q') ?? '').toLowerCase()
-    const rows = fixtures.catalogItems.filter(
-      (row) => row.item_name.toLowerCase().includes(term) || row.item_sku.toLowerCase().includes(term),
+    const rows = everyItem().filter(
+      (row) => (row.item_name ?? '').toLowerCase().includes(term) || (row.item_sku ?? '').toLowerCase().includes(term),
     )
     return new Response(JSON.stringify({ data: rows, meta: { total: rows.length, limit: 20, offset: 0 } }), {
       status: 200,
@@ -141,10 +161,14 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Res
     })
   }
 
-  // Scan to credit: a code that matches an SKU resolves, anything else 404s.
+  // Scan: a real barcode where the fixture carries one, an SKU otherwise —
+  // the credit note booth scans by SKU. Anything else 404s, which is the path
+  // the bill screen falls back to the ordinary search on.
   if (/v1\/catalog\/items\/barcode\//.test(url)) {
-    const code = decodeURIComponent(url.split('/barcode/')[1].split('?')[0]).toLowerCase()
-    const item = fixtures.catalogItems.find((row) => row.item_sku.toLowerCase() === code)
+    const code = decodeURIComponent(url.split('/barcode/')[1]?.split('?')[0] ?? '').toLowerCase()
+    const item = everyItem().find(
+      (row) => (row.barcode ?? '').toLowerCase() === code || (row.item_sku ?? '').toLowerCase() === code,
+    )
     return new Response(JSON.stringify(item ? { data: item } : { error: { code: 'not_found', message: 'No such code.' } }), {
       status: item ? 200 : 404,
       headers: { 'Content-Type': 'application/json' },
@@ -159,6 +183,24 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Res
     const rows = pool.filter((row) => row.acc_name.toLowerCase().includes(term))
     return new Response(JSON.stringify({ data: rows, meta: { total: rows.length, limit: 20, offset: 0 } }), {
       status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  if (/v1\/catalog\/stock/.test(url)) {
+    const itemId = Number(new URL(url, window.location.origin).searchParams.get('item_id') ?? 0)
+    return new Response(JSON.stringify({ data: fixtures.availability[itemId] ?? {} }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  // One item by id, as the biller desk and the global search link into the bill.
+  const byId = /v1\/catalog\/items\/(\d+)/.exec(url)
+  if (byId) {
+    const hit = everyItem().find((row) => row.item_id === Number(byId[1]))
+    return new Response(JSON.stringify(hit ? { data: hit } : { error: { code: 'not_found', message: 'No such item.' } }), {
+      status: hit ? 200 : 404,
       headers: { 'Content-Type': 'application/json' },
     })
   }
