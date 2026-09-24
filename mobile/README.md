@@ -52,6 +52,34 @@ components/, constants/  Expo template leftovers: themed Text/View, color tokens
 `web/src/services/api.ts` and `web/src/context/BillingContext.tsx` — same shapes and
 behavior, adapted where React Native forces a difference (below).
 
+## Versioning
+
+App version and build number are deliberately decoupled, and every `eas build` follows
+this policy automatically — nothing to remember by hand:
+
+- **`expo.version`** in `app.json` (currently `1.0.0`) is the user-facing app version —
+  the one shown in the App Store / Play Store listing. It **never changes on its own**.
+  Bump it only when explicitly asked to, by editing `app.json`'s `"version"` field
+  (that one field drives both platforms).
+- **The build number** — `ios.buildNumber` / `android.versionCode` — **auto-increments on
+  every `eas build`**, independent of the app version. `eas.json` sets
+  `"cli": { "appVersionSource": "remote" }` plus `"autoIncrement": true` on every build
+  profile, so EAS tracks and bumps the next build number on its own servers rather than
+  by writing a new value into `app.json` (and needing a commit) before each build. The
+  `buildNumber: "1"` / `versionCode: 1` checked into `app.json` are only the seed values
+  for the very first build.
+
+So: build 1 → `1.0.0 (1)`, build 2 → `1.0.0 (2)`, build 3 → `1.0.0 (3)`, and so on — for
+both `eas build --platform ios` and `--platform android` — until someone deliberately
+bumps `"version"` in `app.json`, at which point the next build starts a new version with
+its build number continuing to climb from wherever EAS's remote counter is (it does not
+reset on a version bump unless you reset it in the EAS dashboard).
+
+**Local (non-EAS) builds** — `npx expo prebuild` / `expo run:android` / `expo run:ios` —
+read `ios.buildNumber` / `android.versionCode` straight from `app.json` and do **not**
+auto-increment them (there's no EAS server involved to track a counter). Bump those two
+fields by hand before a local release build if you're not going through `eas build`.
+
 ## Auth on mobile — what's different from web
 
 - **No automatic silent SSO bounce.** Web redirects the whole page to the portal the

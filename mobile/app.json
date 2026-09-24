@@ -9,10 +9,12 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.aicountly.billing"
+      "bundleIdentifier": "com.aicountly.billing",
+      "buildNumber": "1"
     },
     "android": {
       "package": "com.aicountly.billing",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
