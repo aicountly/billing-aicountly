@@ -69,6 +69,7 @@ See [docs/auth/AICOUNTLY_AUTH_WORKFLOW.md](docs/auth/AICOUNTLY_AUTH_WORKFLOW.md)
 
 ```
 web/          React app (Vite). Builds to web/dist, deployed to the document root.
+mobile/       iOS/Android app (Expo + React Native). See mobile/README.md.
 server-php/   PHP API. Deployed to the api/ folder inside the document root.
 docs/         deployment and auth notes
 ```
