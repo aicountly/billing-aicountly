@@ -6,9 +6,9 @@ the same PHP API as `../web` and signs in through the same AICOUNTLY portal SSO 
 `../docs/auth/AICOUNTLY_AUTH_WORKFLOW.md` for the shared flow, and "Auth on mobile" below
 for what's different here.
 
-This is a scaffold: the foundation (auth, API client, company/session context, a
-server-driven tab bar over the five dashboards) is in place and typechecks cleanly, but
-most of `web/`'s screens beyond the five dashboards (sales, purchases, parties, reports,
+This is a scaffold, but the core loop is complete end to end and audited: sign in → pick a
+company → land on the right dashboard tab → switch company or sign out from any of them.
+Most of `web/`'s screens beyond the five dashboards (sales, purchases, parties, reports,
 settings, …) are not ported yet. See "What's not built yet" below.
 
 ## Getting started
@@ -39,18 +39,26 @@ mobile app has no origin of its own to fall back to.
 app/                 Expo Router routes (file-based).
   _layout.tsx           Root layout: boots auth, gates the navigator on sign-in status.
   sign-in.tsx            Shown when signed out.
-  index.tsx               Post-auth landing — redirects into the right dashboard tab.
-  (dashboards)/           The tab bar and the five dashboard screens.
+  index.tsx               Post-auth landing — the company picker, then redirects into
+                           the right dashboard tab once a company is chosen.
+  (dashboards)/           The tab bar and the five dashboard screens. Every tab's header
+                           carries "Switch" (back to the company picker) and "Sign out".
 auth/                 Portal SSO — token storage, sign-in/out, the ses_key lifecycle.
-services/             Typed API client (api.ts) and the API response shapes (types.ts).
+services/             Typed API client (api.ts), API response shapes (types.ts), and the
+                       Manage company/branch/financial-year reads (manage.ts).
+company/              manageShapes.ts — pure parsers for Manage's several payload shapes.
 context/              BillingContext — company/branch/financial-year scope and session.
 config.ts             Build-time config, read from EXPO_PUBLIC_* env vars.
 components/, constants/  Expo template leftovers: themed Text/View, color tokens.
 ```
 
-`auth/`, `services/` and `context/` are deliberate ports of `web/src/auth`,
-`web/src/services/api.ts` and `web/src/context/BillingContext.tsx` — same shapes and
-behavior, adapted where React Native forces a difference (below).
+`auth/`, `services/api.ts`, `services/manage.ts`, `company/manageShapes.ts` and `context/`
+are deliberate ports of `web/src/auth`, `web/src/services/api.ts`, `web/src/services/manage.ts`,
+`web/src/company/manageShapes.ts` and `web/src/context/BillingContext.tsx` — same shapes and
+behavior, adapted where React Native forces a difference (below). `app/index.tsx`'s company
+picker is a simplified `web/src/shell/ScopeBar.tsx`: picking a company opens it at its latest
+financial year, all branches — switching branch or year afterward isn't built yet (see
+"What's not built yet").
 
 ## Versioning
 
@@ -110,11 +118,19 @@ fields by hand before a local release build if you're not going through `eas bui
 
 ## What's not built yet
 
-- A real company / financial-year picker. Right now, until a scope is chosen, `app/
-  index.tsx` shows a plain "Choose a company" placeholder instead of web's `ScopeBar`
-  company switcher.
+- **Branch / financial-year switching after the initial pick.** The company picker
+  (`app/index.tsx`) opens a company at its latest FY, all branches — matching what web
+  does automatically for a single-company account. Changing branch or year afterward,
+  or re-opening a different FY on the same company, needs web's full `ScopeBar` (three
+  selects) ported; today that means using "Switch" to go back to the company picker,
+  which only re-opens at the latest FY again.
 - Everything beyond the five dashboards — sales, purchases, receipts/payments, credit
-  and debit notes, Parties, Money to Collect/Pay, Reports, Settings.
+  and debit notes, Parties, Money to Collect/Pay, Reports, Settings. There is also no
+  Settings/Account screen yet, which is why "Switch company" and "Sign out" live directly
+  in the dashboard tabs' header instead of a proper account menu.
+- App icons/splash are still the generic Expo template placeholders — swap
+  `assets/images/icon.png`, the `android-icon-*` set and `splash-icon.png` for real
+  AICOUNTLY Billing artwork before a store submission.
 - File export/import (`api.download`/`api.upload` were deliberately dropped from
   `services/api.ts` — native file handling needs `expo-file-system` and a share sheet,
   which is its own piece of work).

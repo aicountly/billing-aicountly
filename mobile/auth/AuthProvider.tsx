@@ -25,6 +25,7 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 
 const PORTAL_ERROR_MESSAGES: Record<string, string> = {
   access_denied: 'The portal declined the sign-in request.',
+  no_token: 'The portal did not return an auth token.',
 }
 
 function describePortalError(code: string): string {

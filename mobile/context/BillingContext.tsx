@@ -24,6 +24,8 @@ import type { BillingSession } from '../services/types'
 interface BillingContextValue {
   scope: CompanyScope | null
   setCompanyScope: (scope: CompanyScope) => void
+  /** Drops the chosen company/branch/year — back to the picker, e.g. "Switch company". */
+  clearCompanyScope: () => void
   session: BillingSession | null
   /** Has this user got that permission? Owners hold everything. */
   can: (permission: string) => boolean
@@ -85,6 +87,13 @@ export function BillingProvider({ children }: { children: ReactNode }): JSX.Elem
     })
   }, [])
 
+  const clearCompanyScope = useCallback(() => {
+    setScopeState(null)
+    AsyncStorage.removeItem(SCOPE_KEY).catch(() => {
+      /* storage refused; the in-memory scope is still cleared for this visit */
+    })
+  }, [])
+
   useEffect(() => {
     if (!scope) {
       setSession(null)
@@ -130,13 +139,14 @@ export function BillingProvider({ children }: { children: ReactNode }): JSX.Elem
     () => ({
       scope,
       setCompanyScope,
+      clearCompanyScope,
       session,
       can,
       loading,
       error,
       reload: () => setReloadToken((n) => n + 1),
     }),
-    [scope, setCompanyScope, session, can, loading, error],
+    [scope, setCompanyScope, clearCompanyScope, session, can, loading, error],
   )
 
   return <BillingContextObject.Provider value={value}>{children}</BillingContextObject.Provider>

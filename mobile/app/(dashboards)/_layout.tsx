@@ -1,5 +1,8 @@
-import { Tabs } from 'expo-router';
+import { router, Tabs } from 'expo-router';
+import { Pressable, StyleSheet } from 'react-native';
 
+import { Text } from '@/components/Themed';
+import { useAuth } from '@/auth/AuthProvider';
 import { useBilling } from '@/context/BillingContext';
 
 /**
@@ -16,12 +19,50 @@ const ROUTE_NAMES: Record<string, string> = {
   'cash-compliance': 'cash-compliance',
 };
 
+/**
+ * Every dashboard tab carries the same two escapes, since nothing else in
+ * this scaffold offers them yet (there is no Settings/Account screen — see
+ * mobile/README.md): switch to a different company, or sign out entirely.
+ */
+function HeaderActions() {
+  const { clearCompanyScope } = useBilling();
+  const { signOut } = useAuth();
+
+  return (
+    <>
+      <Pressable
+        onPress={() => {
+          clearCompanyScope();
+          router.replace('/');
+        }}
+        hitSlop={8}
+        style={styles.headerButton}
+      >
+        <Text style={styles.headerButtonText}>Switch</Text>
+      </Pressable>
+      <Pressable
+        onPress={() => {
+          // Also drop the persisted company/branch/year, not just the auth
+          // tokens: without this, whoever signs in next on this device would
+          // briefly inherit this profile's scope before picking their own.
+          clearCompanyScope();
+          signOut();
+        }}
+        hitSlop={8}
+        style={styles.headerButton}
+      >
+        <Text style={styles.headerButtonText}>Sign out</Text>
+      </Pressable>
+    </>
+  );
+}
+
 export default function DashboardsLayout() {
   const { session } = useBilling();
   const dashboards = session?.dashboards ?? [];
 
   return (
-    <Tabs>
+    <Tabs screenOptions={{ headerRight: () => <HeaderActions /> }}>
       {dashboards.map((entry) => (
         <Tabs.Screen
           key={entry.key}
@@ -32,3 +73,13 @@ export default function DashboardsLayout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  headerButton: {
+    paddingHorizontal: 10,
+  },
+  headerButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+});
