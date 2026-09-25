@@ -147,7 +147,11 @@ export async function signInWithPortal(): Promise<PortalSignInResult> {
   if (typeof authError === 'string' && authError) {
     return { error: authError }
   }
-  return { error: 'The portal did not return an auth token.' }
+  // A short code, like `authError` above — AuthProvider maps both through the
+  // same PORTAL_ERROR_MESSAGES table, so this must not be prose itself (it
+  // would otherwise get wrapped a second time as "The portal reported an
+  // error (<this sentence>).").
+  return { error: 'no_token' }
 }
 
 // ---------------------------------------------------------------------------

@@ -1,8 +1,11 @@
 import { Redirect } from 'expo-router';
-import { ActivityIndicator, StyleSheet } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet } from 'react-native';
 
 import { Text, View } from '@/components/Themed';
 import { useBilling } from '@/context/BillingContext';
+import { fetchAllCompanies, fetchCompanyInfo, type CompanyOption } from '@/services/manage';
+import type { CompanyScope } from '@/services/api';
 import type { BillingSession } from '@/services/types';
 
 /**
@@ -33,6 +36,110 @@ function landingRouteName(session: BillingSession): string | null {
   return DASHBOARD_ROUTE_NAMES[entry.key] ?? entry.key;
 }
 
+/**
+ * Every company the signed-in user can open, read live from Manage —
+ * mirrors web/src/shell/ScopeBar.tsx's company step. Picking one opens it at
+ * its latest financial year, all branches (bo_id 0); switching branch or year
+ * afterward is not built yet in this scaffold — see mobile/README.md.
+ */
+function CompanyPicker() {
+  const { setCompanyScope } = useBilling();
+
+  const [companies, setCompanies] = useState<CompanyOption[]>([]);
+  const [loadingList, setLoadingList] = useState(true);
+  const [openingId, setOpeningId] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function openCompany(cmpId: number) {
+    setOpeningId(cmpId);
+    setError(null);
+    try {
+      const info = await fetchCompanyInfo(cmpId);
+      // Sorted latest-first by parseCompanyInfo, same as web's openCompany().
+      const fyId = info.fyList[0]?.fyId;
+      if (fyId === undefined) {
+        setError('That company has no financial year set up yet. Add one in Aicountly Manage.');
+        return;
+      }
+      const next: CompanyScope = { cmp_id: cmpId, fy_id: fyId, bo_id: 0 };
+      setCompanyScope(next);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load that company's years and branches.");
+    } finally {
+      setOpeningId(null);
+    }
+  }
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoadingList(true);
+
+    fetchAllCompanies(controller.signal)
+      .then((rows) => {
+        if (controller.signal.aborted) return;
+        setCompanies(rows);
+        setError(null);
+        // One company and nothing chosen yet: open it. A list of one is a tap
+        // that teaches nobody anything.
+        if (rows.length === 1) void openCompany(rows[0].cmpId);
+      })
+      .catch((err: unknown) => {
+        if (controller.signal.aborted) return;
+        setError(err instanceof Error ? err.message : 'Could not load your companies.');
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoadingList(false);
+      });
+
+    return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (loadingList) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator />
+      </View>
+    );
+  }
+
+  if (companies.length === 0) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.title}>No companies yet</Text>
+        <Text style={styles.message}>
+          {error ?? "You don't have access to any company yet. Ask an owner to add you in Aicountly Manage."}
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.pickerContainer}>
+      <Text style={styles.pickerTitle}>Choose a company</Text>
+      <FlatList
+        data={companies}
+        keyExtractor={(company) => String(company.cmpId)}
+        ItemSeparatorComponent={() => <View style={styles.separator} />}
+        renderItem={({ item }) => (
+          <Pressable
+            style={styles.companyRow}
+            disabled={openingId !== null}
+            onPress={() => openCompany(item.cmpId)}
+          >
+            <Text style={styles.companyName}>
+              {item.name}
+              {item.ownership === 'shared' ? ' (shared)' : ''}
+            </Text>
+            {openingId === item.cmpId ? <ActivityIndicator /> : null}
+          </Pressable>
+        )}
+      />
+      {error ? <Text style={[styles.message, styles.error]}>{error}</Text> : null}
+    </View>
+  );
+}
+
 export default function Index() {
   const { session, scope, loading, error } = useBilling();
 
@@ -45,16 +152,7 @@ export default function Index() {
   }
 
   if (!scope) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.title}>Choose a company</Text>
-        <Text style={styles.message}>Pick the company and financial year to work in.</Text>
-        {/*
-          TODO: a real company/financial-year picker (mirroring web's ScopeBar
-          / company switcher) is not built yet in this scaffold — follow-up.
-        */}
-      </View>
-    );
+    return <CompanyPicker />;
   }
 
   if (session) {
@@ -96,5 +194,34 @@ const styles = StyleSheet.create({
     fontSize: 15,
     textAlign: 'center',
     opacity: 0.7,
+  },
+  pickerContainer: {
+    flex: 1,
+    paddingTop: 24,
+  },
+  pickerTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    paddingHorizontal: 24,
+    marginBottom: 16,
+  },
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(128,128,128,0.3)',
+  },
+  companyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+  },
+  companyName: {
+    fontSize: 16,
+  },
+  error: {
+    color: '#dc2626',
+    paddingHorizontal: 24,
+    marginTop: 12,
   },
 });
